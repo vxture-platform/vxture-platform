@@ -1094,9 +1094,7 @@ export class SubscriptionRouter {
       };
     }
 
-    const workspaceId = req.tenant.workspace
-      ? await this.resolveRequestWorkspace(req.tenant)
-      : undefined;
+    const workspaceId = await this.resolveRequestWorkspace(req.tenant);
     const [current, pendingOrder, plans] = await Promise.all([
       this.queryCurrentForProduct(req.tenant.id, product.code, workspaceId),
       this.queryPendingOrder(req.tenant.id, product.code, workspaceId),
@@ -1112,7 +1110,7 @@ export class SubscriptionRouter {
       ? (plans.find((p) => p.planCode === current.planCode) ?? null)
       : null;
     const isLive = current
-      ? current.status === "active" || current.status === "trialing"
+      ? ["active", "trialing", "expiring", "overdue"].includes(current.status)
       : false;
     const currentPlanRetired =
       Boolean(current) && isLive && ladderSame === null;
@@ -1905,7 +1903,7 @@ export class SubscriptionRouter {
     );
 
     // 原订阅：upgrade / renew 由客户端指定；renew 未指定时取本产品的代表订阅（续订即延长它）。
-    let effectiveIntent = intent as OrderCreateIntent;
+    const effectiveIntent = intent as OrderCreateIntent;
     let fromSubscriptionId = upgradeOf;
     if (effectiveIntent === "renew") {
       const current = await this.queryCurrentForProduct(
@@ -1918,25 +1916,8 @@ export class SubscriptionRouter {
           throw new BadRequestException("没有可续订的订阅，请直接订阅");
         fromSubscriptionId = current.subscriptionId;
       }
-      // 续订只延长"同一套餐、可续"的订阅（在用 / 到期族）；已取消的、或到期后换档的，
-      // 都不是续订——按 new 建新订阅（原订阅已不在用，档位守卫放行）。
-      const from =
-        current && current.subscriptionId === fromSubscriptionId
-          ? current
-          : null;
-      const live = from && ["active", "trialing"].includes(from.status);
-      const lapsed =
-        from && ["expiring", "overdue", "expired"].includes(from.status);
-      if (
-        from &&
-        !(
-          (live && from.planVersionId === planVersionId) ||
-          (lapsed && from.planVersionId === planVersionId)
-        )
-      ) {
-        effectiveIntent = live ? "upgrade" : "new";
-        if (effectiveIntent === "new") fromSubscriptionId = undefined;
-      }
+      // The domain service validates plan identity across versions. Never silently
+      // turn a renewal into an upgrade or a new purchase here.
     }
     // Renewal/upgrade targets must belong to this exact tenant and workspace.
     if (fromSubscriptionId) {

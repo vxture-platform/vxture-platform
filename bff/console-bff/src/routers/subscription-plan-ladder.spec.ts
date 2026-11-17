@@ -27,6 +27,8 @@ function recordingPool() {
   const sqls: string[] = [];
   const query = vi.fn(async (sql: string, _params?: unknown[]) => {
     sqls.push(sql);
+    if (sql.includes("from tenancy.workspaces"))
+      return { rows: [{ id: "ws-1" }] };
     return sql.includes("product_code") && sql.includes("product_name")
       ? { rows: [{ product_code: "arda", product_name: "Arda" }] }
       : { rows: [] };
@@ -70,7 +72,7 @@ function ladderSql(sqls: string[]): string {
 async function runContext() {
   const { pool, query, sqls } = recordingPool();
   await routerWith(pool)
-    .getSubscribeContext(req(), { product: "arda", intent: "new" })
+    .getSubscribeContext(req(), { product: "arda", intent: "subscribe" })
     .catch(() => undefined);
   return { query, sqls };
 }
@@ -112,10 +114,12 @@ function poolWithProduct(productRow: Record<string, unknown>) {
   /* 只认产品那一条（按 where 子句）：在途订单那条 SQL 也同时提到 product_code 与
      product_name，按列名认会把产品行喂给它，然后在 created_at 上炸。 */
   const query = vi.fn(async (sql: string) =>
-    sql.includes("from product.products") &&
-    sql.includes("where product_code = $1")
-      ? { rows: [productRow] }
-      : { rows: [] },
+    sql.includes("from tenancy.workspaces")
+      ? { rows: [{ id: "ws-1" }] }
+      : sql.includes("from product.products") &&
+          sql.includes("where product_code = $1")
+        ? { rows: [productRow] }
+        : { rows: [] },
   );
   return { pool: { query } as unknown as Pool, query };
 }
@@ -132,7 +136,7 @@ describe("subscribe-context · 升级维护中", () => {
     const { pool } = poolWithProduct(MAINTAINED);
     const ctx = await routerWith(pool).getSubscribeContext(req(), {
       product: "arda",
-      intent: "new",
+      intent: "subscribe",
     });
 
     expect(ctx.product).toEqual({
@@ -150,7 +154,7 @@ describe("subscribe-context · 升级维护中", () => {
     });
     const ctx = await routerWith(pool).getSubscribeContext(req(), {
       product: "arda",
-      intent: "new",
+      intent: "subscribe",
     });
 
     expect(ctx.product?.maintenance).toBeNull();
@@ -160,7 +164,7 @@ describe("subscribe-context · 升级维护中", () => {
     const { pool, query } = poolWithProduct(MAINTAINED);
     await routerWith(pool).getSubscribeContext(req(), {
       product: "arda",
-      intent: "new",
+      intent: "subscribe",
     });
 
     const sql = query.mock.calls

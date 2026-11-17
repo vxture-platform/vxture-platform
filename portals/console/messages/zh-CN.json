@@ -1916,6 +1916,16 @@
       "yearly": "年付"
     },
     "confirm": {
+      "contextChanged": "订阅或订单状态已变化，请检查最新信息后再确认。",
+      "submitRenew": "确认续订",
+      "planConflict": "当前已有同产品、同档位的其他套餐，不能作为升级重复购买。请联系支持确认套餐变更。",
+      "alreadySubscribed": "已订阅该套餐",
+      "alreadySubscribedHint": "当前订阅仍在服务中，无需重复购买。如需延长有效期，请主动选择续订。",
+      "chooseRenewal": "我要续订",
+      "uncomparable": "无法判断套餐档位，请联系支持后再变更。",
+      "pendingOrder": "该产品已有进行中的订单",
+      "pendingOrderHint": "订单 {orderNo} 尚未结束。请先查看并确认订单用途，完成或取消后再下单。",
+      "viewOrder": "查看已有订单",
       "title": "确认订单",
       "who": "订阅归属",
       "what": "订阅套餐",

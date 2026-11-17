@@ -1916,6 +1916,16 @@
       "yearly": "Yearly"
     },
     "confirm": {
+      "contextChanged": "The subscription or order has changed. Review the latest information before confirming.",
+      "submitRenew": "Confirm renewal",
+      "planConflict": "Another plan at this tier already covers this product. It cannot be purchased as an upgrade. Please contact support to change plans.",
+      "alreadySubscribed": "Already subscribed",
+      "alreadySubscribedHint": "Your subscription is still in service. To extend its term, explicitly choose to renew.",
+      "chooseRenewal": "Renew subscription",
+      "uncomparable": "The plan tiers cannot be compared. Please contact support before changing plans.",
+      "pendingOrder": "An order is already in progress",
+      "pendingOrderHint": "Order {orderNo} is still open. Review its purpose and complete or cancel it before placing another order.",
+      "viewOrder": "Review existing order",
       "title": "Confirm order",
       "who": "Subscription owner",
       "what": "Plan",

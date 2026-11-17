@@ -354,8 +354,12 @@ export class SubscriptionService {
     remark?: string,
   ): Promise<SubscriptionRecord> {
     const subscription = await this.getSubscription(id);
-    if (subscription.status !== "active")
-      throw new ConflictException("只有活跃订阅可以升级");
+    if (
+      !["active", "trialing", "expiring", "overdue"].includes(
+        subscription.status,
+      )
+    )
+      throw new ConflictException("只有服务中的订阅可以升级");
     await this.assertNoTierConflict(
       subscription.workspaceId,
       newPlanVersionId,
@@ -364,12 +368,17 @@ export class SubscriptionService {
 
     const result = await this.repo.update(id, subscription, {
       toPlanVersionId: newPlanVersionId,
+      status: "active",
+      expectedStatus: subscription.status,
       operatorType: "operator",
       ...(operatorId !== undefined
         ? { operatorId, updatedBy: operatorId }
         : {}),
       ...(remark !== undefined ? { operatorRemark: remark } : {}),
     });
+    if (!result) {
+      throw new ConflictException("订阅状态已变化，请刷新后重新确认升级");
+    }
     await this.safeProvisioningHook("upgrade", id, () =>
       this.fireVersionChange(result!, subscription.planVersionId),
     );

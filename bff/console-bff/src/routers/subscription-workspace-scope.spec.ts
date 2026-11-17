@@ -286,6 +286,40 @@ describe("subscription workspace scope", () => {
     );
   });
 
+  it("keeps cross-version renewal explicit instead of converting it to upgrade", async () => {
+    const { router, orderService } = setup();
+    await router.createOrder(req(), {
+      ...BODY,
+      intent: "renew",
+      planVersionId: "pv-2",
+    });
+    expect(orderService.createOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: "renew",
+        fromSubscriptionId: "selected-subscription",
+        planVersionId: "pv-2",
+      }),
+    );
+  });
+
+  it("uses one default workspace for both current subscriptions and pending orders when scope is absent", async () => {
+    const { router, query } = setup();
+    const request = { ...req(), tenant: { id: TENANT } } as Request &
+      RequestContext;
+    await router.getSubscribeContext(request, {
+      product: "vxtpl",
+      intent: "subscribe",
+    });
+    const current = query.mock.calls.find(([sql]) =>
+      sql.includes("select ts.id, ts.status"),
+    );
+    const pending = query.mock.calls.find(([sql]) =>
+      sql.includes("o.status in ('pending_payment', 'pending_verify', 'paid')"),
+    );
+    expect(current?.[1]?.[3]).toBe(DEFAULT);
+    expect(pending?.[1]).toEqual([TENANT, "vxtpl", DEFAULT]);
+  });
+
   it("rejects an upgrade target belonging to another workspace in the same tenant", async () => {
     const { router, orderService } = setup({ targetWorkspace: DEFAULT });
     await expect(

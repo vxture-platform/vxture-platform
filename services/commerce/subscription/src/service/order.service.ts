@@ -7,6 +7,7 @@
  * 钩子），再由 PgOrderRepository.applySubscriptionTerms 把订单条款（周期 / 实付 / current_order_id）
  * 落到订阅上。履约（fulfill）幂等：订单已 fulfilled 直接返回；失败停在 paid，reconcile 重试。
  */
+import type { PoolClient } from "pg";
 import {
   ConflictException,
   Inject,
@@ -70,7 +71,7 @@ import type {
 } from "../types/subscription.types";
 
 /** 权益在用的订阅状态（ACTIVATED 口径，与 SubscriptionService 一致）。 */
-const LIVE = new Set(["active", "trialing"]);
+const LIVE = new Set(["active", "trialing", "expiring", "overdue"]);
 /** 续订可作用的状态：在用 + 到期族（复活）。 */
 const RENEWABLE = new Set([
   "active",
@@ -354,6 +355,63 @@ export class OrderService {
    * （在用或到期族）且同套餐。不建订阅行。
    */
   async createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
+    await this.assertPurchaseAllowed(input);
+    if (input.intent === "upgrade" && input.fromSubscriptionId) {
+      const source = await this.subscriptions.getSubscription(
+        input.fromSubscriptionId,
+      );
+      // 折抵随单落库（P2-a）：确认页展示的报价与这里同一函数，同一时刻只差秒级。
+      const quote = await this.quoteUpgrade(
+        input.fromSubscriptionId,
+        input.price,
+      );
+      return this.orders.createOrder({
+        ...input,
+        proration: {
+          credit: quote.credit,
+          payable: quote.payable,
+          leftover: quote.leftover,
+          snapshot: {
+            ...quote,
+            fromPlanVersionId: source.planVersionId,
+            fromPeriodEnd: source.endAt?.toISOString() ?? null,
+            fromPaidAmount: source.payAmount,
+            computedAt: new Date().toISOString(),
+          },
+        },
+      });
+    }
+    return this.orders.createOrder(input);
+  }
+
+  /**
+   * Validate the purchase before creating an order or moving money.
+   * @param input - Workspace, plan, and explicitly chosen order operation.
+   * @param existingOrder - Version-change consent was checked when this order was placed.
+   * @param client - Existing payment transaction used to probe held subscriptions.
+   * @returns Resolves when the purchase is valid against current subscription facts.
+   * @throws {ConflictException} When ownership, plan, status, or purchase direction conflicts.
+   */
+  private async assertPurchaseAllowed(
+    input: Pick<
+      CreateOrderInput,
+      | "intent"
+      | "workspaceId"
+      | "tenantId"
+      | "planVersionId"
+      | "acceptVersionChangeFrom"
+    > & { fromSubscriptionId?: string | null },
+    existingOrder = false,
+    client?: PoolClient,
+  ): Promise<void> {
+    await this.orders.assertNoOtherSubscription(
+      input.workspaceId,
+      input.planVersionId,
+      input.intent === "new"
+        ? undefined
+        : (input.fromSubscriptionId ?? undefined),
+      client,
+    );
     if (input.intent === "new") {
       await this.subscriptions.assertTierAvailable(
         input.workspaceId,
@@ -366,7 +424,10 @@ export class OrderService {
       const from = await this.subscriptions.getSubscription(
         input.fromSubscriptionId,
       );
-      if (from.workspaceId !== input.workspaceId) {
+      if (
+        from.workspaceId !== input.workspaceId ||
+        from.tenantId !== input.tenantId
+      ) {
         throw new ConflictException("原订阅不属于本工作区");
       }
       /*
@@ -384,7 +445,16 @@ export class OrderService {
       if (!target) {
         throw new ConflictException("套餐版本不存在，请重新选择");
       }
+      if (!target.sameProduct) {
+        throw new ConflictException({
+          code: "PLAN_PRODUCT_MISMATCH",
+          message: "原订阅与目标套餐不属于同一产品",
+        });
+      }
       if (input.intent === "upgrade") {
+        if (target.toPlanStatus !== "active" || !target.toIsCurrent) {
+          throw new ConflictException("请选择当前在售套餐版本进行升级");
+        }
         if (!LIVE.has(from.status)) {
           throw new ConflictException("原订阅不在服务中，请重新订阅");
         }
@@ -455,6 +525,7 @@ export class OrderService {
          * （现状：auto_renew 只是个开关，`next_renewal_at` 全仓无写入方、无作业。）
          */
         if (
+          !existingOrder &&
           from.planVersionId !== input.planVersionId &&
           input.acceptVersionChangeFrom !== from.planVersionId
         ) {
@@ -465,23 +536,6 @@ export class OrderService {
         }
       }
     }
-    if (input.intent === "upgrade" && input.fromSubscriptionId) {
-      // 折抵随单落库（P2-a）：确认页展示的报价与这里同一函数，同一时刻只差秒级。
-      const quote = await this.quoteUpgrade(
-        input.fromSubscriptionId,
-        input.price,
-      );
-      return this.orders.createOrder({
-        ...input,
-        proration: {
-          credit: quote.credit,
-          payable: quote.payable,
-          leftover: quote.leftover,
-          snapshot: { ...quote, computedAt: new Date().toISOString() },
-        },
-      });
-    }
-    return this.orders.createOrder(input);
   }
 
   /**
@@ -560,6 +614,29 @@ export class OrderService {
             },
           };
         }
+        if (
+          order.intent === "upgrade" &&
+          order.fromSubscriptionId &&
+          order.proration?.fromPlanVersionId
+        ) {
+          const source = await this.subscriptions.getSubscription(
+            order.fromSubscriptionId,
+          );
+          if (
+            source.planVersionId !== order.proration.fromPlanVersionId ||
+            ("fromPeriodEnd" in order.proration &&
+              order.proration.fromPeriodEnd !==
+                (source.endAt?.toISOString() ?? null)) ||
+            ("fromPaidAmount" in order.proration &&
+              order.proration.fromPaidAmount !== source.payAmount)
+          ) {
+            throw new ConflictException({
+              code: "SUBSCRIPTION_CHANGED",
+              message: "原订阅套餐已变化，请取消旧订单后重新确认升级报价。",
+            });
+          }
+        }
+        await this.assertPurchaseAllowed(order, true, client);
         const cleaned = await this.subRepo.softDeleteDiscountItemsTx(
           client,
           invoice.id,
@@ -780,6 +857,40 @@ export class OrderService {
       ? await this.subscriptions.getSubscription(order.fromSubscriptionId)
       : null;
 
+    // Payment and fulfillment may be separated by operator review or retries.
+    // Recheck direction without invalidating an already-applied version switch.
+    if (from) {
+      if (
+        from.tenantId !== order.tenantId ||
+        from.workspaceId !== order.workspaceId ||
+        from.status === "suspended"
+      ) {
+        throw new ConflictException(
+          "原订阅归属或状态已变化，不能继续开通此订单",
+        );
+      }
+      if (
+        from.planVersionId !== order.planVersionId &&
+        (mode === "renew" || mode === "upgrade")
+      ) {
+        const target = await this.orders.resolveRenewTarget(
+          from.planVersionId,
+          order.planVersionId,
+        );
+        if (
+          !target?.sameProduct ||
+          (mode === "renew" && !target.samePlan) ||
+          (mode === "upgrade" &&
+            LIVE.has(from.status) &&
+            !isTierUpgrade(target.fromTier, target.toTier))
+        ) {
+          throw new ConflictException(
+            "原订阅套餐已变化，请核对订单后处理，不能重复开通或降档",
+          );
+        }
+      }
+    }
+
     if (mode === "upgrade" && from && LIVE.has(from.status)) {
       if (from.planVersionId !== order.planVersionId) {
         await this.subscriptions.upgradeSubscription(
@@ -807,7 +918,8 @@ export class OrderService {
       const base = from.endAt && from.endAt > now ? from.endAt : now;
       const endAt = addCycle(base, order.cycleUnit, order.cycleCount);
       await this.subscriptions.updateSubscription(from.id, {
-        ...(LIVE.has(from.status) ? {} : { status: "active" }),
+        ...(from.status === "active" ? {} : { status: "active" }),
+        expectedStatus: from.status,
         endAt,
         /* 续订 = 重新签一次，签的是现在在售的那一版（owner 2026-09-22）。不重钉的话
            「小改开新版本」永远触达不到存量客户——那正是 owner 最初想改已发布套餐的
@@ -852,6 +964,10 @@ export class OrderService {
         );
         subscription = orphan;
       } else {
+        await this.orders.assertNoOtherSubscription(
+          order.workspaceId,
+          order.planVersionId,
+        );
         // 订阅↔订单的关联是 current_order_id（下面 applySubscriptionTerms 落）；
         // subscriptions.order_no 已停写（product_330 P2）。
         subscription = await this.subscriptions.createSubscription({
@@ -1770,6 +1886,8 @@ export class OrderService {
   }
 
   async restore(orderId: string, actor: OrderActor): Promise<OrderRecord> {
+    const original = await this.getOrder(orderId);
+    await this.assertPurchaseAllowed(original, true);
     const restored = await this.orders.restoreOrder(orderId, actor);
     // 运营把已取消 / 已超时关闭的单救回来——客户那边不知道这张单又能付了，倒计时也重新
     // 开始走。此前这一步一句话都不发（cancel 那一侧一直有通知，恢复这一侧没有）。

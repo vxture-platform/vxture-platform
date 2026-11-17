@@ -40,7 +40,11 @@ function req(): Request & RequestContext {
 function poolAnswering(
   answer: (sql: string) => Record<string, unknown>[] | null,
 ) {
-  const query = vi.fn(async (sql: string) => ({ rows: answer(sql) ?? [] }));
+  const query = vi.fn(async (sql: string) => ({
+    rows:
+      answer(sql) ??
+      (sql.includes("from tenancy.workspaces") ? [{ id: "ws-1" }] : []),
+  }));
   return { pool: { query } as unknown as Pool, query };
 }
 

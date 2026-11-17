@@ -132,6 +132,7 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
       invoiceId: "inv-1",
       billNo: "INV-1",
     })),
+    assertNoOtherSubscription: vi.fn(async (): Promise<void> => undefined),
     findOpenOrderForProduct: vi.fn(async () => null),
     applySubscriptionTerms: vi.fn(async () => undefined),
     markFulfilled: vi.fn(async () => true),
@@ -155,6 +156,7 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
     /* 续订/升级的判据来源（2026-09-22 起按**套餐**判，不按版本）。默认答「同一个
        套餐、目标就是当前在售版」——各用例按需覆写。 */
     resolveRenewTarget: vi.fn(async (fromId: string, toId: string) => ({
+      sameProduct: true,
       samePlan: fromId === toId || (fromId === PV_PRO && toId === PV_PRO_V2),
       toIsCurrent: true,
       toPlanStatus: "active",
@@ -267,6 +269,89 @@ describe("OrderService.createOrder guards", () => {
     expect(subscriptions.assertTierAvailable).toHaveBeenCalledWith(WS, PV_PRO);
     expect(orders.createOrder).toHaveBeenCalledTimes(1);
   });
+
+  it("new: refuses a duplicate before persisting an order", async () => {
+    const { service, orders } = build(order(), null);
+    orders.assertNoOtherSubscription.mockRejectedValueOnce(
+      new ConflictException({ code: "SUBSCRIPTION_ALREADY_EXISTS" }),
+    );
+    await expect(
+      service.createOrder({
+        tenantId: "t-1",
+        workspaceId: WS,
+        planVersionId: PV_PRO,
+        cycleUnit: "year",
+        price: 1,
+        createdBy: "u-1",
+        intent: "new",
+        itemName: "Pro",
+      }),
+    ).rejects.toMatchObject({
+      response: { code: "SUBSCRIPTION_ALREADY_EXISTS" },
+    });
+    expect(orders.createOrder).not.toHaveBeenCalled();
+  });
+
+  it.each(["renew", "upgrade"] as const)(
+    "%s rejects a source subscription for another product",
+    async (intent) => {
+      const { service, orders } = build(
+        order(),
+        sub({ planVersionId: PV_FREE }),
+      );
+      orders.resolveRenewTarget.mockResolvedValueOnce({
+        sameProduct: false,
+        samePlan: false,
+        toIsCurrent: true,
+        toPlanStatus: "active",
+        toPlanCode: "other-pro",
+        fromTier: "free",
+        toTier: "pro",
+      });
+      await expect(
+        service.createOrder({
+          tenantId: "t-1",
+          workspaceId: WS,
+          planVersionId: PV_PRO,
+          cycleUnit: "year",
+          price: 1,
+          createdBy: "u-1",
+          intent,
+          itemName: "Pro",
+          fromSubscriptionId: "sub-1",
+        }),
+      ).rejects.toMatchObject({ response: { code: "PLAN_PRODUCT_MISMATCH" } });
+      expect(orders.createOrder).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["expiring", "overdue"])(
+    "%s subscriptions can upgrade without opening a second subscription",
+    async (status) => {
+      const { service, orders } = build(
+        order(),
+        sub({ planVersionId: PV_FREE, status }),
+      );
+      await service.createOrder({
+        tenantId: "t-1",
+        workspaceId: WS,
+        planVersionId: PV_PRO,
+        cycleUnit: "year",
+        price: 1,
+        createdBy: "u-1",
+        intent: "upgrade",
+        itemName: "Pro",
+        fromSubscriptionId: "sub-1",
+      });
+      expect(orders.assertNoOtherSubscription).toHaveBeenCalledWith(
+        WS,
+        PV_PRO,
+        "sub-1",
+        undefined,
+      );
+      expect(orders.createOrder).toHaveBeenCalledOnce();
+    },
+  );
 
   it("upgrade: 409 当目标是同一个套餐（换档才叫升级，延期用续订）", async () => {
     const { service } = build(order(), sub({ planVersionId: PV_PRO }));
@@ -486,6 +571,7 @@ describe("OrderService.createOrder guards", () => {
       sub({ planVersionId: PV_PRO }),
     );
     orders.resolveRenewTarget.mockResolvedValueOnce({
+      sameProduct: true,
       samePlan: true,
       toIsCurrent: true,
       toPlanStatus: "deprecated",
@@ -509,6 +595,7 @@ describe("OrderService.createOrder guards", () => {
       sub({ planVersionId: PV_PRO }),
     );
     orders.resolveRenewTarget.mockResolvedValueOnce({
+      sameProduct: true,
       samePlan: true,
       toIsCurrent: false,
       toPlanStatus: "active",
@@ -1463,6 +1550,51 @@ describe("OrderService refund transfer step（2026-12-01）", () => {
 });
 
 describe("OrderService.fulfill", () => {
+  it("does not create a duplicate after payment when another subscription is already held", async () => {
+    const { service, orders, subscriptions } = build(
+      order({ intent: "new" }),
+      null,
+    );
+    orders.assertNoOtherSubscription.mockRejectedValueOnce(
+      new ConflictException("already subscribed"),
+    );
+    await expect(
+      service.fulfill("ord-1", { actorType: "customer", actorId: "u-1" }),
+    ).rejects.toThrow();
+    expect(subscriptions.createSubscription).not.toHaveBeenCalled();
+  });
+
+  it.each(["renew", "upgrade"] as const)(
+    "does not fulfill %s after the source is suspended",
+    async (intent) => {
+      const { service, orders, subscriptions } = build(
+        order({ intent, fromSubscriptionId: "sub-1" }),
+        sub({ status: "suspended" }),
+      );
+      await expect(
+        service.fulfill("ord-1", { actorType: "customer", actorId: "u-1" }),
+      ).rejects.toThrow();
+      expect(subscriptions.createSubscription).not.toHaveBeenCalled();
+      expect(subscriptions.updateSubscription).not.toHaveBeenCalled();
+      expect(orders.applySubscriptionTerms).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not downgrade a newer subscription while fulfilling an old upgrade", async () => {
+    const { service, orders, subscriptions } = build(
+      order({
+        intent: "upgrade",
+        fromSubscriptionId: "sub-1",
+        planVersionId: PV_FREE,
+      }),
+      sub({ planVersionId: PV_PRO }),
+    );
+    await expect(
+      service.fulfill("ord-1", { actorType: "customer", actorId: "u-1" }),
+    ).rejects.toThrow();
+    expect(subscriptions.upgradeSubscription).not.toHaveBeenCalled();
+    expect(orders.applySubscriptionTerms).not.toHaveBeenCalled();
+  });
   it("refuses an order that has not been paid", async () => {
     const { service, subscriptions } = build(
       order({ status: "pending_verify" }),
@@ -2099,6 +2231,7 @@ describe("balance payment", () => {
       currency: "CNY",
     };
     const repo = {
+      assertNoOtherSubscription: vi.fn(async (): Promise<void> => undefined),
       withOrderTx: vi.fn(
         async (
           _id: string,
@@ -2133,7 +2266,7 @@ describe("balance payment", () => {
     const service = new OrderService(
       repo as never,
       subRepo as never,
-      {} as never,
+      { assertTierAvailable: vi.fn() } as never,
       promotion as never,
     );
     const fulfill = vi.spyOn(service, "fulfill").mockResolvedValue({} as never);
@@ -2166,6 +2299,19 @@ describe("balance payment", () => {
     const f = checkout({}, true);
     expect(await f.pay()).toMatchObject({ outcome: "already_settled" });
     expect(f.subRepo.settleBalanceTx).not.toHaveBeenCalled();
+  });
+  it("rejects a duplicate subscription before debiting the wallet or reserving vouchers", async () => {
+    const f = checkout();
+    f.repo.assertNoOtherSubscription.mockRejectedValueOnce(
+      new ConflictException({ code: "SUBSCRIPTION_ALREADY_EXISTS" }),
+    );
+    await expect(f.pay()).rejects.toMatchObject({
+      response: { code: "SUBSCRIPTION_ALREADY_EXISTS" },
+    });
+    expect(f.subRepo.settleBalanceTx).not.toHaveBeenCalled();
+    expect(f.promotion.reserveForOrder).not.toHaveBeenCalled();
+    expect(f.repo.markPaidTx).not.toHaveBeenCalled();
+    expect(f.fulfill).not.toHaveBeenCalled();
   });
   it("rejects cross-tenant payment before reserving vouchers", async () => {
     const f = checkout({ tenantId: "other" });
