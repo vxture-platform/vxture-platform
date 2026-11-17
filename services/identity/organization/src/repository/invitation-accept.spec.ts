@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MockOrganizationRepository } from "./mock-organization.repository";
 import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
 
@@ -111,7 +111,7 @@ describe("invitation-rules", () => {
     expect(
       rejectAcceptance(
         {
-          targetType: "phone",
+          targetType: "unimplemented-channel",
           target: "13800000000",
           status: "pending",
           expiresAt: future,
@@ -147,6 +147,7 @@ describe("invitation-rules", () => {
 });
 
 describe("MockOrganizationRepository invitations & member status", () => {
+  afterEach(() => vi.useRealTimers());
   let repo: MockOrganizationRepository;
   let orgId: string;
 
@@ -206,6 +207,8 @@ describe("MockOrganizationRepository invitations & member status", () => {
 
   it("重发 = 换 token:旧链接失效、新链接可用;撤销后不能重发", async () => {
     const { invitation, token } = await invite();
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 61_000);
     const rotated = await repo.rotateInvitationToken(invitation.id, orgId);
     expect(rotated?.email).toBe("ann@example.com");
     expect(rotated?.token).not.toBe(token);

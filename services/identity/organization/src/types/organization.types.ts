@@ -73,6 +73,7 @@ export interface TenantVerificationRecord {
 
 /** 邀请台账行(tenancy.invitations;expired 为读侧派生,库内可能仍是 pending)。 */
 export interface InvitationListItem {
+  recipientUserId?: string | null;
   id: string;
   /**
    * 收件方式。`email` 时 `email` 字段有值；`user_no` 时它是空串，真正的目标在
@@ -327,13 +328,15 @@ export interface CreateInvitationInput {
    * `email`   —— 发链接到邮箱，收件人凭邮箱身份接受（既有）。
    * `user_no` —— 目标是**平台已有账号**：填对方的用户号，站内直接送达，
    *               对方同意即加入（owner 2026-09-09）。不发邮件、不出链接。
-   * `phone`   —— 预留，尚未接通。
+   * `phone`   — verified existing account; in-app consent without SMS.
    *
    * 每加一种，`rejectAcceptance` 的 switch 里必须同时加身份校验分支——
    * 那个 switch 的 default 是拒绝，漏了会在测试里显影而不是静默放行。
    */
   targetType: "email" | "phone" | "user_no";
   target: string;
+  /** Resolved account, never supplied directly by an HTTP caller. */
+  recipientUserId?: string | null;
   role: string;
   createdBy: string;
   /** Time-to-live in seconds (default applied by service). */
@@ -341,6 +344,7 @@ export interface CreateInvitationInput {
 }
 
 export interface InvitationView {
+  recipientUserId?: string | null;
   id: string;
   scope: "org" | "workspace";
   organizationId: string | null;
@@ -361,6 +365,8 @@ export type OrgMemberStatus = "active" | "suspended";
 
 /** 按原始 token 查到的邀请(接受页预览用);status 含读侧派生的 expired。 */
 export interface InvitationLookup {
+  /** Internal account binding; never project the UUID into a browser response. */
+  recipientUserId?: string | null;
   id: string;
   tenantId: string | null;
   tenantName: string | null;
@@ -393,6 +399,7 @@ export type AcceptInvitationRejection =
   | "expired"
   | "revoked"
   | "already_accepted"
+  | "declined"
   | "email_mismatch"
   /** 按平台用户号邀请，但接受的人不是那个号（owner 2026-09-09）。 */
   | "user_mismatch"
@@ -400,7 +407,10 @@ export type AcceptInvitationRejection =
    * `target_type` 认不出来。库里这一列**没有 CHECK 约束**，脏数据或某个没接完的
    * 通道都可能落到这里——一律拒绝，不放行。
    */
-  | "unknown_target";
+  | "unknown_target"
+  | "already_member"
+  | "member_suspended"
+  | "workspace_unavailable";
 
 /**
  * 定位一条待接受的邀请。
@@ -654,20 +664,35 @@ export interface OrganizationReadRepository {
   acceptInvitation(
     locator: InvitationLocator,
     userId: string,
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
   ): Promise<AcceptInvitationResult>;
   /**
    * 「谁在邀请我」——按身份查待接受邀请,跨租户。与 `listInvitations` 互为两侧:
    * 那个要 `tenant.member.manage`,这个是自视角(此刻我还不是该租户成员)。
    */
   listInvitationsForIdentity(
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
     limit?: number,
   ): Promise<IncomingInvitation[]>;
   /** 被邀请人自己拒绝。判定沿用接受矩阵——无权接受者亦无权拒绝。 */
   declineInvitation(
     invitationId: string,
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
   ): Promise<DeclineInvitationResult>;
   /**
    * 会话落到哪个工作空间——带提示的那一版。hint 站不住(不属于本租户 / 已停用 /

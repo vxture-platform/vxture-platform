@@ -6,6 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { toE164 } from "@vxture/core-utils/phone";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { VxConfigService } from "@vxture/core-config";
@@ -592,11 +593,15 @@ export class SessionAggregator {
         workspaces: byWorkspace.get(m.userId) ?? [],
       })),
       ...invitations
-        .filter((i) => i.status === "pending")
+        .filter(
+          (i) =>
+            i.status === "pending" &&
+            !members.some((m) => m.userId === i.recipientUserId),
+        )
         .map((i) =>
           pendingMemberRecord(
             i.id,
-            i.email,
+            i.target,
             i.roleCode,
             i.expiresAt,
             i.createdAt,
@@ -706,7 +711,10 @@ export class SessionAggregator {
       { orgId: resolved.orgId },
       "tenant.member.manage",
     );
-    return this.org.listInvitations(resolved.orgId);
+    const invitations = await this.org.listInvitations(resolved.orgId);
+    return invitations.map(
+      ({ recipientUserId: _recipientUserId, ...view }) => view,
+    );
   }
 
   async revokeInvitation(
@@ -741,6 +749,8 @@ export class SessionAggregator {
     input: {
       email?: string;
       userNo?: string;
+      phone?: string;
+      expectedUserNo?: string;
       roleCode?: string | null;
       workspaceId?: string | null;
     },
@@ -775,19 +785,51 @@ export class SessionAggregator {
      *   user_no  —— 目标**必须是平台已有账号**：查不到就直接告诉邀请方号不对，
      *               不要发出一条永远没人能接受的邀请
      * 判据是入参里给了哪一个，不是猜的。 */
+    if (
+      [input.email, input.userNo, input.phone].some(
+        (v) => v !== undefined && typeof v !== "string",
+      )
+    )
+      throw new BadRequestException("invitation_channel_required");
+    const channels = [input.email, input.userNo, input.phone].filter(
+      (v) => typeof v === "string" && v.trim(),
+    );
+    if (channels.length !== 1)
+      throw new BadRequestException("invitation_channel_required");
+    const byPhone = Boolean(input.phone?.trim());
     const byUserNo = (input.userNo ?? "").trim().length > 0;
     let target: string;
     let targetUserId: string | null = null;
-    if (byUserNo) {
+    if (byPhone) {
+      const phone = toE164(input.phone);
+      if (!phone) throw new BadRequestException("invalid_phone");
+      const match = await this.account.findUserByIdentifier(phone);
+      const found = match ? await this.account.getUserById(match.id) : null;
+      if (
+        !found?.phoneVerified ||
+        toE164(found.phone) !== phone ||
+        found.status !== "active"
+      )
+        throw new NotFoundException("user_not_found");
+      if (!input.expectedUserNo || input.expectedUserNo !== found.userNo)
+        throw new ConflictException("invitation_identity_changed");
+      target = phone;
+      targetUserId = found.id;
+    } else if (byUserNo) {
       const found = await this.account.findUserByUserNo(input.userNo!.trim());
       if (!found) throw new NotFoundException("user_not_found");
       target = found.userNo;
       targetUserId = found.id;
     } else {
       target = normalizeEmail(input.email ?? "");
-      if (!target) throw new BadRequestException("email_or_user_no_required");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target) || target.length > 128)
+        throw new BadRequestException("invalid_email");
       const existingUser = await this.account.findUserByIdentifier(target);
-      targetUserId = existingUser?.id ?? null;
+      targetUserId =
+        existingUser?.emailVerified &&
+        normalizeEmail(existingUser.email ?? "") === target
+          ? existingUser.id
+          : null;
     }
 
     /* 已是成员就不必再邀。两条通道都要查——按号邀请时我们已经知道是谁，
@@ -800,15 +842,17 @@ export class SessionAggregator {
       if (member) throw new ConflictException("already_member");
     }
 
-    /* 同一个目标不重复挂 pending。比对要**按通道各比各的**:
-       邮箱通道比邮箱、用户号通道比号——混着比会让「同一个人的两种邀请」
-       其中一条被误判成重复。 */
+    // Account identity is shared by all administrators and channels. The
+    // database guard is authoritative when concurrent requests pass this hint.
     const pending = (await this.org.listInvitations(resolved.orgId)).find(
       (i) =>
         i.status === "pending" &&
-        (byUserNo
-          ? i.targetType === "user_no" && i.target.trim() === target
-          : i.targetType === "email" && i.email.toLowerCase() === target),
+        ((targetUserId !== null && i.recipientUserId === targetUserId) ||
+          (byPhone
+            ? i.targetType === "phone" && i.target === target
+            : byUserNo
+              ? i.targetType === "user_no" && i.target.trim() === target
+              : i.targetType === "email" && i.email.toLowerCase() === target)),
     );
     if (pending) throw new ConflictException("invitation_pending");
 
@@ -818,7 +862,8 @@ export class SessionAggregator {
       scope: "org",
       organizationId: resolved.orgId,
       workspaceId: input.workspaceId!,
-      targetType: byUserNo ? "user_no" : "email",
+      targetType: byPhone ? "phone" : byUserNo ? "user_no" : "email",
+      recipientUserId: targetUserId,
       target,
       role,
       createdBy: userId,
@@ -836,8 +881,8 @@ export class SessionAggregator {
       token,
       /* `email` 只在邮箱通道有值:上层拿它决定发不发邮件。按用户号邀请时是空串,
          那条链路不发邮件——站内直接送达,对方在待办里同意。 */
-      email: byUserNo ? "" : target,
-      targetType: byUserNo ? ("user_no" as const) : ("email" as const),
+      email: byPhone || byUserNo ? "" : target,
+      targetType: byPhone ? "phone" : byUserNo ? "user_no" : "email",
       targetUserId,
       roleCode: role,
       expiresAt: invitation.expiresAt,
@@ -876,10 +921,21 @@ export class SessionAggregator {
       ),
       /* 重发照原通道走:邮箱通道才发邮件(email 非空),用户号通道只是换了 token,
          对方待办里那条仍然有效。 */
-      targetType: rotated.targetType === "user_no" ? "user_no" : "email",
-      /* 重发不重新解析被邀请人:这条邀请是谁的在创建时就定了,轮换 token 不改变它。
-         站内待办也已经挂好,不需要再挂一次。 */
-      targetUserId: null,
+      targetType:
+        rotated.targetType === "phone"
+          ? "phone"
+          : rotated.targetType === "user_no"
+            ? "user_no"
+            : "email",
+      // The database preserves the recipient binding. Resolve the current account
+      // again only to retry a failed in-app notice using the same deduplication key.
+      targetUserId:
+        rotated.targetType === "email"
+          ? null
+          : ((rotated.targetType === "phone"
+              ? await this.account.findUserByIdentifier(rotated.target)
+              : await this.account.findUserByUserNo(rotated.target)
+            )?.id ?? null),
       invitationId,
       token: rotated.token,
       email: rotated.email,
@@ -915,7 +971,9 @@ export class SessionAggregator {
   ): Promise<AcceptInvitationResult> {
     const user = await this.account.getUserById(userId);
     const result = await this.org.acceptInvitation(locator, userId, {
-      email: user?.email ?? null,
+      userId,
+      phone: user?.phoneVerified ? toE164(user.phone) : null,
+      email: user?.emailVerified ? user.email : null,
       userNo: user?.userNo ?? null,
     });
     if (result.ok) {
@@ -1225,6 +1283,32 @@ export class SessionAggregator {
    * 顺带回一个 `alreadyMember`:已经在本租户里的人不需要邀请,让前端把按钮收掉,
    * 而不是让人点完才收到一句「已经是成员」。
    */
+  async lookupUserByPhone(
+    userId: string,
+    orgId: string | undefined,
+    raw: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.gov.assertCan(
+      userId,
+      { orgId: resolved.orgId },
+      "tenant.member.manage",
+    );
+    const phone = toE164(raw);
+    if (!phone) throw new BadRequestException("invalid_phone");
+    const match = await this.account.findUserByIdentifier(phone);
+    const found = match ? await this.account.getUserById(match.id) : null;
+    if (
+      !found?.phoneVerified ||
+      toE164(found.phone) !== phone ||
+      found.status !== "active" ||
+      !found.userNo
+    )
+      return { found: false as const };
+    return this.lookupUserByNo(userId, orgId, found.userNo);
+  }
+
   async lookupUserByNo(
     userId: string,
     orgId: string | undefined,
@@ -1257,9 +1341,11 @@ export class SessionAggregator {
     const user = await this.account.getUserById(userId);
     /* 身份两项都没有 → 不可能有任何邀请指向我。空手查会让 SQL 拿两个 null
        去比,虽然也返回空,但没必要为此打一趟库。 */
-    if (!user?.email && !user?.userNo) return [];
+    if (!user) return [];
     return this.org.listInvitationsForIdentity({
-      email: user?.email ?? null,
+      userId,
+      phone: user?.phoneVerified ? toE164(user.phone) : null,
+      email: user?.emailVerified ? user.email : null,
       userNo: user?.userNo ?? null,
     });
   }
@@ -1268,7 +1354,9 @@ export class SessionAggregator {
   async declineInvitation(userId: string, invitationId: string) {
     const user = await this.account.getUserById(userId);
     return this.org.declineInvitation(invitationId, {
-      email: user?.email ?? null,
+      userId,
+      phone: user?.phoneVerified ? toE164(user.phone) : null,
+      email: user?.emailVerified ? user.email : null,
       userNo: user?.userNo ?? null,
     });
   }
@@ -1407,7 +1495,7 @@ export interface InviteMemberOutcome {
    */
   email: string;
   /** 走的哪条通道。决定送达方式，也决定审计里记的是什么。 */
-  targetType: "email" | "user_no";
+  targetType: "email" | "phone" | "user_no";
   /**
    * 被邀请人的账号 id。按用户号邀请时**一定有**（查不到号就不会走到这里）；
    * 按邮箱邀请时只有对方已注册才有值——站内待办要挂到这个人头上。

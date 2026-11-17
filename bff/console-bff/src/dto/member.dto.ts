@@ -11,6 +11,9 @@
 export class UpsertMemberDto {
   email?: string;
   userNo?: string;
+  phone?: string;
+  /** Identity confirmed in the masked phone lookup. */
+  expectedUserNo?: string;
   roleId?: string | null;
   roleCode?: string | null;
   /** 邀请进哪个工作空间(邀请必填;加成员不用)。 */
