@@ -53,6 +53,22 @@ export function buildSwitchUserUrl(): string {
   return `${API_BASE_URL}/auth/switch`;
 }
 
+/** Return null on verification outages; only a confirmed denial ends local identity. */
+export async function hasActiveSession(): Promise<boolean | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/session`, {
+      credentials: "include",
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (response.ok) return true;
+    if (response.status === 401 || response.status === 403) return false;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface AuthUserDto {
   id: string;
   name: string;

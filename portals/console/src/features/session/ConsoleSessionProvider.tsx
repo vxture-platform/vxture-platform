@@ -17,6 +17,7 @@ import {
   buildTenantSwitchUrl,
   buildWorkspaceSwitchUrl,
   restoreSession,
+  hasActiveSession,
 } from "@/api/console-bff";
 import type { SessionSnapshot } from "@/entities/console";
 
@@ -27,6 +28,7 @@ type SessionStatus = "idle" | "loading" | "ready";
 // tab fired 5 HTTP requests (probe + 4 aggregated reads) at the shared 2C/2G host.
 const SESSION_SYNC_INTERVAL_MS = 300_000;
 const SESSION_SYNC_THROTTLE_MS = 1500;
+const SESSION_PROBE_INTERVAL_MS = 15_000;
 const ANONYMOUS_SESSION: SessionSnapshot = {
   isAuthenticated: false,
   user: null,
@@ -106,6 +108,7 @@ export function ConsoleSessionProvider({
   const seededRef = useRef(seeded);
   const lastSyncAtRef = useRef(0);
   const syncInFlightRef = useRef(false);
+  const sessionEpochRef = useRef(0);
 
   const commitSession = useCallback((snapshot: SessionSnapshot) => {
     const previous = sessionRef.current;
@@ -118,17 +121,20 @@ export function ConsoleSessionProvider({
 
   const refreshSession = useCallback(
     async (options: RefreshSessionOptions = {}) => {
+      const epoch = sessionEpochRef.current;
       if (!options.silent) {
         setStatus("loading");
       }
 
       try {
         const snapshot = await restoreSession();
+        if (epoch !== sessionEpochRef.current) return sessionRef.current;
         commitSession(snapshot);
         setStatus("ready");
 
         return snapshot;
       } catch (error) {
+        if (epoch !== sessionEpochRef.current) return sessionRef.current;
         if (!options.silent) {
           commitSession(ANONYMOUS_SESSION);
         }
@@ -175,6 +181,7 @@ export function ConsoleSessionProvider({
     const syncIfStale = () => {
       const now = Date.now();
       if (
+        document.visibilityState !== "visible" ||
         syncInFlightRef.current ||
         now - lastSyncAtRef.current < SESSION_SYNC_THROTTLE_MS
       ) {
@@ -200,14 +207,51 @@ export function ConsoleSessionProvider({
       SESSION_SYNC_INTERVAL_MS,
     );
     window.addEventListener("focus", syncIfStale);
+    window.addEventListener("pageshow", syncIfStale);
+    window.addEventListener("online", syncIfStale);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener("focus", syncIfStale);
+      window.removeEventListener("pageshow", syncIfStale);
+      window.removeEventListener("online", syncIfStale);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshSession, status]);
+
+  useEffect(() => {
+    let active = true;
+    let pending = false;
+    const probe = async () => {
+      if (
+        !sessionRef.current.isAuthenticated ||
+        document.visibilityState !== "visible" ||
+        pending ||
+        syncInFlightRef.current
+      )
+        return;
+      pending = true;
+      try {
+        if ((await hasActiveSession()) === false && active) {
+          // Fence older projection reads before removing the authenticated shell.
+          sessionEpochRef.current += 1;
+          commitSession(ANONYMOUS_SESSION);
+          setStatus("ready");
+        }
+      } finally {
+        pending = false;
+      }
+    };
+    const timer = window.setInterval(
+      () => void probe(),
+      SESSION_PROBE_INTERVAL_MS,
+    );
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [commitSession]);
 
   const signOut = useCallback(() => {
     // Top-level navigation (not fetch) so the browser sends vx_sid to the IdP
