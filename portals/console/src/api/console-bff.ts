@@ -1898,7 +1898,8 @@ export function orgLogoUrl(logoHash: string): string {
   )}`;
 }
 
-async function hasActiveSession(): Promise<boolean | null> {
+/** Check central validity without loading user, tenant, or permission projections. */
+export async function hasActiveSession(): Promise<boolean | null> {
   try {
     // RP session probe: /auth/session lives at the BFF root (outside /api/*),
     // returns 200 with verified claims when the OIDC-RP session is active, 401
@@ -1908,6 +1909,7 @@ async function hasActiveSession(): Promise<boolean | null> {
       {
         credentials: "include",
         cache: "no-store",
+        signal: AbortSignal.timeout(5000),
       },
     );
 
