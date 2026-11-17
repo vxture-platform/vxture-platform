@@ -441,7 +441,7 @@ export function AtlasChangeTable() {
                   <span>{r.actorName ?? "平台无此运营者"}</span>
                 )}
                 {r.actorConsole ? (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     来自 {r.actorConsole}
                   </span>
                 ) : null}

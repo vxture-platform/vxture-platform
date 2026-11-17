@@ -33,7 +33,7 @@ export function AgentProductActions({
           {t("catalog.actions.coming")}
         </Button>
       ) : availability === "sunset" ? (
-        <p className="text-body-md text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t("subscription.sunsetHint")}
         </p>
       ) : (

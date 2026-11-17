@@ -41,7 +41,7 @@ export function SolutionField({
       </Label>
       {children}
       {showFooter ? (
-        <div className="flex items-start justify-between gap-md text-body-sm">
+        <div className="flex items-start justify-between gap-md text-body-small">
           <span
             className={cn(
               "min-w-0",

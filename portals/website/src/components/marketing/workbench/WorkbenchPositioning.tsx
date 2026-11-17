@@ -40,7 +40,7 @@ export function WorkbenchPositioning() {
             >
               <div className="flex items-center justify-between gap-3">
                 <p
-                  className={`text-label-sm font-medium ${i === 2 ? "text-primary-text" : "text-muted-foreground"}`}
+                  className={`text-label-small font-medium ${i === 2 ? "text-primary-text" : "text-muted-foreground"}`}
                 >
                   {category.label}
                 </p>
@@ -58,13 +58,13 @@ export function WorkbenchPositioning() {
               <p className="mt-4 flex-1 text-base leading-8 text-muted-foreground">
                 {category.description}
               </p>
-              <p className="mt-7 border-t border-border pt-5 text-body-md font-medium leading-6">
+              <p className="mt-7 border-t border-border pt-5 text-body font-medium leading-6">
                 {category.focus}
               </p>
             </div>
           ))}
         </div>
-        <p className="mt-5 max-w-website-4xl text-body-sm leading-6 text-muted-foreground">
+        <p className="mt-5 max-w-website-4xl text-body-small leading-6 text-muted-foreground">
           {t("note")}{" "}
           <a
             href="https://www.workbuddy.ai/"

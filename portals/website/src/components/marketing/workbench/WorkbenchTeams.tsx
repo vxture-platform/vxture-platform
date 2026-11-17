@@ -43,7 +43,7 @@ export function WorkbenchTeams() {
                   />
                   <div>
                     <h3 className="text-base font-semibold">{point.title}</h3>
-                    <p className="mt-2 text-body-md leading-7 text-muted-foreground">
+                    <p className="mt-2 text-body leading-7 text-muted-foreground">
                       {point.description}
                     </p>
                   </div>
@@ -52,7 +52,7 @@ export function WorkbenchTeams() {
             </div>
           </div>
           <figure className="flex min-w-0 flex-col rounded-xl border border-border bg-background p-5 sm:p-8 lg:col-span-7">
-            <figcaption className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-5 text-body-sm text-muted-foreground">
+            <figcaption className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-5 text-body-small text-muted-foreground">
               <span>{t("sample.title")}</span>
               <span>{t("sample.label")}</span>
             </figcaption>
@@ -64,7 +64,7 @@ export function WorkbenchTeams() {
               />
               <div>
                 <p className="font-semibold">{t("sample.workspace")}</p>
-                <p className="mt-1 text-body-sm text-muted-foreground">
+                <p className="mt-1 text-body-small text-muted-foreground">
                   {t("sample.resources")}
                 </p>
               </div>
@@ -76,11 +76,11 @@ export function WorkbenchTeams() {
                   key={item.role}
                   className="rounded-lg border border-border p-4"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted font-mono text-body-sm text-muted-foreground">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted font-mono text-body-small text-muted-foreground">
                     0{i + 1}
                   </span>
                   <p className="mt-4 text-base font-semibold">{item.role}</p>
-                  <p className="mt-2 text-body-md leading-6 text-muted-foreground">
+                  <p className="mt-2 text-body leading-6 text-muted-foreground">
                     {item.task}
                   </p>
                 </div>
@@ -92,9 +92,9 @@ export function WorkbenchTeams() {
                 className="h-5 w-5 shrink-0 text-primary-text"
                 aria-hidden
               />
-              <p className="text-body-md font-medium">{t("sample.outcome")}</p>
+              <p className="text-body font-medium">{t("sample.outcome")}</p>
             </div>
-            <p className="mt-6 text-body-sm leading-6 text-muted-foreground">
+            <p className="mt-6 text-body-small leading-6 text-muted-foreground">
               {t("availability")}
             </p>
           </figure>

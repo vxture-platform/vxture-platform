@@ -82,7 +82,7 @@ export function LoginClientsSection({
   return (
     <div className="flex min-w-0 flex-col gap-lg">
       {drafts.length === 0 ? (
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body-small text-muted-foreground">
           还没有登录客户端。要让用户用平台账号登录这个产品，先添加一个正式渠道。
         </p>
       ) : null}
@@ -163,7 +163,7 @@ export function LoginClientsSection({
                     value={d.clientId}
                     disabled={!canManage}
                     aria-invalid={!!err("clientId")}
-                    className="font-mono text-code-sm"
+                    className="font-mono text-code"
                     onChange={(e) => update(i, { clientId: e.target.value })}
                   />
                 ) : (
@@ -171,7 +171,7 @@ export function LoginClientsSection({
                     id={clientFieldId(i, "clientId")}
                     locked
                     value={d.clientId}
-                    className="font-mono text-code-sm"
+                    className="font-mono text-code"
                   />
                 )}
               </FormField>
@@ -214,7 +214,7 @@ export function LoginClientsSection({
                   disabled={!canManage}
                   aria-invalid={!!err("redirectUris")}
                   placeholder={`https://${host}/api/auth/oidc/callback`}
-                  className="font-mono text-code-sm"
+                  className="font-mono text-code"
                   onChange={(e) => update(i, { redirectUris: e.target.value })}
                 />
               </FormField>
@@ -233,7 +233,7 @@ export function LoginClientsSection({
                   disabled={!canManage}
                   aria-invalid={!!err("postLogoutRedirectUris")}
                   placeholder={`https://${host}/`}
-                  className="font-mono text-code-sm"
+                  className="font-mono text-code"
                   onChange={(e) =>
                     update(i, { postLogoutRedirectUris: e.target.value })
                   }
@@ -257,7 +257,7 @@ export function LoginClientsSection({
                   disabled={!canManage || isPublic}
                   aria-invalid={!!err("backChannelLogoutUri")}
                   placeholder={`https://${host}/auth/backchannel-logout`}
-                  className="font-mono text-code-sm"
+                  className="font-mono text-code"
                   onChange={(e) =>
                     update(i, { backChannelLogoutUri: e.target.value })
                   }
@@ -310,7 +310,7 @@ export function LoginClientsSection({
                   disabled={!canManage}
                   aria-invalid={!!err("logoUrl")}
                   placeholder={`https://${host}/logo.svg`}
-                  className="font-mono text-code-sm"
+                  className="font-mono text-code"
                   onChange={(e) => update(i, { logoUrl: e.target.value })}
                 />
               </FormField>
@@ -327,7 +327,7 @@ export function LoginClientsSection({
                   value={d.allowedScopes}
                   disabled={!canManage}
                   aria-invalid={!!err("allowedScopes")}
-                  className="font-mono text-code-sm"
+                  className="font-mono text-code"
                   onChange={(e) => update(i, { allowedScopes: e.target.value })}
                 />
               </FormField>

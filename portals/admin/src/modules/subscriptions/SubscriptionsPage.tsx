@@ -294,7 +294,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               </StatusBadge>
             </span>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {subscription.orderNo ?? subscription.subscriptionCode}
           </span>
         </span>
@@ -314,7 +314,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               {subscriptionStatusLabels[subscription.status]}
             </StatusBadge>
           }
-          <span className="text-body-sm text-muted-foreground">{`${formatDate(subscription.startAt, locale)} - ${formatDate(subscription.endAt, locale)}`}</span>
+          <span className="text-body-small text-muted-foreground">{`${formatDate(subscription.startAt, locale)} - ${formatDate(subscription.endAt, locale)}`}</span>
         </span>
       ),
     },
@@ -325,7 +325,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       cell: (subscription) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {`${formatNumber(subscription.quota.usageRate)}%`}
-          <span className="text-body-sm text-muted-foreground">{`${quotaRiskLabels[subscription.quota.risk]} · 席位 ${subscription.quota.seatUsed} / ${seatLimitLabel(subscription.quota.maxUsers)}`}</span>
+          <span className="text-body-small text-muted-foreground">{`${quotaRiskLabels[subscription.quota.risk]} · 席位 ${subscription.quota.seatUsed} / ${seatLimitLabel(subscription.quota.maxUsers)}`}</span>
         </span>
       ),
     },
@@ -338,7 +338,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       cell: (subscription) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatMoney(subscription.payAmount)}
-          <span className="text-body-sm text-muted-foreground">{`${cycleLabels[subscription.cycleType]} · ${
+          <span className="text-body-small text-muted-foreground">{`${cycleLabels[subscription.cycleType]} · ${
             subscription.autoRenew ? "自动续期" : subscription.operationHint
           }`}</span>
         </span>
@@ -597,7 +597,7 @@ export function SubscriptionsPage() {
               ]}
             />
             {operationFeedback ? (
-              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
+              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-small text-success-text">
                 {operationFeedback}
               </div>
             ) : null}

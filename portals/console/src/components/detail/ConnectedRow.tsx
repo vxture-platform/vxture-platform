@@ -63,11 +63,11 @@ export function ConnectedRow({
 
       <div className="flex min-w-0 flex-1 basis-media-3xl flex-col gap-2xs">
         <span className="flex flex-wrap items-center gap-sm">
-          <strong className="text-label-md text-foreground">{title}</strong>
+          <strong className="text-label text-foreground">{title}</strong>
           {status}
         </span>
         {description ? (
-          <p className="text-body-sm text-muted-foreground">{description}</p>
+          <p className="text-body-small text-muted-foreground">{description}</p>
         ) : null}
       </div>
 
@@ -76,11 +76,11 @@ export function ConnectedRow({
           key={item.label}
           className="flex min-w-0 shrink-0 flex-col gap-2xs sm:w-media-2xl"
         >
-          <span className="text-label-sm text-muted-foreground">
+          <span className="text-label-small text-muted-foreground">
             {item.label}
           </span>
           <span
-            className="truncate text-body-sm text-foreground"
+            className="truncate text-body-small text-foreground"
             {...(item.title ? { title: item.title } : {})}
           >
             {item.value}

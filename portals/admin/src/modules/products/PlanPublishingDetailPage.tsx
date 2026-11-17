@@ -511,7 +511,7 @@ export function PlanPublishingDetailPage({
         cell: (version) => (
           <span className="flex flex-col">
             <strong>{planVersionLabel(version)}</strong>
-            <span className="text-body-sm text-muted-foreground tabular-nums">
+            <span className="text-body-small text-muted-foreground tabular-nums">
               v{version.versionNo}
             </span>
           </span>
@@ -1076,14 +1076,14 @@ export function PlanPublishingDetailPage({
                         {tierLabel(plan.tier)}
                       </Badge>
                       <span>{plan.planName}</span>
-                      <span className="text-body-sm text-muted-foreground">
+                      <span className="text-body-small text-muted-foreground">
                         {plan.planCode}
                       </span>
                     </span>
                   }
                   trail={
                     <span className="inline-flex flex-wrap items-center justify-end gap-2xs">
-                      <span className="text-body-sm text-muted-foreground">
+                      <span className="text-body-small text-muted-foreground">
                         {impact && impact.subscriptions > 0
                           ? t("retired.hadSubs", {
                               n: formatNumber(impact.subscriptions),
@@ -1139,7 +1139,7 @@ export function PlanPublishingDetailPage({
               onChange={(event) => setEditName(event.target.value)}
               maxLength={128}
             />
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("actions.newPlanNameHint")}
             </span>
           </Field>
@@ -1168,7 +1168,7 @@ export function PlanPublishingDetailPage({
               onCheckedChange={setEditCustomerVisible}
             />
           </Field>
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {t("actions.editVisibilityHint")}
           </span>
           <Field orientation="horizontal">
@@ -1258,7 +1258,7 @@ export function PlanPublishingDetailPage({
               placeholder={`${productCode}-pro`}
               maxLength={64}
             />
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("actions.newPlanCodeHint")}
             </span>
           </Field>
@@ -1276,7 +1276,7 @@ export function PlanPublishingDetailPage({
               }}
               maxLength={120}
             />
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("actions.newPlanNameHint")}
             </span>
           </Field>

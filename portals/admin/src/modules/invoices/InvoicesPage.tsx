@@ -370,7 +370,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
               </StatusBadge>
             </span>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {(invoice.bills ?? [{ billNo: invoice.billNo }])
               .map((b) => b.billNo)
               .join(" / ")}
@@ -385,7 +385,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
       cell: (invoice) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatCurrency(invoice.invoiceAmount, invoice.currency)}
-          <span className="text-body-sm text-muted-foreground">{`税额 ${formatCurrency(invoice.taxAmount, invoice.currency)}`}</span>
+          <span className="text-body-small text-muted-foreground">{`税额 ${formatCurrency(invoice.taxAmount, invoice.currency)}`}</span>
         </span>
       ),
     },
@@ -403,7 +403,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
               {invoiceStatusLabel(invoice.invoiceStatus)}
             </StatusBadge>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {invoiceTypeLabel(invoice.invoiceType)}
           </span>
         </span>
@@ -687,7 +687,7 @@ export function InvoicesPage() {
               ]}
             />
             {operationFeedback ? (
-              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
+              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-small text-success-text">
                 {operationFeedback}
               </div>
             ) : null}

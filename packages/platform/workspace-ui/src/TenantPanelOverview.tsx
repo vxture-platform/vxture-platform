@@ -115,8 +115,8 @@ function ResourceRow({
         <Icon name={storage ? "database" : "sparkles"} size="sm" />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-2xs">
-        <span className="truncate text-label-md text-foreground">{label}</span>
-        <span className="text-body-sm text-muted-foreground">workspace</span>
+        <span className="truncate text-label text-foreground">{label}</span>
+        <span className="text-body-small text-muted-foreground">workspace</span>
       </div>
       <TooltipProvider delayDuration={200}>
         <Tooltip>
@@ -132,7 +132,7 @@ function ResourceRow({
                   {amount}
                 </span>
                 {unit && (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {unit}
                   </span>
                 )}
@@ -152,7 +152,7 @@ function ResourceRow({
             avoidCollisions
             sticky="always"
             data-tenant-resource-tooltip
-            className="text-body-sm font-normal"
+            className="text-body-small font-normal"
           >
             {known ? (
               <div className="flex flex-col gap-2xs">
@@ -210,7 +210,7 @@ export function TenantPanelOverview(
         <div className="flex min-w-0 flex-1 flex-col gap-2xs">
           <div className="flex items-center justify-between gap-xs">
             <span
-              className="truncate text-label-lg text-foreground"
+              className="truncate text-label text-foreground"
               title={props.name}
             >
               {props.name}
@@ -220,14 +220,14 @@ export function TenantPanelOverview(
             ) : (
               <Badge
                 variant="outline"
-                className="shrink-0 rounded-full text-label-sm font-normal"
+                className="shrink-0 rounded-full text-label-small font-normal"
               >
                 {props.typeLabel}
               </Badge>
             )}
           </div>
           <span
-            className="truncate text-body-sm text-muted-foreground"
+            className="truncate text-body-small text-muted-foreground"
             title={props.workspaceName}
           >
             {props.workspaceName}

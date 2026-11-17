@@ -93,7 +93,7 @@ export function OrderFlowStrip({ stage, times, badge }: OrderFlowStripProps) {
               ) : null}
               <span
                 className={cn(
-                  "flex size-icon-lg shrink-0 items-center justify-center rounded-full border-2 text-body-sm font-semibold",
+                  "flex size-icon-lg shrink-0 items-center justify-center rounded-full border-2 text-body-small font-semibold",
                   done && "border-primary bg-primary text-primary-foreground",
                   cur && "border-primary bg-surface-selected text-primary-text",
                   !done &&
@@ -106,7 +106,7 @@ export function OrderFlowStrip({ stage, times, badge }: OrderFlowStripProps) {
               <span className="flex min-w-0 flex-col">
                 <span
                   className={cn(
-                    "truncate text-label-sm",
+                    "truncate text-label-small",
                     done
                       ? "text-foreground"
                       : cur
@@ -117,7 +117,7 @@ export function OrderFlowStrip({ stage, times, badge }: OrderFlowStripProps) {
                   {t(`${key}.${done ? "done" : "pending"}`)}
                 </span>
                 {time ? (
-                  <time className="hidden truncate text-body-sm text-content-tertiary tabular-nums sm:block">
+                  <time className="hidden truncate text-body-small text-content-tertiary tabular-nums sm:block">
                     {formatTs(time)}
                   </time>
                 ) : null}

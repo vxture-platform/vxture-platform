@@ -390,7 +390,7 @@ export function RunosCallStreams({
               id: "agent",
               header: "调用方 / 任务",
               cell: (r: CapabilityCallRecord) => (
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {r.agentId ?? "—"}
                   {r.taskId ? (
                     <>
@@ -398,7 +398,7 @@ export function RunosCallStreams({
                       <Button
                         variant="link"
                         size="sm"
-                        className="font-mono text-code-sm"
+                        className="font-mono text-code"
                         title="按这个任务串联上下两张表"
                         onClick={() => onTaskIdChange(r.taskId ?? "")}
                       >
@@ -506,7 +506,7 @@ export function RunosCallStreams({
               cell: (r: CapabilityCallRecord) =>
                 r.costAmount != null ? (
                   <span
-                    className="font-mono text-code-sm"
+                    className="font-mono text-code"
                     title={`载荷 ${r.bytesIn ?? "—"} B 入 / ${r.bytesOut ?? "—"} B 出`}
                   >
                     {r.costAmount}
@@ -582,7 +582,7 @@ export function RunosCallStreams({
               id: "note",
               header: "备注",
               cell: (r: TaskOutcomeRecord) => (
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {r.note ?? "—"}
                 </span>
               ),

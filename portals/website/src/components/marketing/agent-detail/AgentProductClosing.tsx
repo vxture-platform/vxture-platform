@@ -29,7 +29,7 @@ export function AgentProductClosing({
       <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
         <div className="flex flex-col gap-7 rounded-xl border border-border bg-linear-to-br from-primary-muted/40 to-card p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
           <div className="min-w-0 max-w-website-2xl lg:flex-1">
-            <p className="text-label-sm font-semibold text-primary-text">
+            <p className="text-label-small font-semibold text-primary-text">
               {t("agentDetail.closingEyebrow")}
             </p>
             <h2
@@ -38,7 +38,7 @@ export function AgentProductClosing({
             >
               {t("agentDetail.closingTitle")}
             </h2>
-            <p className="mt-3 max-w-website-xl text-body-sm leading-7 text-muted-foreground">
+            <p className="mt-3 max-w-website-xl text-body-small leading-7 text-muted-foreground">
               {t("agentDetail.closingDescription")}
             </p>
           </div>
@@ -51,7 +51,7 @@ export function AgentProductClosing({
         </div>
         <Link
           href="/appcenter"
-          className="mt-8 inline-flex items-center gap-2 rounded-md text-body-sm text-muted-foreground hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-8 inline-flex items-center gap-2 rounded-md text-body-small text-muted-foreground hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Icon name="arrow-left" className="h-4 w-4" aria-hidden />
           {t("catalog.backAppcenter")}

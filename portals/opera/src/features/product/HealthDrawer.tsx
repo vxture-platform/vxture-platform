@@ -157,11 +157,11 @@ export function HealthDrawer({
               ) : (
                 <StatusBadge tone="danger">读取失败</StatusBadge>
               )}
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {checkedAt ? `实测于 ${checkedAt}` : "正在实测…"}
               </span>
             </div>
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {meta?.hint ??
                 "读不到运行痕迹——这和「没人用」不是一回事，先解决读取失败。"}
             </p>
@@ -199,20 +199,22 @@ export function HealthDrawer({
                     >
                       {c.status === "pass" ? "有痕迹" : "无痕迹"}
                     </StatusBadge>
-                    <span className="text-label-md text-foreground">
+                    <span className="text-label text-foreground">
                       {c.label}
                     </span>
                     {c.advisory ? (
-                      <span className="text-body-sm text-muted-foreground">
+                      <span className="text-body-small text-muted-foreground">
                         仅供参考
                       </span>
                     ) : null}
                   </div>
                 </div>
-                <p className="text-body-sm text-muted-foreground">{c.detail}</p>
+                <p className="text-body-small text-muted-foreground">
+                  {c.detail}
+                </p>
                 {c.legacyAuthThisMonth !== undefined ? (
                   /* E6：一句事实，不进三态判定。 */
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-small text-muted-foreground">
                     {tShared("integrationSignals.legacyAuthThisMonth", {
                       count: c.legacyAuthThisMonth,
                     })}
@@ -220,7 +222,7 @@ export function HealthDrawer({
                 ) : null}
                 {c.delegatedReporter !== undefined ? (
                   /* 代上报（决策 3 PR C）：同样一句事实——这次 C2 读是谁替它发起的。 */
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-small text-muted-foreground">
                     {tShared("integrationSignals.delegatedReporter", {
                       reporter: c.delegatedReporter,
                     })}
@@ -229,14 +231,14 @@ export function HealthDrawer({
               </div>
             ))
           ) : (
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {running ? "实测中…" : "读不到痕迹。"}
             </p>
           )}
         </div>
 
         {/* 上屏的文案里不写 markdown：星号会原样显示给运营。 */}
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body-small text-muted-foreground">
           这一屏不挡任何动作。产品能不能上线、能不能转正式版，都看「接入检查」。
         </p>
       </div>

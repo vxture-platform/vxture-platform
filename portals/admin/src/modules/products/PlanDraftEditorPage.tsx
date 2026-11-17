@@ -498,7 +498,7 @@ export function PlanDraftEditorPage({
   return (
     <DetailPageTemplate className="min-w-0" header={header}>
       {message ? (
-        <p className="text-body-sm" role="status">
+        <p className="text-body-small" role="status">
           {message}
         </p>
       ) : null}
@@ -527,7 +527,7 @@ export function PlanDraftEditorPage({
               placeholder={t("publishOverride.reasonHint")}
               onChange={(event) => setOverrideReason(event.target.value)}
             />
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("publishOverride.auditHint")}
             </span>
           </Field>
@@ -695,7 +695,7 @@ export function PlanDraftEditorPage({
       >
         <div className="grid min-w-0 gap-md lg:grid-cols-2">
           <div className="grid min-w-0 gap-2xs">
-            <h4 className="text-body-sm text-muted-foreground">
+            <h4 className="text-body-small text-muted-foreground">
               {t("editorV2.candidates")}
             </h4>
             {(["platform", "product"] as const).map((scope) => {
@@ -713,7 +713,7 @@ export function PlanDraftEditorPage({
                             ? t("editorV2.groupPlatform")
                             : t("editorV2.groupProduct")}
                         </StatusBadge>
-                        <span className="text-body-sm text-muted-foreground">
+                        <span className="text-body-small text-muted-foreground">
                           {scope === "platform"
                             ? t("editorV2.groupPlatformHint")
                             : t("editorV2.groupProductHint")}
@@ -767,7 +767,7 @@ export function PlanDraftEditorPage({
           </div>
 
           <div className="grid min-w-0 gap-2xs">
-            <h4 className="text-body-sm text-muted-foreground">
+            <h4 className="text-body-small text-muted-foreground">
               {t("editorV2.chosen")}
             </h4>
             {entries.length === 0 ? (
@@ -792,12 +792,12 @@ export function PlanDraftEditorPage({
                       main={
                         <span className="inline-flex flex-wrap items-center gap-2xs">
                           <span className="font-mono">{entry.key}</span>
-                          <span className="font-mono text-body-sm text-muted-foreground">
+                          <span className="font-mono text-body-small text-muted-foreground">
                             {meta?.metricUnit ?? "—"}
                           </span>
                           {/* 千分位预览：十一位的字节数不分组根本读不出量级。 */}
                           {Number.isFinite(n) && entry.amount.trim() !== "" ? (
-                            <span className="text-body-sm text-muted-foreground">
+                            <span className="text-body-small text-muted-foreground">
                               {n === -1 ? "-1" : formatNumber(n)}
                             </span>
                           ) : null}
@@ -884,7 +884,7 @@ export function PlanDraftEditorPage({
       >
         <div className="grid min-w-0 gap-md lg:grid-cols-2">
           <div className="grid min-w-0 gap-2xs">
-            <h4 className="text-body-sm text-muted-foreground">
+            <h4 className="text-body-small text-muted-foreground">
               {t("editorV2.bundleCandidates")}
             </h4>
             {bundleCandidates.length === 0 ? (
@@ -897,7 +897,7 @@ export function PlanDraftEditorPage({
                     main={
                       <span className="inline-flex flex-wrap items-center gap-2xs">
                         <span>{item.productName}</span>
-                        <span className="font-mono text-body-sm text-muted-foreground">
+                        <span className="font-mono text-body-small text-muted-foreground">
                           {item.productCode}
                         </span>
                       </span>
@@ -929,7 +929,7 @@ export function PlanDraftEditorPage({
           </div>
 
           <div className="grid min-w-0 gap-2xs">
-            <h4 className="text-body-sm text-muted-foreground">
+            <h4 className="text-body-small text-muted-foreground">
               {t("editorV2.bundleChosen")}
             </h4>
             {bundle.length === 0 ? (
@@ -1003,7 +1003,7 @@ export function PlanDraftEditorPage({
                 ))}
               </PanelList>
             )}
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {t("editorV2.priorityHint")}
             </p>
           </div>
@@ -1028,7 +1028,7 @@ export function PlanDraftEditorPage({
         }
       >
         {previewOpen ? (
-          <pre className="overflow-x-auto rounded-md bg-muted p-sm font-mono text-body-sm">
+          <pre className="overflow-x-auto rounded-md bg-muted p-sm font-mono text-body-small">
             {JSON.stringify(composedQuota, null, 2)}
           </pre>
         ) : null}
@@ -1062,12 +1062,12 @@ export function PlanDraftEditorPage({
             >
               {t("editorV2.discard")}
             </Button>
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("editorV2.actionsLeftHint")}
             </span>
           </span>
           <span className="inline-flex flex-wrap items-center justify-end gap-2xs">
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("editorV2.actionsRightHint")}
             </span>
             <Button

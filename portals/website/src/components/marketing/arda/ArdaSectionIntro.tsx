@@ -17,7 +17,7 @@ interface ArdaSectionIntroProps {
 export function ArdaSectionIntro(props: ArdaSectionIntroProps) {
   return (
     <div className="mb-10 max-w-website-3xl">
-      <p className="text-label-sm font-semibold text-primary-text">
+      <p className="text-label-small font-semibold text-primary-text">
         {props.eyebrow}
       </p>
       <h2

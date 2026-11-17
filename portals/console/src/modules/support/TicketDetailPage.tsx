@@ -167,7 +167,7 @@ function TicketTimeline({ events }: { readonly events: ConsoleTicketEvent[] }) {
               />
             }
             trail={
-              <span className="shrink-0 text-body-sm text-muted-foreground tabular-nums">
+              <span className="shrink-0 text-body-small text-muted-foreground tabular-nums">
                 {fmtDateTime(event.createdAt)}
               </span>
             }
@@ -538,7 +538,7 @@ export function TicketDetailPage() {
         <SectionBody>
           {/* 建单时写下的那段话（`support.tickets.description`），不是一条流水，
               所以它有自己的板块而不是混进时间线的第一条。 */}
-          <p className="whitespace-pre-wrap text-body-md text-foreground">
+          <p className="whitespace-pre-wrap text-body text-foreground">
             {ticket.description.trim() || "—"}
           </p>
         </SectionBody>
@@ -572,7 +572,7 @@ export function TicketDetailPage() {
 
       <PageSection icon="info" level={2} title={tList("notes.title")}>
         <SectionBody>
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {tList("notes.noticeBody")}
           </p>
         </SectionBody>

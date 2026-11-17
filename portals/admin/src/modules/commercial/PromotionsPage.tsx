@@ -167,7 +167,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       cell: (record) => (
         <span className="inline-flex flex-col items-center gap-2xs">
           {<Badge variant="outline">{record.scopeLabel}</Badge>}
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {record.description}
           </span>
         </span>
@@ -192,7 +192,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       cell: (record) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatNumber(record.redemptionCount)}
-          <span className="text-body-sm text-muted-foreground">{`${formatNumber(record.tenantCount)} 租户`}</span>
+          <span className="text-body-small text-muted-foreground">{`${formatNumber(record.tenantCount)} 租户`}</span>
         </span>
       ),
     },
@@ -207,7 +207,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
               {statusLabel(record.status)}
             </Tag>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {record.ownerName}
           </span>
         </span>

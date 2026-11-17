@@ -200,7 +200,7 @@ export function AuditLogsPage() {
         cell: (r) => (
           <span className="flex flex-col items-center tabular-nums">
             <span className="text-foreground">{fmtDate(r.at)}</span>
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {fmtTime(r.at)}
             </span>
           </span>
@@ -225,7 +225,7 @@ export function AuditLogsPage() {
         id: "resource",
         header: t("table.colResource"),
         cell: (r) => (
-          <span className="font-mono text-body-sm text-muted-foreground">
+          <span className="font-mono text-body-small text-muted-foreground">
             {r.resourceId}
           </span>
         ),
@@ -245,7 +245,7 @@ export function AuditLogsPage() {
         header: t("table.colIp"),
         cell: (r) =>
           r.ipAddress ? (
-            <span className="font-mono text-body-sm text-muted-foreground">
+            <span className="font-mono text-body-small text-muted-foreground">
               {r.ipAddress}
             </span>
           ) : (
@@ -328,7 +328,7 @@ export function AuditLogsPage() {
           }
           footer={
             <div className="flex w-full flex-wrap items-center justify-between gap-md">
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {loadFailed ? "—" : t("table.total", { count: total })}
               </span>
               <span className="flex items-center gap-sm">
@@ -340,7 +340,7 @@ export function AuditLogsPage() {
                 >
                   {t("table.prev")}
                 </Button>
-                <span className="text-body-sm text-muted-foreground tabular-nums">
+                <span className="text-body-small text-muted-foreground tabular-nums">
                   {t("table.pageOf", { page, pageCount })}
                 </span>
                 <Button

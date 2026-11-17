@@ -373,7 +373,7 @@ function RankMedal({ rank }: { rank: number }) {
 
   return (
     <span
-      className="inline-grid size-icon-xl place-items-center text-title-md"
+      className="inline-grid size-icon-xl place-items-center text-heading-2"
       role="img"
       aria-label={`第 ${rank} 名`}
     >
@@ -390,7 +390,9 @@ function metricValueNode(value: string) {
     <>
       {prefix}
       {number}
-      {unit ? <small className="text-body-sm font-normal">{unit}</small> : null}
+      {unit ? (
+        <small className="text-body-small font-normal">{unit}</small>
+      ) : null}
     </>
   );
 }
@@ -399,7 +401,7 @@ function metricValueNode(value: string) {
 function DetailLink({ href }: { href: string }) {
   return (
     <Link
-      className="shrink-0 text-body-sm font-semibold text-primary-text no-underline hover:underline"
+      className="shrink-0 text-body-small font-semibold text-primary-text no-underline hover:underline"
       href={href}
     >
       详情
@@ -995,7 +997,7 @@ function ProductRankingCard({
             }
             trail={
               <span className="flex items-center gap-xs">
-                <b className="text-title-sm font-bold">
+                <b className="text-heading-3 font-bold">
                   {item.subscriptions.toLocaleString("en-US")}
                 </b>
                 {item.priceTag ? (

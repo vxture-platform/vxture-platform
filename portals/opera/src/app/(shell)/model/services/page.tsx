@@ -332,7 +332,7 @@ function ModelServiceContent() {
     if (rows.length === 0) {
       return (
         <div className="flex items-center justify-between gap-sm px-md py-sm">
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             这家名下还没有模型。
           </span>
           {canManageModels && providerId ? (
@@ -409,7 +409,7 @@ function ModelServiceContent() {
                       但「同一个 modelCode 行为变了」发生时它是唯一的证据——编码锁死
                       不可改，而 endpointUrl / providerId / config 都可以改。 */}
                   <span
-                    className="text-body-sm text-muted-foreground"
+                    className="text-body-small text-muted-foreground"
                     title={`行为指纹 ${m.behaviorVersion}｜它一变，就是有人把这个编码指到了别的上游、或改了 wire`}
                   >
                     {m.protocol}
@@ -423,7 +423,7 @@ function ModelServiceContent() {
               align: "numeric",
               width: "xs",
               cell: (m: AiModelRecord) => (
-                <span className="flex flex-col items-end gap-2xs text-body-sm">
+                <span className="flex flex-col items-end gap-2xs text-body-small">
                   {/* 未声明就写「未声明」，不写 0——0 是一个会被当真的数字。 */}
                   <span>
                     {m.contextWindow == null ? (
@@ -448,7 +448,7 @@ function ModelServiceContent() {
               align: "numeric",
               width: "sm",
               cell: (m: AiModelRecord) => (
-                <span className="flex flex-col items-end gap-2xs text-body-sm">
+                <span className="flex flex-col items-end gap-2xs text-body-small">
                   {m.endpointRefCount === 0 ? (
                     <span className="text-muted-foreground">入口 0</span>
                   ) : (
@@ -829,18 +829,18 @@ function ModelServiceContent() {
                   authoritative !== undefined && authoritative !== owned.length;
                 return (
                   <span className="flex flex-col items-end gap-2xs">
-                    <span className="text-body-sm">
+                    <span className="text-body-small">
                       {authoritative ?? owned.length}
                     </span>
                     {disagrees ? (
                       <span
-                        className="text-body-sm text-warning-foreground"
+                        className="text-body-small text-warning-foreground"
                         title="Atlas 报的模型数与本页按 providerId 分出来的组不一致——展开看到的是后者。"
                       >
                         展开可见 {owned.length}
                       </span>
                     ) : owned.length > 0 ? (
-                      <span className="text-body-sm text-muted-foreground">
+                      <span className="text-body-small text-muted-foreground">
                         {activeCount} 启用
                       </span>
                     ) : null}

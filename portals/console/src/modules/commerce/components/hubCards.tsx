@@ -112,7 +112,7 @@ function ProductGlyph({
   return (
     <span
       aria-hidden="true"
-      className="flex size-control-md shrink-0 items-center justify-center rounded-lg bg-primary-muted-hover text-label-sm font-semibold text-primary-hover"
+      className="flex size-control-md shrink-0 items-center justify-center rounded-lg bg-primary-muted-hover text-label-small font-semibold text-primary-hover"
     >
       {productInitials(name, code)}
     </span>
@@ -314,10 +314,10 @@ export function SubscriptionProductCard({
           <ProductGlyph name={item.productName} code={item.productCode} />
           <div className="flex min-w-0 flex-1 flex-wrap items-start gap-sm">
             <div className="flex min-w-32 flex-1 flex-col gap-2xs">
-              <span className="break-words text-label-md text-foreground">
+              <span className="break-words text-label text-foreground">
                 {item.productName ?? item.planName}
               </span>
-              <span className="truncate text-body-sm text-muted-foreground">
+              <span className="truncate text-body-small text-muted-foreground">
                 {item.productNick ?? item.planName}
               </span>
             </div>
@@ -373,7 +373,7 @@ export function SubscriptionProductCard({
         </div>
 
         {suspensionHint ? (
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {suspensionHint}
           </span>
         ) : null}
@@ -382,7 +382,7 @@ export function SubscriptionProductCard({
             进度条走 DS 的 Progress,填充是 `bg-primary`(品牌色,当前就是蓝)——
             不需要为「蓝色进度线」再造一个档,也不在注释里记具体色值。 */}
         <div className="flex flex-col gap-2xs">
-          <div className="flex items-baseline justify-between gap-sm text-body-sm">
+          <div className="flex items-baseline justify-between gap-sm text-body-small">
             <span className="text-muted-foreground tabular-nums">
               {item.endAt
                 ? `${fmtDate(item.startAt)} ~ ${fmtDate(item.endAt)}`
@@ -408,7 +408,7 @@ export function SubscriptionProductCard({
       </CardContent>
 
       {/* 卡底行：DS CardFooter 自带虚线分隔 + 下对齐 */}
-      <CardFooter className="flex-wrap justify-between gap-md text-body-sm">
+      <CardFooter className="flex-wrap justify-between gap-md text-body-small">
         <span className="flex min-w-0 items-center gap-md">
           {productCode ? (
             <a

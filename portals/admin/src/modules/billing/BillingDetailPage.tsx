@@ -342,10 +342,10 @@ function BillingDetails({
               }
               trail={
                 <span className="grid justify-items-end gap-2xs">
-                  <span className="text-body-md font-semibold text-foreground">
+                  <span className="text-body font-semibold text-foreground">
                     {formatCurrency(item.totalAmount, bill.currency)}
                   </span>
-                  <span className="truncate text-body-sm text-muted-foreground">
+                  <span className="truncate text-body-small text-muted-foreground">
                     {item.remark ??
                       `单价 ${formatCurrency(item.unitPrice, bill.currency)}`}
                   </span>
@@ -378,10 +378,10 @@ function BillingDetails({
                 }
                 trail={
                   <span className="grid justify-items-end gap-2xs">
-                    <span className="text-body-md font-semibold text-foreground">
+                    <span className="text-body font-semibold text-foreground">
                       {formatCurrency(payment.paidAmount, payment.currency)}
                     </span>
-                    <span className="truncate text-body-sm text-muted-foreground">
+                    <span className="truncate text-body-small text-muted-foreground">
                       {payment.remark ?? payment.operatorName}
                     </span>
                   </span>
@@ -399,10 +399,10 @@ function BillingDetails({
               }
               trail={
                 <span className="grid justify-items-end gap-2xs">
-                  <span className="text-body-md font-semibold text-foreground">
+                  <span className="text-body font-semibold text-foreground">
                     未收款
                   </span>
-                  <span className="truncate text-body-sm text-muted-foreground">
+                  <span className="truncate text-body-small text-muted-foreground">
                     订单侧确认线下收款后会自动写入支付记录。
                   </span>
                 </span>
@@ -435,14 +435,14 @@ function BillingDetails({
                 }
                 trail={
                   <span className="grid justify-items-end gap-2xs">
-                    <span className="text-body-md font-semibold text-foreground">
+                    <span className="text-body font-semibold text-foreground">
                       {formatCurrency(receipt.invoiceAmount, receipt.currency)}
                     </span>
                     {/* 截断要落在里面那条文字上，不能落在这一层：这一层同时装着
                         三个操作钮，`truncate`（overflow:hidden + nowrap）会把钮裁掉。
                         main 上正是这么分的——容器 `overflow:visible;white-space:normal`
                         并允许换行，只有内层 `> span` 带 ellipsis。 */}
-                    <span className="flex flex-wrap items-center gap-xs text-body-sm text-muted-foreground">
+                    <span className="flex flex-wrap items-center gap-xs text-body-small text-muted-foreground">
                       <span className="min-w-0 max-w-panel-sm truncate">
                         {receipt.invoiceFileUrl ? (
                           <a
@@ -521,13 +521,13 @@ function BillingDetails({
               }
               trail={
                 <span className="grid justify-items-end gap-2xs">
-                  <span className="text-body-md font-semibold text-foreground">
+                  <span className="text-body font-semibold text-foreground">
                     {formatCurrency(
                       Math.max(0, bill.payableAmount - bill.invoicedAmount),
                       bill.currency,
                     )}
                   </span>
-                  <span className="truncate text-body-sm text-muted-foreground">
+                  <span className="truncate text-body-small text-muted-foreground">
                     财务线下开票完成后，由运营在此手动同步登记。
                   </span>
                 </span>
@@ -563,13 +563,13 @@ function BillingDetails({
               }
               main={
                 <span className="grid min-w-0 gap-2xs">
-                  <strong className="block text-body-md font-semibold text-foreground">
+                  <strong className="block text-body font-semibold text-foreground">
                     {event.title}
                   </strong>
-                  <p className="m-0 text-body-sm leading-relaxed text-muted-foreground">
+                  <p className="m-0 text-body-small leading-relaxed text-muted-foreground">
                     {event.description}
                   </p>
-                  <small className="block text-body-sm text-muted-foreground">
+                  <small className="block text-body-small text-muted-foreground">
                     {event.actor} · {formatDate(event.at, locale)}
                   </small>
                 </span>
@@ -852,7 +852,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
       }
     >
       {operationFeedback ? (
-        <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
+        <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-small text-success-text">
           {operationFeedback}
         </div>
       ) : null}
@@ -863,7 +863,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
           <BillingDetails bill={bill} onReceiptAction={requestReceiptAction} />
         </>
       ) : (
-        <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
+        <section className="flex min-h-0 items-center justify-end gap-sm text-body-small font-normal text-muted-foreground">
           <span>{tShared("common.loading")}</span>
         </section>
       )}

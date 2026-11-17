@@ -29,7 +29,7 @@ export function ArdaWorkspace() {
   const stages = t.raw("sample.stages") as string[];
   return (
     <figure className="min-w-0">
-      <figcaption className="mb-3 flex flex-wrap justify-between gap-2 text-label-sm text-muted-foreground">
+      <figcaption className="mb-3 flex flex-wrap justify-between gap-2 text-label-small text-muted-foreground">
         <span>ARDA / DATA WORKSPACE</span>
         <span>{t("sample.disclaimer")}</span>
       </figcaption>
@@ -43,7 +43,7 @@ export function ArdaWorkspace() {
             />
             Arda
           </span>
-          <span className="text-label-sm text-muted-foreground">
+          <span className="text-label-small text-muted-foreground">
             {t("sample.workspace")}
           </span>
         </div>
@@ -55,7 +55,7 @@ export function ArdaWorkspace() {
             {menu.map((item, index) => (
               <div
                 key={item}
-                className={`flex items-center gap-2 rounded-md px-2 py-2 text-label-sm ${index === 2 ? "bg-primary-muted text-primary-text" : "text-muted-foreground"}`}
+                className={`flex items-center gap-2 rounded-md px-2 py-2 text-label-small ${index === 2 ? "bg-primary-muted text-primary-text" : "text-muted-foreground"}`}
               >
                 <Icon
                   name={MENU_ICONS[index] ?? "squares-four"}
@@ -66,13 +66,13 @@ export function ArdaWorkspace() {
             ))}
           </div>
           <div className="min-w-0 flex-1 p-4 sm:p-5">
-            <p className="text-label-sm text-muted-foreground">
+            <p className="text-label-small text-muted-foreground">
               {t("sample.breadcrumb")}
             </p>
-            <p className="mt-3 text-title-sm font-semibold">
+            <p className="mt-3 text-heading-3 font-semibold">
               {t("sample.title")}
             </p>
-            <div className="my-5 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-label-sm text-muted-foreground">
+            <div className="my-5 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-label-small text-muted-foreground">
               <Icon name="search" className="h-3 w-3 shrink-0" aria-hidden />
               {t("sample.search")}
             </div>
@@ -85,7 +85,7 @@ export function ArdaWorkspace() {
                   key={row.name}
                   className="flex items-center justify-between gap-3 py-4"
                 >
-                  <span className="flex min-w-0 items-start gap-2 text-body-sm">
+                  <span className="flex min-w-0 items-start gap-2 text-body-small">
                     <Icon
                       name="database"
                       className="mt-1 h-3 w-3 shrink-0 text-primary-text"
@@ -93,25 +93,28 @@ export function ArdaWorkspace() {
                     />
                     <span>
                       {row.name}
-                      <small className="mt-1 block text-label-sm text-muted-foreground">
+                      <small className="mt-1 block text-label-small text-muted-foreground">
                         {row.domain}
                       </small>
                     </span>
                   </span>
-                  <Badge variant="outline" className="shrink-0 text-label-sm">
+                  <Badge
+                    variant="outline"
+                    className="shrink-0 text-label-small"
+                  >
                     {t("sample.passed")}
                   </Badge>
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-label-sm text-muted-foreground">
+            <p className="mt-3 text-label-small text-muted-foreground">
               {t("sample.footer")}
             </p>
           </div>
         </div>
       </Card>
       <div
-        className="mt-3 flex flex-wrap items-center justify-center gap-3 rounded-lg border border-primary-border bg-primary-muted px-3 py-3 text-label-sm text-primary-text"
+        className="mt-3 flex flex-wrap items-center justify-center gap-3 rounded-lg border border-primary-border bg-primary-muted px-3 py-3 text-label-small text-primary-text"
         aria-hidden
       >
         {stages.map((item, index) => (

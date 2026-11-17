@@ -24,7 +24,7 @@ export function WorkbenchDesktop() {
   const t = useTranslations("products.workbench.demo");
   return (
     <figure className="min-w-0">
-      <figcaption className="mb-3 flex flex-wrap items-center justify-between gap-2 text-label-sm text-muted-foreground">
+      <figcaption className="mb-3 flex flex-wrap items-center justify-between gap-2 text-label-small text-muted-foreground">
         <span className="font-mono tracking-widest">
           RUYIN / BUSINESS WORKSPACE
         </span>
@@ -38,14 +38,14 @@ export function WorkbenchDesktop() {
               className="h-4 w-4 shrink-0 text-primary-text"
               aria-hidden
             />
-            <span className="font-brand text-body-md font-semibold tracking-wider">
+            <span className="font-brand text-body font-semibold tracking-wider">
               RUYIN
             </span>
-            <span className="hidden border-l border-border pl-3 text-label-sm text-muted-foreground sm:block">
+            <span className="hidden border-l border-border pl-3 text-label-small text-muted-foreground sm:block">
               {t("workspace")}
             </span>
           </div>
-          <span className="flex items-center gap-2 text-label-sm text-muted-foreground">
+          <span className="flex items-center gap-2 text-label-small text-muted-foreground">
             <Icon
               name="shield-check"
               className="h-4 w-4 text-primary-text"
@@ -64,7 +64,7 @@ export function WorkbenchDesktop() {
                 <TabsTrigger
                   key={id}
                   value={id}
-                  className="h-auto min-w-0 whitespace-normal px-3 py-2 text-center text-body-md sm:px-5"
+                  className="h-auto min-w-0 whitespace-normal px-3 py-2 text-center text-body sm:px-5"
                 >
                   {t(`scenarios.${id}.label`)}
                 </TabsTrigger>

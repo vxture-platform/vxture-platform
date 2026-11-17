@@ -411,7 +411,7 @@ export function ProductMetricsSection({
               的指标，不能都从头来。」产品重定义这些键会被 409 拦下。 */}
           {platform.length > 0 ? (
             <div className="flex flex-col gap-xs rounded-md border border-border-soft bg-muted/30 p-sm">
-              <span className="text-label-sm text-muted-foreground">
+              <span className="text-label-small text-muted-foreground">
                 平台级共享指标（已有，无需登记）
               </span>
               <div className="flex flex-wrap gap-xs">
@@ -420,9 +420,7 @@ export function ProductMetricsSection({
                     key={m.metricKey}
                     variant={m.state === "active" ? "outline" : "secondary"}
                   >
-                    <span className="font-mono text-code-sm">
-                      {m.metricKey}
-                    </span>
+                    <span className="font-mono text-code">{m.metricKey}</span>
                     {m.metricUnit ? ` · ${m.metricUnit}` : null}
                     {m.state === "reserved" ? " · 保留" : null}
                   </Badge>
@@ -511,7 +509,7 @@ export function ProductMetricsSection({
                         >
                           {hit.label}
                         </Badge>
-                        <span className="text-label-sm text-muted-foreground">
+                        <span className="text-label-small text-muted-foreground">
                           {hit.value === "cost_bearing" ? "硬限" : "软限"}
                         </span>
                       </div>
@@ -650,7 +648,7 @@ export function ProductMetricsSection({
                 setDraft({ ...draft, metricKey: e.target.value })
               }
               placeholder="doc.words"
-              className="font-mono text-code-sm"
+              className="font-mono text-code"
             />
             <FieldDescription>
               点号分段，如 <code>doc.words</code>。平台级共享键（

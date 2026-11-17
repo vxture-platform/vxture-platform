@@ -114,7 +114,7 @@ function ChangeAudit() {
           <TabsContent key={s} value={s} className="flex flex-col gap-md pt-md">
             {/* 每个 tab 先说清它覆盖什么、**不**覆盖什么——三份来源的边界正是这页
                 存在的理由，不写出来就只是三张长得不一样的表摆在一起。 */}
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {SOURCE_META[s].covers}
             </p>
             {/* 未选中的 tab 不挂载：三条流各自会打上游接口，全挂等于进页面就发三个

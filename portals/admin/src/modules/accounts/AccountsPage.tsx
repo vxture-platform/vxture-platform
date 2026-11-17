@@ -366,7 +366,7 @@ function useAccountColumns(
                 </StatusBadge>
               ))}
             </span>
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {summary.primaryName}
             </span>
           </span>
@@ -411,7 +411,7 @@ function useAccountColumns(
       cell: (account) => (
         <span className="inline-flex flex-col items-center gap-2xs">
           <Badge>{accountHighestRoleLabel(account)}</Badge>
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {`${formatNumber(account.tenantCount)} 个租户`}
           </span>
         </span>

@@ -16,7 +16,6 @@
 "use client";
 
 import {
-  PhoneNumber,
   ShellHeaderActions,
   ShellBrand as HeaderBrand,
   ShellHeader,
@@ -80,13 +79,6 @@ function getDisplayName(user: UserInfo, fallback: string): string {
     user.name?.trim() ||
     fallback
   );
-}
-
-/**
- * Format phone display consistently while preserving the international country code.
- */
-function formatPhone(phone: string | null | undefined) {
-  return phone ? <PhoneNumber {...formatPhoneForDisplay(phone)} /> : "";
 }
 
 function isThemePreference(value: unknown): value is ThemePreference {
@@ -388,7 +380,7 @@ function UserMenu({
 
   const displayName = getDisplayName(user, t("unnamed"));
   const rawPhone = user?.phone?.trim() ?? "";
-  const userPhone = rawPhone ? formatPhone(rawPhone) : "";
+  const userPhone = rawPhone ? formatPhoneForDisplay(rawPhone) : null;
   const userEmail = user?.email?.trim() ?? "";
   const verified =
     hasPersonalVerification(user) || hasOrganizationVerification(user);
@@ -423,7 +415,9 @@ function UserMenu({
         // 联系方式两行（owner 2026-08-18 判）：缺失走「名称+值」占位骨架、值
         // 空缺（"手机号："后面空着 = 该补了）；有值只显真值本身，不带名称前缀。
         // 同一行永远不会出现「名称: 真值」的组合。
-        uniqueLine: userPhone || t("phonePlaceholder"),
+        ...(userPhone
+          ? { phone: userPhone }
+          : { uniqueLine: t("phonePlaceholder") }),
         meta: userEmail || t("emailPlaceholder"),
         ...(verified
           ? {

@@ -59,7 +59,7 @@ export function PlanSummaryCard({
         </span>
         <span className={infoRowText}>
           <span className="flex flex-wrap items-center gap-sm">
-            <strong className="truncate text-label-md text-foreground">
+            <strong className="truncate text-label text-foreground">
               {productName} · {plan.planName}
             </strong>
             <StatusBadge tone="brand">{plan.tier}</StatusBadge>
@@ -70,12 +70,14 @@ export function PlanSummaryCard({
             ) : null}
           </span>
           {plan.inviteOnly ? (
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("badges.inviteOnlyHint")}
             </span>
           ) : null}
           {note ? (
-            <span className="text-body-sm text-muted-foreground">{note}</span>
+            <span className="text-body-small text-muted-foreground">
+              {note}
+            </span>
           ) : null}
         </span>
       </div>
@@ -84,14 +86,14 @@ export function PlanSummaryCard({
           {chips.map((feature) => (
             <li
               key={feature}
-              className="rounded-4xl border border-border bg-card px-sm py-2xs text-body-sm text-muted-foreground"
+              className="rounded-4xl border border-border bg-card px-sm py-2xs text-body-small text-muted-foreground"
             >
               {featureLabel(feature)}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-body-sm text-content-tertiary">
+        <p className="text-body-small text-content-tertiary">
           {t("confirm.noFeatures")}
         </p>
       )}

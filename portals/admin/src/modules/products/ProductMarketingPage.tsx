@@ -197,10 +197,10 @@ function ReadOnlyCell({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-2xs">
-      <span className="truncate text-label-sm text-muted-foreground">
+      <span className="truncate text-label-small text-muted-foreground">
         {label}
       </span>
-      <span className="min-w-0 truncate text-body-sm text-foreground">
+      <span className="min-w-0 truncate text-body-small text-foreground">
         {children}
       </span>
     </div>
@@ -339,7 +339,7 @@ function MarketingForm({
   return (
     <div className="grid min-w-0 gap-xl">
       <nav
-        className="flex min-w-0 items-center gap-2xs text-body-sm text-muted-foreground"
+        className="flex min-w-0 items-center gap-2xs text-body-small text-muted-foreground"
         aria-label="面包屑"
       >
         <Link
@@ -361,10 +361,10 @@ function MarketingForm({
 
       {/* 只读身份行：这是谁。改不了的东西不给输入框。 */}
       <header className="flex min-w-0 flex-wrap items-center gap-sm">
-        <h1 className="m-0 min-w-0 truncate text-title-xl font-semibold text-foreground">
+        <h1 className="m-0 min-w-0 truncate text-heading-1 font-semibold text-foreground">
           {product.productName}
         </h1>
-        <span className="shrink-0 text-body-sm font-extrabold text-muted-foreground">
+        <span className="shrink-0 text-body-small font-extrabold text-muted-foreground">
           {product.productCode}
         </span>
         <div className="flex flex-wrap items-center gap-xs">
@@ -433,7 +433,7 @@ function MarketingForm({
                 onCheckedChange={setVisible}
                 aria-label="客户端可见"
               />
-              <span className="text-body-sm text-foreground">
+              <span className="text-body-small text-foreground">
                 {visible ? "在目录中出现" : "不在目录中出现"}
               </span>
             </div>
@@ -563,10 +563,10 @@ function MarketingForm({
           <CardContent className="grid min-w-0 gap-sm">
             <div className="flex min-w-0 items-start gap-sm">
               <span className="grid min-w-0 gap-2xs">
-                <span className="min-w-0 truncate text-title-md font-semibold text-foreground">
+                <span className="min-w-0 truncate text-heading-2 font-semibold text-foreground">
                   {form.tagline || product.productName}
                 </span>
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {form.value || "（价值说明未填）"}
                 </span>
               </span>
@@ -590,7 +590,7 @@ function MarketingForm({
                 {form.highlights.filter(Boolean).map((item, index) => (
                   <li
                     key={index}
-                    className="flex min-w-0 items-center gap-xs text-body-sm text-foreground"
+                    className="flex min-w-0 items-center gap-xs text-body-small text-foreground"
                   >
                     <Icon
                       name="check"
@@ -611,7 +611,7 @@ function MarketingForm({
                 </Badge>
               ))}
             </div>
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {releaseStage === "preview"
                 ? expectedReleaseAt
                   ? `预期发布：${expectedReleaseAt}`
@@ -623,7 +623,7 @@ function MarketingForm({
                     : "可直接订阅"}
             </span>
             {!visible ? (
-              <span className="text-body-sm text-destructive-text">
+              <span className="text-body-small text-destructive-text">
                 客户端可见已关闭——官网目录里不会出现这张卡。
               </span>
             ) : null}

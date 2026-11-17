@@ -115,14 +115,14 @@ export function InvoiceApplicationDialog({
       }}
     >
       <p>{t("selected", { count: bills.length })}</p>
-      <ul className="grid gap-xs text-body-sm">
+      <ul className="grid gap-xs text-body-small">
         {bills.map((b) => (
           <li key={b.id}>
             {b.billNo} · {b.billCycle} · {b.currency} {b.payableAmount}
           </li>
         ))}
       </ul>
-      <p className="text-body-sm">
+      <p className="text-body-small">
         {t("total", {
           amount: sumAmounts(bills.map((b) => b.payableAmount)),
           currency: bills[0]?.currency ?? "",

@@ -84,7 +84,7 @@ export function TenantDangerCard({
               </Button>
             }
           >
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("danger.close.summary")}
             </span>
           </DetailRow>

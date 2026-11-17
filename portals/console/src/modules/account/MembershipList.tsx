@@ -62,7 +62,7 @@ export function MembershipList({
             />
             <span className="flex min-w-0 flex-1 flex-col gap-xs">
               <span className="flex flex-wrap items-center gap-md">
-                <span className="text-label-md text-foreground">
+                <span className="text-label text-foreground">
                   {formatTenantDisplay(tenant.name, tenant.type)}
                 </span>
 
@@ -89,15 +89,15 @@ export function MembershipList({
                   <PrincipalNo
                     no={tenant.tenantNo}
                     kind="tenant"
-                    className="text-body-sm text-muted-foreground"
+                    className="text-body-small text-muted-foreground"
                   />
                 ) : null}
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {t("workspaces.joinedOn", { date: tenant.joinedAt })}
                 </span>
               </span>
 
-              <span className="flex flex-wrap items-center gap-md text-body-sm text-muted-foreground">
+              <span className="flex flex-wrap items-center gap-md text-body-small text-muted-foreground">
                 <span>{t("identity.workspace")}</span>
                 {tenant.workspaces.length === 0 ? <span>—</span> : null}
                 {tenant.workspaces.map((ws) => (
@@ -157,7 +157,7 @@ export function MembershipList({
           </li>
         ))}
         {tenants.length === 0 ? (
-          <li className="py-md text-body-sm text-muted-foreground">
+          <li className="py-md text-body-small text-muted-foreground">
             {loading ? t("common.loading") : t("sections.workspaces.empty")}
           </li>
         ) : null}

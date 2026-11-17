@@ -172,7 +172,7 @@ export function PayChannelPanel({
           >
             {active?.balance ?? "0.00"}
           </strong>
-          <p className="text-center text-body-sm text-muted-foreground">
+          <p className="text-center text-body-small text-muted-foreground">
             <span className="block">{t("balanceNote")}</span>
           </p>
         </PaymentDisplayCard>
@@ -187,7 +187,7 @@ export function PayChannelPanel({
               className="h-full min-h-0 w-full object-contain"
             />
           </PaymentDisplayCard>
-          <p className="text-body-md text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t("wechatPlaceholder")}
           </p>
         </div>
@@ -258,7 +258,7 @@ export function PayChannelPanel({
       ) : null}
 
       {value === "balance" || showReference ? (
-        <p className="max-w-full break-all text-center text-body-md text-muted-foreground">
+        <p className="max-w-full break-all text-center text-body text-muted-foreground">
           {t(value === "balance" ? "relatedOrderNote" : "referenceNote", {
             orderNo,
           })}
@@ -266,7 +266,9 @@ export function PayChannelPanel({
       ) : null}
 
       {noneEnabled ? (
-        <p className="text-body-sm text-muted-foreground">{t("noneEnabled")}</p>
+        <p className="text-body-small text-muted-foreground">
+          {t("noneEnabled")}
+        </p>
       ) : null}
     </>
   );

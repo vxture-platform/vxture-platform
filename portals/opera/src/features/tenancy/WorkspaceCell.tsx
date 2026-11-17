@@ -32,9 +32,9 @@ export function WorkspaceCell({
       className="flex flex-col gap-2xs"
       {...(d.title ? { title: d.title } : {})}
     >
-      <span className="text-body-sm text-foreground">{d.primary}</span>
+      <span className="text-body-small text-foreground">{d.primary}</span>
       {d.secondary ? (
-        <span className="text-body-sm text-muted-foreground">
+        <span className="text-body-small text-muted-foreground">
           {d.secondary}
         </span>
       ) : null}

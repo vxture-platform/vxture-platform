@@ -58,10 +58,10 @@ export function KardaCapabilities() {
               >
                 <Icon name={icon} className="h-5 w-5 shrink-0" aria-hidden />
                 <span className="min-w-0">
-                  <span className="block text-body-sm font-semibold">
+                  <span className="block text-body-small font-semibold">
                     {t(`capabilities.${id}.label`)}
                   </span>
-                  <span className="mt-1 hidden text-label-sm text-muted-foreground lg:block">
+                  <span className="mt-1 hidden text-label-small text-muted-foreground lg:block">
                     {t(`capabilities.${id}.hint`)}
                   </span>
                 </span>
@@ -72,7 +72,7 @@ export function KardaCapabilities() {
             <TabsContent key={id} value={id} className="mt-8">
               <div className="grid items-center gap-8 lg:grid-cols-5 lg:gap-12">
                 <div className="lg:col-span-2">
-                  <p className="font-mono text-label-sm text-muted-foreground">
+                  <p className="font-mono text-label-small text-muted-foreground">
                     0{index + 1} / {id.toUpperCase()}
                   </p>
                   <h3 className="font-display mt-4 text-2xl font-semibold leading-snug text-balance lg:text-3xl">
@@ -84,7 +84,7 @@ export function KardaCapabilities() {
                   <ul className="mt-6 space-y-3">
                     {(t.raw(`capabilities.${id}.points`) as string[]).map(
                       (point) => (
-                        <li key={point} className="flex gap-3 text-body-sm">
+                        <li key={point} className="flex gap-3 text-body-small">
                           <Icon
                             name="check"
                             className="mt-1 h-4 w-4 shrink-0 text-primary-text"

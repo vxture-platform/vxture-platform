@@ -148,11 +148,11 @@ export function TenantVerificationPage() {
       header: t("history.colResult"),
       cell: (r) =>
         r.status === "rejected" && r.rejectReason ? (
-          <span className="text-body-sm text-warning-text">
+          <span className="text-body-small text-warning-text">
             {r.rejectReason}
           </span>
         ) : r.reviewedAt ? (
-          <span className="tabular-nums text-body-sm text-muted-foreground">
+          <span className="tabular-nums text-body-small text-muted-foreground">
             {fmtDateTime(r.reviewedAt)}
           </span>
         ) : (

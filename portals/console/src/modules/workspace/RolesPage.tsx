@@ -118,16 +118,16 @@ function RolePermissionDialog({
                 key={permission.id}
                 className="grid min-w-0 gap-2xs rounded-lg border border-primary/10 p-sm"
               >
-                <strong className="truncate text-body-sm font-semibold text-foreground">
+                <strong className="truncate text-body-small font-semibold text-foreground">
                   {permLabel(permission.permissionCode)}
                 </strong>
-                <code className="truncate font-mono text-body-sm text-muted-foreground">
+                <code className="truncate font-mono text-body-small text-muted-foreground">
                   {permission.permissionCode}
                 </code>
               </article>
             ))
           ) : (
-            <p className="m-0 text-body-sm text-muted-foreground">
+            <p className="m-0 text-body-small text-muted-foreground">
               {t("permDialog.empty")}
             </p>
           )}
@@ -269,7 +269,7 @@ export function RolesPage() {
       id: "blurb",
       header: t("directory.colBlurb"),
       cell: (r) => (
-        <span className="text-body-sm text-muted-foreground">
+        <span className="text-body-small text-muted-foreground">
           {roleBlurb(r.roleCode) ?? "—"}
         </span>
       ),

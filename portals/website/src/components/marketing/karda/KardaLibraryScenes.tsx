@@ -19,7 +19,7 @@ export function IntakeScene() {
         {(t.raw("intakeSources") as string[]).map((source) => (
           <Card
             key={source}
-            className="items-center gap-3 p-4 text-center text-body-sm"
+            className="items-center gap-3 p-4 text-center text-body-small"
           >
             <Icon
               name="file-text"
@@ -38,7 +38,7 @@ export function IntakeScene() {
         />
       </div>
       <Card className="gap-4 border-primary-border bg-primary-muted p-5">
-        <p className="flex items-center gap-2 text-body-sm font-semibold text-primary-text">
+        <p className="flex items-center gap-2 text-body-small font-semibold text-primary-text">
           <Icon name="book-open" className="h-5 w-5 shrink-0" aria-hidden />
           {t("intakeTitle")}
         </p>
@@ -46,16 +46,16 @@ export function IntakeScene() {
           {(t.raw("processing") as string[]).map((stage, index) => (
             <li
               key={stage}
-              className="rounded-md border border-primary-border p-3 text-body-sm"
+              className="rounded-md border border-primary-border p-3 text-body-small"
             >
-              <span className="mb-2 block font-mono text-label-sm text-muted-foreground">
+              <span className="mb-2 block font-mono text-label-small text-muted-foreground">
                 0{index + 1}
               </span>
               {stage}
             </li>
           ))}
         </ol>
-        <p className="border-t border-primary-border pt-4 text-body-sm text-muted-foreground">
+        <p className="border-t border-primary-border pt-4 text-body-small text-muted-foreground">
           {t("intakeNote")}
         </p>
       </Card>
@@ -76,15 +76,15 @@ export function OrganizationScene() {
           className="mb-5 h-8 w-8 text-primary-text"
           aria-hidden
         />
-        <p className="text-title-sm font-semibold">{t("library")}</p>
-        <p className="mb-5 mt-2 text-label-sm text-muted-foreground">
+        <p className="text-heading-3 font-semibold">{t("library")}</p>
+        <p className="mb-5 mt-2 text-label-small text-muted-foreground">
           {t("libraryDescription")}
         </p>
         <dl className="divide-y divide-border">
           {properties.map((property) => (
             <div
               key={property.label}
-              className="flex flex-wrap justify-between gap-2 py-3 text-body-sm"
+              className="flex flex-wrap justify-between gap-2 py-3 text-body-small"
             >
               <dt className="text-muted-foreground">{property.label}</dt>
               <dd>{property.value}</dd>
@@ -94,7 +94,7 @@ export function OrganizationScene() {
       </Card>
       <div className="grid grid-rows-2 gap-3">
         <Card className="justify-center gap-3 p-5">
-          <p className="text-label-sm text-muted-foreground">
+          <p className="text-label-small text-muted-foreground">
             {t("topicsLabel")}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -104,16 +104,16 @@ export function OrganizationScene() {
               </Badge>
             ))}
           </div>
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("topicsNote")}
           </p>
         </Card>
         <Card className="justify-center gap-2 p-5">
-          <p className="text-label-sm text-muted-foreground">
+          <p className="text-label-small text-muted-foreground">
             {t("maintenanceLabel")}
           </p>
           <p className="font-semibold">{t("maintenanceTitle")}</p>
-          <p className="text-body-sm leading-6 text-muted-foreground">
+          <p className="text-body-small leading-6 text-muted-foreground">
             {t("maintenanceNote")}
           </p>
         </Card>

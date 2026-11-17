@@ -246,7 +246,7 @@ export function TicketsPage() {
     iso ? (
       <span className="flex flex-col items-center tabular-nums">
         <span className="text-foreground">{fmtDate(iso)}</span>
-        <span className="text-body-sm text-muted-foreground">
+        <span className="text-body-small text-muted-foreground">
           {fmtTime(iso)}
         </span>
       </span>

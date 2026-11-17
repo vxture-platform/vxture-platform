@@ -34,11 +34,9 @@ export function SignalList({ items }: { items: SignalListItem[] }) {
             .join(" ")}
         >
           <div className="flex min-w-0 flex-col gap-2xs">
-            <strong className="text-label-md text-foreground">
-              {item.title}
-            </strong>
+            <strong className="text-label text-foreground">{item.title}</strong>
             {item.description ? (
-              <p className="text-body-sm text-muted-foreground">
+              <p className="text-body-small text-muted-foreground">
                 {item.description}
               </p>
             ) : null}

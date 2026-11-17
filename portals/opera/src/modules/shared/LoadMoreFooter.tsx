@@ -48,7 +48,7 @@ export function LoadMoreFooter({
 
   return (
     <div className="flex w-full flex-wrap items-center justify-between gap-sm">
-      <span className="text-body-sm text-muted-foreground tabular-nums">
+      <span className="text-body-small text-muted-foreground tabular-nums">
         {hasMore
           ? t("loadedMore", { count: loaded })
           : t("loadedEnd", { count: loaded })}

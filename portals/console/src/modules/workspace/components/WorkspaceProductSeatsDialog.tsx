@@ -158,7 +158,7 @@ export function WorkspaceProductSeatsDialog({
                 key={m.accountId}
                 className="flex flex-wrap items-center justify-between gap-sm"
               >
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {t("notInWorkspace", { name: m.name })}
                 </span>
                 <Button
@@ -205,7 +205,7 @@ export function WorkspaceProductSeatsDialog({
             return (
               <li key={row.productId} className="flex flex-col gap-sm py-md">
                 <span className="flex items-center justify-between gap-md">
-                  <span className="truncate text-label-md text-foreground">
+                  <span className="truncate text-label text-foreground">
                     {row.productName}
                   </span>
                   <StatusBadge tone={full ? "warning" : "info"}>
@@ -217,7 +217,7 @@ export function WorkspaceProductSeatsDialog({
                 </span>
 
                 {visibleHolders.length === 0 ? (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {t(targetMemberId ? "memberUnassigned" : "nobody")}
                   </span>
                 ) : (
@@ -227,7 +227,7 @@ export function WorkspaceProductSeatsDialog({
                         key={h.userId}
                         className="flex items-center justify-between gap-md"
                       >
-                        <span className="truncate text-body-sm text-foreground">
+                        <span className="truncate text-body-small text-foreground">
                           {h.displayName ?? h.userNo}
                         </span>
                         <Button
@@ -289,7 +289,7 @@ export function WorkspaceProductSeatsDialog({
                   </Button>
                 </span>
                 {full ? (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {t("fullHint")}
                   </span>
                 ) : null}

@@ -213,11 +213,11 @@ export function ReviewDialog({
           rows={3}
         />
       </Field>
-      <p className="text-body-sm text-muted-foreground">
+      <p className="text-body-small text-muted-foreground">
         {t("outro", { product: productName })}
       </p>
       {error ? (
-        <p className="text-body-sm text-destructive" role="alert">
+        <p className="text-body-small text-destructive" role="alert">
           {error}
         </p>
       ) : null}

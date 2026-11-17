@@ -109,7 +109,7 @@ export function ScopeMenu({
                 <span className="work-scope-organization truncate">
                   {scope.name}
                 </span>
-                <span className="work-scope-workspace text-body-sm font-normal text-muted-foreground">
+                <span className="work-scope-workspace text-body-small font-normal text-muted-foreground">
                   / {scope.workspaceName}
                 </span>
               </span>
@@ -163,7 +163,7 @@ export function ScopeMenu({
                 {data.scopeOptions.status === "error" ? (
                   <p
                     role="status"
-                    className="p-md text-body-sm text-muted-foreground"
+                    className="p-md text-body-small text-muted-foreground"
                   >
                     {t(data.scopeOptions.message)}
                   </p>
@@ -182,7 +182,7 @@ export function ScopeMenu({
                 {data.workspaces.status === "error" && (
                   <p
                     role="status"
-                    className="p-md text-body-sm text-muted-foreground"
+                    className="p-md text-body-small text-muted-foreground"
                   >
                     {t("工作空间列表：")}
                     {t(data.workspaces.message)}

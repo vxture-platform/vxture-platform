@@ -907,7 +907,7 @@ function SystemNoticesSummary() {
         </ActionButton>
       }
     >
-      <p className="text-body-sm text-muted-foreground">{line}</p>
+      <p className="text-body-small text-muted-foreground">{line}</p>
     </Section>
   );
 }
@@ -1438,7 +1438,7 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
                           /* admin 里没有这一类的落点（今天只有维护窗口）：说一句
                              在哪儿办，不摆一个点了跳回原地的按钮。完整去处写在
                              任务句里。 */
-                          <span className="text-body-sm text-muted-foreground">
+                          <span className="text-body-small text-muted-foreground">
                             {tPage("actions.maintenanceElsewhere")}
                           </span>
                         )}

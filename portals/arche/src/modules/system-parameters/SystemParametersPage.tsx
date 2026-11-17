@@ -368,7 +368,7 @@ export function SystemParametersPage() {
             )}
           </Field>
           {editing.description ? (
-            <p className="m-0 text-body-sm text-muted-foreground">
+            <p className="m-0 text-body-small text-muted-foreground">
               {editing.description}
             </p>
           ) : null}

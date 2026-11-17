@@ -46,7 +46,7 @@ export function AgentProductHero({
       <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
         <Link
           href="/appcenter"
-          className="inline-flex items-center gap-2 rounded-md text-body-sm text-muted-foreground transition-colors hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex items-center gap-2 rounded-md text-body-small text-muted-foreground transition-colors hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Icon name="arrow-left" className="h-4 w-4" aria-hidden />
           {t("catalog.backAppcenter")}
@@ -54,7 +54,7 @@ export function AgentProductHero({
         <div className="mt-6 grid items-center gap-6 sm:gap-10 lg:mt-8 lg:grid-cols-12 lg:gap-12">
           <div className="relative z-10 min-w-0 py-4 lg:col-span-7 lg:py-8">
             <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <span className="text-label-sm font-semibold text-primary-text">
+              <span className="text-label-small font-semibold text-primary-text">
                 {content.tagline || typeLabel}
               </span>
               {availability === "maintenance" ? (
@@ -74,7 +74,7 @@ export function AgentProductHero({
               {content.name}
             </h1>
             {content.lead ? (
-              <p className="mt-5 max-w-website-xl whitespace-pre-line break-words text-body-sm leading-7 text-pretty text-muted-foreground">
+              <p className="mt-5 max-w-website-xl whitespace-pre-line break-words text-body-small leading-7 text-pretty text-muted-foreground">
                 {content.lead}
               </p>
             ) : null}
@@ -87,7 +87,7 @@ export function AgentProductHero({
             {content.highlights.length > 0 ? (
               <a
                 href="#agent-capabilities"
-                className="mt-6 inline-flex items-center gap-2 rounded-md text-body-sm text-muted-foreground hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-6 inline-flex items-center gap-2 rounded-md text-body-small text-muted-foreground hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {t("agentDetail.explore")}
                 <Icon name="arrow-down" className="h-4 w-4" aria-hidden />
@@ -99,13 +99,13 @@ export function AgentProductHero({
             <AgentHeroArtwork variant={content.artwork} />
             <div className="relative flex w-3/4 min-w-0 flex-col items-center rounded-xl border border-border bg-card/90 px-6 py-7 text-center shadow-lg shadow-primary/5 backdrop-blur-sm sm:py-8">
               <AgentProductIcon url={product.iconUrl ?? null} />
-              <p className="mt-5 text-label-sm font-medium tracking-widest text-muted-foreground">
+              <p className="mt-5 text-label-small font-medium tracking-widest text-muted-foreground">
                 {t("agentDetail.identityLabel")}
               </p>
               <p className="font-display mt-2 max-w-full break-words text-xl font-semibold leading-snug sm:text-2xl">
                 {content.brand || content.name}
               </p>
-              <p className="mt-4 max-w-full break-words border-t border-border pt-4 text-body-sm text-muted-foreground">
+              <p className="mt-4 max-w-full break-words border-t border-border pt-4 text-body-small text-muted-foreground">
                 {typeLabel}
               </p>
             </div>

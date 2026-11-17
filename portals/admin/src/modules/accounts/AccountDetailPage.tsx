@@ -149,11 +149,11 @@ function AccountKeyMetric({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-2xs">
-      <span className="truncate text-label-sm text-muted-foreground">
+      <span className="truncate text-label-small text-muted-foreground">
         {label}
       </span>
       <span className="flex min-w-0 flex-wrap items-baseline gap-xs">
-        <span className="truncate text-title-md font-extrabold text-foreground">
+        <span className="truncate text-heading-2 font-extrabold text-foreground">
           {value}
         </span>
         {(tags ?? []).map((item) => (
@@ -176,10 +176,10 @@ function Field({
 }) {
   return (
     <div className="flex min-h-icon-2xl min-w-0 items-center gap-sm border-b border-dashed border-primary/10 pb-sm">
-      <span className="w-media-sm shrink-0 text-body-sm text-muted-foreground">
+      <span className="w-media-sm shrink-0 text-body-small text-muted-foreground">
         {label}
       </span>
-      <span className="min-w-0 flex-1 text-body-sm text-foreground">
+      <span className="min-w-0 flex-1 text-body-small text-foreground">
         {children}
       </span>
     </div>
@@ -344,7 +344,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
 
   const backLink = (
     <Link
-      className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-sm font-extrabold text-primary-text no-underline"
+      className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-small font-extrabold text-primary-text no-underline"
       href="/accounts"
     >
       <Icon name="arrow-left" size="xs" fallback="placeholder" />
@@ -461,7 +461,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
                        删除，必须每次都问：step-up 凭据在有效期内会被复用，不能
                        拿它兼任确认。 */
                     <DestructiveButton
-                      className="text-body-sm font-normal"
+                      className="text-body-small font-normal"
                       size="sm"
                       disabled={resetting || !account.avatarHash}
                       confirm={withLabels({
@@ -487,12 +487,12 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
                 >
                   <h2
                     className={`min-w-0 truncate font-semibold text-foreground ${
-                      summaryExpanded ? "text-title-xl" : "text-title-md"
+                      summaryExpanded ? "text-heading-1" : "text-heading-2"
                     }`}
                   >
                     {account.displayName}
                   </h2>
-                  <p className="m-0 min-w-0 shrink-0 truncate text-body-sm font-extrabold text-muted-foreground">
+                  <p className="m-0 min-w-0 shrink-0 truncate text-body-small font-extrabold text-muted-foreground">
                     {accountCode}
                   </p>
                   <div
@@ -521,7 +521,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
                     aria-label="租户与产品概要"
                   >
                     <div className="flex min-w-0 flex-col gap-2xs">
-                      <span className="truncate text-label-sm text-muted-foreground">
+                      <span className="truncate text-label-small text-muted-foreground">
                         所属租户
                       </span>
                       {account.tenantBindings.length ? (
@@ -538,7 +538,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
                                 aria-hidden="true"
                                 className="shrink-0 text-muted-foreground"
                               />
-                              <span className="min-w-0 truncate text-body-sm text-foreground">
+                              <span className="min-w-0 truncate text-body-small text-foreground">
                                 {binding.tenantName}
                               </span>
                               <StatusBadge
@@ -552,7 +552,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
                           ))}
                         </ul>
                       ) : (
-                        <span className="text-body-sm text-muted-foreground">
+                        <span className="text-body-small text-muted-foreground">
                           —
                         </span>
                       )}
@@ -595,10 +595,10 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
       }
     >
       {error ? (
-        <p className="text-body-sm text-destructive-text">{error}</p>
+        <p className="text-body-small text-destructive-text">{error}</p>
       ) : null}
       {feedback ? (
-        <p className="text-body-sm text-muted-foreground">{feedback}</p>
+        <p className="text-body-small text-muted-foreground">{feedback}</p>
       ) : null}
 
       <Section

@@ -22,7 +22,7 @@
  * 3. launcher 面板切的是工作域（两个），不是 console 的应用中心/控制台。
  */
 
-import { PhoneNumber, ShellHeaderActions } from "@vxture/design-system";
+import { ShellHeaderActions } from "@vxture/design-system";
 import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useMemo } from "react";
 import {
@@ -52,13 +52,6 @@ import type { ShellView } from "../template/shell/types";
 import { useAdminSearch, type NavSearchEntry } from "./useAdminSearch";
 import { useLocaleSwitch } from "@/lib/useLocaleSwitch";
 import { operatorAccountCenterUrl } from "@/lib/account-center";
-
-/**
- * Use the shared number presentation rules, retaining country codes and regional grouping.
- */
-function formatPhone(phone: string | null | undefined) {
-  return phone ? <PhoneNumber {...formatPhoneForDisplay(phone)} /> : "";
-}
 
 export interface AdminHeaderViewOption {
   id: ShellView;
@@ -198,7 +191,7 @@ export function AdminHeader({
             logoSrc="/brand/vxture-logo-white.png"
           />
           <span className="h-lg w-px bg-border" aria-hidden="true" />
-          <span className="hidden truncate text-label-md text-muted-foreground sm:inline">
+          <span className="hidden truncate text-label text-muted-foreground sm:inline">
             {activeMenuName}
           </span>
         </>
@@ -239,7 +232,7 @@ export function AdminHeader({
               {unreadCount > 0 ? (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-label-sm font-semibold leading-none text-primary-foreground ring-2 ring-background tabular-nums"
+                  className="pointer-events-none absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-label-small font-semibold leading-none text-primary-foreground ring-2 ring-background tabular-nums"
                 >
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
@@ -258,7 +251,9 @@ export function AdminHeader({
               avatarAlt: displayName,
               // 手机号/邮箱缺失时给出明确文案而不是留白——留白读作"没这个字段"，
               // 缺失读作"该补了"，两者对用户的含义完全不同。
-              uniqueLine: formatPhone(user?.phone) || t("missingPhone"),
+              ...(user?.phone
+                ? { phone: formatPhoneForDisplay(user.phone) }
+                : { uniqueLine: t("missingPhone") }),
               meta: user?.email || t("missingEmail"),
               // 认证状态用会话里的 emailVerified——原实现恒显"未认证"，那是
               // 一个写死的字面量，跟这个账号的真实状态无关。

@@ -145,7 +145,7 @@ function UpgradeQuoteSummary({
     <>
       {quoteState === "failed" ? (
         <div className="flex flex-wrap items-center justify-between gap-sm">
-          <span className="text-body-sm text-warning-text">
+          <span className="text-body-small text-warning-text">
             {t("confirm.creditFailed")}
           </span>
           <Button
@@ -159,13 +159,13 @@ function UpgradeQuoteSummary({
       ) : null}
       {quote && Number(quote.credit) > 0 ? (
         <div className="flex flex-col gap-2xs">
-          <div className="flex items-baseline justify-between gap-md text-body-md">
+          <div className="flex items-baseline justify-between gap-md text-body">
             <span className="text-muted-foreground">{t("confirm.credit")}</span>
             <span className="font-medium text-foreground tabular-nums">
               −{formatMoney(quote.credit, quote.currency)}
             </span>
           </div>
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("confirm.creditNote", {
               days: quote.daysLeft,
               usage: Math.round(quote.usageRemainingRatio * 100),
@@ -174,7 +174,7 @@ function UpgradeQuoteSummary({
         </div>
       ) : null}
       <div className="flex items-baseline justify-between gap-md border-t border-dashed border-primary/10 pt-md dark:border-primary/20">
-        <strong className="text-label-lg text-foreground">
+        <strong className="text-label text-foreground">
           {t("confirm.total")}
         </strong>
         <span className="text-heading-3 text-foreground tabular-nums">
@@ -186,7 +186,7 @@ function UpgradeQuoteSummary({
         </span>
       </div>
       {quote && Number(quote.leftover) > 0 ? (
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body-small text-muted-foreground">
           {t("confirm.leftoverNote", {
             amount: formatMoney(quote.leftover, quote.currency),
           })}
@@ -677,7 +677,7 @@ export function SubscribePage() {
             ) : null}
             {showTierFallback && plans.length > 0 ? (
               <div className="flex flex-wrap items-center gap-sm">
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {t("confirm.pickTier")}
                 </span>
                 {plans.map((option) => (
@@ -736,7 +736,7 @@ export function SubscribePage() {
                   : null
               }
             />
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {orderIntent === "renew" && isLive
                 ? t("confirm.startNoteRenew")
                 : t("confirm.startNote")}
@@ -784,7 +784,7 @@ export function SubscribePage() {
                   title={t("versionChange.title")}
                   description={t("versionChange.hint")}
                 />
-                <div className="flex flex-col gap-2xs text-body-sm">
+                <div className="flex flex-col gap-2xs text-body-small">
                   {versionChange.prices.map((row) => (
                     <span key={`p-${row.cycleUnit}`}>
                       {t("versionChange.price", {
@@ -816,7 +816,7 @@ export function SubscribePage() {
 
             {plan ? (
               <>
-                <div className="flex items-baseline justify-between gap-md text-body-md">
+                <div className="flex items-baseline justify-between gap-md text-body">
                   <span className="text-muted-foreground">
                     {plan.planName} ·{" "}
                     {t(
@@ -841,7 +841,7 @@ export function SubscribePage() {
                   />
                 ) : (
                   <div className="flex items-baseline justify-between gap-md border-t border-dashed border-primary/10 pt-md dark:border-primary/20">
-                    <strong className="text-label-lg text-foreground">
+                    <strong className="text-label text-foreground">
                       {t("confirm.total")}
                     </strong>
                     <span className="text-heading-3 text-foreground tabular-nums">
@@ -863,7 +863,7 @@ export function SubscribePage() {
                     >
                       {t("actions.contactSales")}
                     </Button>
-                    <p className="text-body-sm text-content-tertiary">
+                    <p className="text-body-small text-content-tertiary">
                       {t("confirm.fineEnterprise")}
                     </p>
                   </>
@@ -871,7 +871,7 @@ export function SubscribePage() {
                   <>
                     {/* 自动续费 opt-in：合计之下、提交之上；说明只进 tooltip 不铺在页面上
                         （owner 2026-09-03）。企业档不走这里。 */}
-                    <div className="flex items-center justify-between gap-md text-body-md">
+                    <div className="flex items-center justify-between gap-md text-body">
                       <span className="flex items-center gap-2xs text-muted-foreground">
                         {t("confirm.autoRenew")}
                         <Tooltip>
@@ -921,7 +921,7 @@ export function SubscribePage() {
                             ? t("confirm.submitRenew")
                             : t("confirm.submit")}
                     </Button>
-                    <p className="text-body-sm text-content-tertiary">
+                    <p className="text-body-small text-content-tertiary">
                       {isCurrentPlan && !purchaseBlocked
                         ? t("confirm.renewCurrent")
                         : t("confirm.fineOffline")}

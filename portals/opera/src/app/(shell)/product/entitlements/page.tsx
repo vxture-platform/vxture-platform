@@ -727,7 +727,7 @@ function ProductEntitlements() {
 
           <TabsContent value="routes" className="flex flex-col gap-md pt-md">
             <div className="flex items-start justify-between gap-md">
-              <p className="text-body-sm text-muted-foreground">
+              <p className="text-body-small text-muted-foreground">
                 产品可以走哪些模型路由。这是<b>工程关系</b>——不是 admin
                 那个按租户逐模型 发放的商业 grant，两者同名但不是一回事。
               </p>
@@ -768,7 +768,7 @@ function ProductEntitlements() {
                   header: "应用范围",
                   cell: (g: RouteGrant) =>
                     g.applicationId ? (
-                      <span className="font-mono text-code-sm">
+                      <span className="font-mono text-code">
                         {visibleIdOr(g.applicationId, "指定应用")}
                       </span>
                     ) : (
@@ -864,7 +864,7 @@ function ProductEntitlements() {
             className="flex flex-col gap-md pt-md"
           >
             <div className="flex items-start justify-between gap-md">
-              <p className="text-body-sm text-muted-foreground">
+              <p className="text-body-small text-muted-foreground">
                 产品持有哪些能力。`derived` 行是 ADR-005
                 闭包推导的结果，不是谁手工发 的——要撤只能撤它的锚点。
               </p>
@@ -1124,10 +1124,10 @@ function ProductEntitlements() {
                         }
                       />
                       <span className="flex min-w-0 flex-col">
-                        <span className="font-mono text-code-sm text-foreground">
+                        <span className="font-mono text-code text-foreground">
                           {ep.code}
                         </span>
-                        <span className="truncate text-body-sm text-muted-foreground">
+                        <span className="truncate text-body-small text-muted-foreground">
                           {ep.primaryModelCode}
                           {ep.fallbackModelCode
                             ? ` → ${ep.fallbackModelCode}`
@@ -1224,10 +1224,10 @@ function ProductEntitlements() {
                           }
                         />
                         <span className="flex min-w-0 flex-col">
-                          <span className="text-body-sm text-foreground">
+                          <span className="text-body-small text-foreground">
                             {c.displayName?.["zh-CN"] || c.title}
                           </span>
-                          <span className="truncate font-mono text-code-sm text-muted-foreground">
+                          <span className="truncate font-mono text-code text-muted-foreground">
                             {c.capabilityId}
                           </span>
                         </span>
@@ -1370,10 +1370,10 @@ function ProductEntitlements() {
                     className="text-muted-foreground"
                     aria-hidden="true"
                   />
-                  <span className="text-label-md text-foreground">
+                  <span className="text-label text-foreground">
                     {p.productName}
                   </span>
-                  <span className="font-mono text-code-sm text-muted-foreground">
+                  <span className="font-mono text-code text-muted-foreground">
                     {p.productCode}
                   </span>
                   <Icon
@@ -1385,14 +1385,14 @@ function ProductEntitlements() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-lg">
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     模型路由{" "}
                     <span className="text-foreground">{liveRoutes} 生效</span>
                     {routes.length > liveRoutes
                       ? ` · ${routes.length - liveRoutes} 已停用`
                       : ""}
                   </span>
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     能力 <span className="text-foreground">{direct} 直接</span>
                     {derived > 0 ? ` · ${derived} 推导` : ""}
                   </span>
@@ -1412,7 +1412,7 @@ function ProductEntitlements() {
                     ) : null}
                   </div>
                 ) : (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     还没有能力授权
                   </span>
                 )}
@@ -1476,12 +1476,12 @@ function ProductEntitlements() {
                 sortable: true,
                 cell: (r: OrphanRow) =>
                   r.source === "atlas" ? (
-                    <span className="font-mono text-code-sm">
+                    <span className="font-mono text-code">
                       {r.grant.endpointCode}
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-xs">
-                      <span className="font-mono text-code-sm">
+                      <span className="font-mono text-code">
                         {r.grant.capabilityId}
                       </span>
                       <Badge

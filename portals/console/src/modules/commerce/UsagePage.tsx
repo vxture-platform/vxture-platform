@@ -169,7 +169,7 @@ export function UsagePage() {
     ) : current ? (
       chart
     ) : (
-      <p role="status" className="text-body-sm text-muted-foreground">
+      <p role="status" className="text-body-small text-muted-foreground">
         {t("loading")}
       </p>
     );
@@ -212,7 +212,7 @@ export function UsagePage() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" variant="surface">
-                  <div className="flex flex-col gap-sm text-body-sm">
+                  <div className="flex flex-col gap-sm text-body-small">
                     <p>{t("globalScope")}</p>
                     {current ? (
                       <p>
@@ -277,7 +277,7 @@ export function UsagePage() {
                 })) ?? []
               }
             />
-            <p className="text-body-sm">
+            <p className="text-body-small">
               {t("trend.statTotal")}{" "}
               <span className="tabular-nums font-medium">
                 {fmtCount(total)}
@@ -310,7 +310,7 @@ export function UsagePage() {
                 }))}
               />
             ) : (
-              <p className="text-body-sm">{t("share.emptyZero")}</p>
+              <p className="text-body-small">{t("share.emptyZero")}</p>
             )}
           </div>,
         )}
@@ -346,10 +346,10 @@ export function UsagePage() {
         description={t("notes.description")}
       >
         <SectionBody>
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("notes.naturalScope")}
           </p>
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("notes.attributionBody")}
           </p>
         </SectionBody>

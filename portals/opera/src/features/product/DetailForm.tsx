@@ -156,7 +156,7 @@ export function FormField({
   children,
 }: FormFieldProps) {
   /* 小字且淡：标签是索引不是内容。 */
-  const labelClass = `text-label-sm font-normal ${
+  const labelClass = `text-label-small font-normal ${
     error ? "text-destructive-text" : "text-muted-foreground"
   }`;
 
@@ -185,7 +185,7 @@ export function FormField({
           <>
             <span
               aria-hidden="true"
-              className="align-top text-label-sm text-destructive-text"
+              className="align-top text-label-small text-destructive-text"
             >
               *
             </span>
@@ -202,7 +202,7 @@ export function FormField({
         children
       )}
       {error ? (
-        <p className="text-body-sm text-destructive-text">{error}</p>
+        <p className="text-body-small text-destructive-text">{error}</p>
       ) : null}
     </div>
   );
@@ -237,7 +237,7 @@ export function ToggleRow({
   return (
     <div className="flex h-control-md items-center justify-between gap-sm rounded-md border border-border px-sm">
       <span className="flex min-w-0 items-center gap-2xs">
-        <Label htmlFor={id} className="truncate text-body-sm font-normal">
+        <Label htmlFor={id} className="truncate text-body-small font-normal">
           {label}
         </Label>
         {help ? <HelpHint label={label}>{help}</HelpHint> : null}

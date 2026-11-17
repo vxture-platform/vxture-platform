@@ -86,12 +86,12 @@ export function WelcomeCard() {
         />
 
         <div className="flex min-w-0 flex-1 flex-col gap-2xs">
-          <span className="break-words text-title-md text-foreground">
+          <span className="break-words text-heading-2 text-foreground">
             {name
               ? t(`greeting.${greetingKey(new Date().getHours())}`, { name })
               : t("greetingAnonymous")}
           </span>
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {t("subtitle")}
           </span>
         </div>
@@ -109,10 +109,10 @@ export function WelcomeCard() {
                   className="shrink-0 text-muted-foreground"
                   aria-hidden
                 />
-                <span className="shrink-0 text-body-sm text-muted-foreground">
+                <span className="shrink-0 text-body-small text-muted-foreground">
                   {f.label}
                 </span>
-                <span className="min-w-0 break-words text-body-sm font-medium text-foreground">
+                <span className="min-w-0 break-words text-body-small font-medium text-foreground">
                   {f.value}
                 </span>
               </span>

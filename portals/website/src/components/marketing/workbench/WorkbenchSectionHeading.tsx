@@ -20,7 +20,7 @@ export function WorkbenchSectionHeading({
 }) {
   return (
     <div className="max-w-website-3xl">
-      <p className="text-label-sm font-semibold tracking-widest text-primary-text">
+      <p className="text-label-small font-semibold tracking-widest text-primary-text">
         {eyebrow}
       </p>
       <h2

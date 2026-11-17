@@ -500,7 +500,7 @@ export function OrderPayPage() {
         icon="credit-card"
         title={t("title")}
         secondary={
-          <span className="font-mono text-body-md text-muted-foreground">
+          <span className="font-mono text-body text-muted-foreground">
             {detail.orderNo}
           </span>
         }
@@ -597,14 +597,14 @@ export function OrderPayPage() {
                 />
                 <p
                   aria-hidden="true"
-                  className="invisible text-center text-body-sm"
+                  className="invisible text-center text-body-small"
                 >
                   {t("ttlFine")}
                 </p>
                 {!canPay || !canManageBilling ? (
                   <p
                     aria-hidden="true"
-                    className="invisible text-center text-body-sm"
+                    className="invisible text-center text-body-small"
                   >
                     {t("actions.noPaymentPermission")}
                   </p>
@@ -624,7 +624,7 @@ export function OrderPayPage() {
               className={`h-full [&>div:last-child]:flex-1 [&>div:last-child]:px-sm [&>div:last-child]:pb-sm [&>div:last-child]:pt-xs sm:[&>div:last-child]:px-md ${SECTION_TIGHT}`}
             >
               <div className="flex flex-col items-center gap-2xs py-xs">
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {t("amountDue")}
                 </span>
                 <strong className="text-heading-2 text-foreground tabular-nums">
@@ -650,7 +650,7 @@ export function OrderPayPage() {
                 <DetailRow
                   label={t("breakdown.discountVoucher")}
                   actions={
-                    <span className="text-body-md text-success-text tabular-nums">
+                    <span className="text-body text-success-text tabular-nums">
                       {quote && Number(quote.discountOff) > 0
                         ? `− ${fmt(quote.discountOff, detail.currency)}`
                         : "—"}
@@ -677,7 +677,7 @@ export function OrderPayPage() {
                 <DetailRow
                   label={t("breakdown.creditVoucher")}
                   actions={
-                    <span className="text-body-md text-success-text tabular-nums">
+                    <span className="text-body text-success-text tabular-nums">
                       {quote && Number(quote.voucherOff) > 0
                         ? `− ${fmt(quote.voucherOff, detail.currency)}`
                         : "—"}
@@ -754,11 +754,11 @@ export function OrderPayPage() {
                 >
                   {t("actions.cancelOrder")}
                 </DestructiveButton>
-                <p className="text-center text-body-sm text-content-tertiary">
+                <p className="text-center text-body-small text-content-tertiary">
                   {t("ttlFine")}
                 </p>
                 {!canPay || !canManageBilling ? (
-                  <p className="text-center text-body-sm text-warning-text">
+                  <p className="text-center text-body-small text-warning-text">
                     {t("actions.noPaymentPermission")}
                   </p>
                 ) : null}
@@ -779,10 +779,10 @@ export function OrderPayPage() {
               >
                 <Icon name="check" size="lg" />
               </span>
-              <strong className="text-title-lg text-foreground">
+              <strong className="text-heading-1 text-foreground">
                 {t("stateTitle.completed")}
               </strong>
-              <p className="text-body-md text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t("stateHint.completed")}
               </p>
             </div>
@@ -840,7 +840,7 @@ export function OrderPayPage() {
                 </Button>
               </div>
               {/* 24h 退款（product_330 §5）：已申请 → 进度；未申请 → 资格 + 申请入口；退款说明官网统一维护，newtab */}
-              <div className="mt-md flex flex-col gap-xs border-t border-dashed border-primary/10 pt-md text-body-sm dark:border-primary/20">
+              <div className="mt-md flex flex-col gap-xs border-t border-dashed border-primary/10 pt-md text-body-small dark:border-primary/20">
                 {detail.refund ? (
                   <>
                     <span className="font-medium text-foreground">

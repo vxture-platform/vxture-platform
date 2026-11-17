@@ -117,7 +117,7 @@ export function TenantPanel({
               <span className="max-w-[var(--container-overlay-sm)] shrink-0 truncate">
                 {tenantName}
               </span>
-              <span className="truncate text-body-sm font-normal text-muted-foreground">
+              <span className="truncate text-body-small font-normal text-muted-foreground">
                 / {workspaceName || t("defaultWorkspace")}
               </span>
             </span>

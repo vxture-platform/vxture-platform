@@ -166,10 +166,10 @@ function ServicePlanTierRow({
             ) : null}
           </span>
           <span className="grid justify-items-end gap-2xs">
-            <span className="text-body-md font-semibold text-foreground">
+            <span className="text-body font-semibold text-foreground">
               {item.tier.priceLabel}
             </span>
-            <span className="whitespace-nowrap text-body-sm text-muted-foreground">
+            <span className="whitespace-nowrap text-body-small text-muted-foreground">
               {labels.priceKind(item.tier.priceKind)}
             </span>
           </span>
@@ -242,7 +242,7 @@ function ServicePlanGroupBlock({
         }
       />
 
-      <div className="flex min-w-0 flex-wrap items-center gap-x-md gap-y-sm text-body-sm text-muted-foreground [&>span]:whitespace-nowrap">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-md gap-y-sm text-body-small text-muted-foreground [&>span]:whitespace-nowrap">
         <span>
           {t("group.products", { count: group.solution.products.length })}
         </span>
@@ -613,7 +613,7 @@ export function ServicePlansPage() {
           aria-label={t("table.ariaLabel")}
         >
           {loading ? (
-            <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
+            <header className="flex min-h-0 items-center justify-end gap-sm text-body-small font-normal text-muted-foreground">
               <span>{tShared("common.loading")}</span>
             </header>
           ) : visibleGroups.length ? (

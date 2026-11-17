@@ -61,17 +61,17 @@ function TenantLine({
   return (
     <span className={infoRowText}>
       <span className="flex min-w-0 items-baseline gap-xs">
-        <span className="truncate text-label-md text-foreground">
+        <span className="truncate text-label text-foreground">
           {tenant.name}
         </span>
-        <span className="truncate text-body-sm text-muted-foreground">
+        <span className="truncate text-body-small text-muted-foreground">
           {tenant.workspaceName ?? labels.ws}
         </span>
       </span>
       <PrincipalNo
         no={tenant.workspaceNo}
         kind="workspace"
-        className="truncate text-body-sm text-muted-foreground tabular-nums"
+        className="truncate text-body-small text-muted-foreground tabular-nums"
       />
     </span>
   );

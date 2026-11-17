@@ -266,7 +266,7 @@ export function VouchersPage() {
         <span className={urgent ? "text-warning-text" : "text-foreground"}>
           {fmtDate(iso)}
         </span>
-        <span className="text-body-sm text-muted-foreground">
+        <span className="text-body-small text-muted-foreground">
           {fmtTime(iso)}
         </span>
       </span>
@@ -302,7 +302,7 @@ export function VouchersPage() {
           <span className="font-medium text-foreground">{faceValue(v)}</span>
           {/* 可用次数只在多次券上出现:单次券每行都写「1/1」是噪音。 */}
           {v.maxUses > 1 ? (
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("table.usesLeft", {
                 left: Math.max(0, v.maxUses - v.usedCount),
                 total: v.maxUses,
@@ -323,7 +323,7 @@ export function VouchersPage() {
           </StatusBadge>
           {/* 挂单号 = 这个状态的原因:押在哪张单上 / 用到了哪张单上。 */}
           {v.orderNo ? (
-            <span className="font-mono text-body-sm text-muted-foreground">
+            <span className="font-mono text-body-small text-muted-foreground">
               {v.orderNo}
             </span>
           ) : null}
@@ -351,7 +351,7 @@ export function VouchersPage() {
         <span className="flex flex-col items-center">
           {timeCell(v.redeemedAt)}
           {v.redemptionNo ? (
-            <span className="font-mono text-body-sm text-muted-foreground">
+            <span className="font-mono text-body-small text-muted-foreground">
               {v.redemptionNo}
             </span>
           ) : null}

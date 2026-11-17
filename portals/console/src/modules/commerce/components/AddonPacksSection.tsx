@@ -101,10 +101,10 @@ function AddonPackCard({
             />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-label-md text-foreground">
+            <span className="block truncate text-label text-foreground">
               {pack.packName}
             </span>
-            <span className="block truncate font-mono text-body-sm text-muted-foreground">
+            <span className="block truncate font-mono text-body-small text-muted-foreground">
               {pack.packCode}
             </span>
           </span>
@@ -116,19 +116,19 @@ function AddonPackCard({
         </div>
 
         <div className="flex items-baseline gap-xs">
-          <strong className="text-title-md text-foreground tabular-nums">
+          <strong className="text-heading-2 text-foreground tabular-nums">
             {packAmount(pack.metricKey, pack.amount)}
           </strong>
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {t("validityDays", { days: pack.validityDays })}
           </span>
         </div>
 
         <div className="mt-auto flex items-baseline gap-xs pt-sm">
-          <strong className="text-title-sm text-foreground tabular-nums">
+          <strong className="text-heading-3 text-foreground tabular-nums">
             {formatMoney(pack.price, pack.currency)}
           </strong>
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {t("oneOffNote")}
           </span>
         </div>
@@ -299,7 +299,7 @@ export function AddonPacksSection({
       cell: (o) => (
         <span className="flex flex-col">
           <span className="text-foreground">{o.packName}</span>
-          <span className="text-body-sm text-muted-foreground tabular-nums">
+          <span className="text-body-small text-muted-foreground tabular-nums">
             {packAmount(o.metricKey, o.amount)}
           </span>
         </span>
@@ -331,7 +331,7 @@ export function AddonPacksSection({
       cell: (o) => {
         if (o.status === "completed" && o.validUntil) {
           return (
-            <span className="tabular-nums text-body-sm text-muted-foreground">
+            <span className="tabular-nums text-body-small text-muted-foreground">
               {t("validUntil", { date: fmtDate(o.validUntil) })}
             </span>
           );
@@ -342,7 +342,7 @@ export function AddonPacksSection({
           o.expireAt
         ) {
           return (
-            <span className="tabular-nums text-body-sm text-muted-foreground">
+            <span className="tabular-nums text-body-small text-muted-foreground">
               {t("payBefore", {
                 date: fmtDateTime(o.expireAt),
               })}
@@ -351,7 +351,7 @@ export function AddonPacksSection({
         }
         if (o.status === "pending_payment" && o.paymentDeclared) {
           return (
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("awaitingConfirm")}
             </span>
           );

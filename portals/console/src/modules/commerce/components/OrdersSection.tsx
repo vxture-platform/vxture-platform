@@ -288,10 +288,10 @@ export function OrdersSection() {
       header: t("orders.colProduct"),
       cell: (o) => (
         <span className="flex flex-col">
-          <span className="text-label-md text-foreground">
+          <span className="text-label text-foreground">
             {o.productName ?? o.planName}
           </span>
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {o.tier ? t(`tier.${o.tier}`) : o.planName}
           </span>
         </span>
@@ -320,7 +320,7 @@ export function OrdersSection() {
             {money(o.amount, o.currency)}
           </span>
           {Number.parseFloat(o.voucherOff) > 0 ? (
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("orders.voucherOff", {
                 amount: money(o.voucherOff, o.currency),
               })}
@@ -378,7 +378,7 @@ export function OrdersSection() {
       cell: (o) => (
         <span className="flex flex-col items-center tabular-nums">
           <span className="text-foreground">{fmtDate(o.createdAt)}</span>
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {fmtTime(o.createdAt)}
           </span>
         </span>

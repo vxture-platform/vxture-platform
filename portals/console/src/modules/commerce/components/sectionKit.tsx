@@ -37,7 +37,7 @@ export const infoRowText = "flex min-w-0 flex-1 flex-col text-left";
 
 /** 信息行右侧信息区（日期 / 金额 / 编号）。 */
 export const infoRowRight =
-  "shrink-0 text-body-sm text-muted-foreground tabular-nums";
+  "shrink-0 text-body-small text-muted-foreground tabular-nums";
 
 export interface SectionTitleProps {
   readonly icon: IconName;

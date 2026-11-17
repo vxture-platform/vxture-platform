@@ -244,7 +244,7 @@ export function InboxPage() {
           />
         }
       >
-        <div className="flex items-center justify-between gap-md text-body-sm text-muted-foreground">
+        <div className="flex items-center justify-between gap-md text-body-small text-muted-foreground">
           <span className="tabular-nums">
             {t("counts", {
               todos: derived.todos.length,
@@ -263,7 +263,7 @@ export function InboxPage() {
         </div>
 
         {nothing ? (
-          <p className="p-lg text-center text-body-sm text-muted-foreground">
+          <p className="p-lg text-center text-body-small text-muted-foreground">
             {emptyText}
           </p>
         ) : null}
@@ -280,11 +280,11 @@ export function InboxPage() {
                     {t("todoBadge")}
                   </StatusBadge>
                   <Badge variant="outline">{tTodo(`kind.${todo.kind}`)}</Badge>
-                  <span className="min-w-0 truncate text-label-md font-semibold text-foreground">
+                  <span className="min-w-0 truncate text-label font-semibold text-foreground">
                     {todo.title}
                   </span>
                 </span>
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {todo.detail}
                 </span>
               </span>
@@ -313,20 +313,20 @@ export function InboxPage() {
                       </StatusBadge>
                       <Badge variant="outline">{t("messageBadge")}</Badge>
                       <span
-                        className={`min-w-0 truncate text-label-md text-foreground ${unread ? "font-semibold" : "font-normal"}`}
+                        className={`min-w-0 truncate text-label text-foreground ${unread ? "font-semibold" : "font-normal"}`}
                       >
                         {m.title}
                       </span>
                     </span>
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {m.body}
                     </span>
-                    <span className="text-body-sm text-content-tertiary tabular-nums">
+                    <span className="text-body-small text-content-tertiary tabular-nums">
                       {formatInboxTime(m.createdAt, locale)}
                     </span>
                   </span>
                   {inboxMessageHref(m) ? (
-                    <span className="inline-flex shrink-0 items-center gap-2xs text-body-sm text-muted-foreground">
+                    <span className="inline-flex shrink-0 items-center gap-2xs text-body-small text-muted-foreground">
                       {m.templateCode === "tenant.invitation"
                         ? tTodo("items.incomingInviteAction")
                         : t("open")}
@@ -369,7 +369,7 @@ export function InboxPage() {
 
       <PageSection icon="info" level={2} title={t("notes.title")}>
         <SectionBody>
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("notes.body")}
           </p>
         </SectionBody>

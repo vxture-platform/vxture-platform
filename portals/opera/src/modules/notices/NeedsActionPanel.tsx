@@ -155,7 +155,7 @@ export function NeedsActionPanel({
       }
     >
       {state === "loading" ? (
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body-small text-muted-foreground">
           {t("needsAction.loading")}
         </p>
       ) : state === "error" ? (
@@ -170,7 +170,7 @@ export function NeedsActionPanel({
           }
         />
       ) : items.length === 0 ? (
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body-small text-muted-foreground">
           {/* 三种「空」说的不是一件事：一条未读都没有 / 只剩「一般」没读 /
               紧急与重要都读完了。写成同一句会让人以为自己漏看了什么。 */}
           {unread === 0
@@ -192,13 +192,11 @@ export function NeedsActionPanel({
                 }
                 main={
                   <span className="flex min-w-0 flex-col gap-2xs">
-                    <span className="truncate text-label-md">
-                      {notice.title}
-                    </span>
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="truncate text-label">{notice.title}</span>
+                    <span className="text-body-small text-muted-foreground">
                       {notice.body}
                     </span>
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {formatDateTime(notice.publishedAt, locale)}
                       {" · "}
                       {/* system 来源没有人，写「系统」而不是「—」——后者会被当成
@@ -235,7 +233,7 @@ export function NeedsActionPanel({
             ))}
           </PanelList>
           {urgentTotal > items.length ? (
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {t("needsAction.more", {
                 total: urgentTotal,
                 shown: items.length,

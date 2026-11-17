@@ -28,7 +28,7 @@ import type { WorkData, WorkRuntime } from "../../lib/contracts";
 import { authNavigation } from "../../lib/navigation";
 import { buildConsoleEntry } from "../../lib/console-entry";
 import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
-import { PhoneNumber, ShellHeaderActions } from "@vxture/design-system";
+import { ShellHeaderActions } from "@vxture/design-system";
 import { ScopeMenu } from "./ScopeMenu";
 
 // ============================================================================
@@ -196,11 +196,9 @@ export function WorkHeader({
               displayName: data.user.name,
               avatarAlt: data.user.name,
               avatarSrc: data.user.picture ?? undefined,
-              uniqueLine: data.user.phone ? (
-                <PhoneNumber {...formatPhoneForDisplay(data.user.phone)} />
-              ) : (
-                t("未绑定手机号")
-              ),
+              ...(data.user.phone
+                ? { phone: formatPhoneForDisplay(data.user.phone) }
+                : { uniqueLine: t("未绑定手机号") }),
               meta: data.user.email,
             }}
             extras={

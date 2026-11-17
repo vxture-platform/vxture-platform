@@ -222,7 +222,7 @@ export function AppCatalog({
               onClick={() => setCategory(item.value)}
             >
               {t(item.label)}
-              <span className="text-body-sm tabular-nums">
+              <span className="text-body-small tabular-nums">
                 {result.counts[item.value]}
               </span>
             </Button>
@@ -295,7 +295,7 @@ export function AppCatalog({
         <div className="work-empty">
           <Icon name="search" size="lg" />
           <h3>{apps.length ? t("没有找到相关应用") : t("尚未订阅应用")}</h3>
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {apps.length
               ? t("试试其他关键词，或调整应用分类")
               : t("订阅适合你的产品，让专业能力融入日常工作")}

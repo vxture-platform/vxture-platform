@@ -375,7 +375,7 @@ function ProductSolutionDetails({
         </DetailList>
         {solution.description ? (
           <div className="grid min-w-0 gap-xs">
-            <strong className="text-body-md leading-relaxed font-semibold text-foreground">
+            <strong className="text-body leading-relaxed font-semibold text-foreground">
               {solution.description}
             </strong>
           </div>
@@ -432,11 +432,11 @@ function ProductSolutionDetails({
                 }
                 trail={
                   <span className="grid justify-items-end gap-2xs">
-                    <span className="text-body-md font-semibold text-foreground">
+                    <span className="text-body font-semibold text-foreground">
                       {labels.capabilityType(product.productType)} |{" "}
                       {labels.source(product.source)}
                     </span>
-                    <span className="truncate text-body-sm text-muted-foreground">
+                    <span className="truncate text-body-small text-muted-foreground">
                       {product.role || t("products.noRole")}
                     </span>
                   </span>
@@ -473,13 +473,15 @@ function ProductSolutionDetails({
                 key={item}
                 lead={<Icon name="check" size="xs" fallback="placeholder" />}
                 main={
-                  <span className="text-body-sm text-foreground">{item}</span>
+                  <span className="text-body-small text-foreground">
+                    {item}
+                  </span>
                 }
               />
             ))}
           </PanelList>
         ) : (
-          <p className="m-0 text-body-sm text-muted-foreground">
+          <p className="m-0 text-body-small text-muted-foreground">
             {t("boundaries.empty")}
           </p>
         )}
@@ -522,12 +524,12 @@ function ProductSolutionDetails({
                           {labels.status(bound.status)}
                         </StatusBadge>
                         <span className="grid max-w-panel-sm gap-2xs text-right">
-                          <span className="truncate text-body-md font-semibold text-foreground">
+                          <span className="truncate text-body font-semibold text-foreground">
                             {bound.priceLabel}
                           </span>
                           <span
                             title={bound.summary}
-                            className="truncate text-body-sm text-muted-foreground"
+                            className="truncate text-body-small text-muted-foreground"
                           >
                             {bound.summary || labels.priceKind(bound.priceKind)}
                           </span>
@@ -897,7 +899,7 @@ export function ProductSolutionDetailPage({
           />
         </>
       ) : (
-        <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
+        <section className="flex min-h-0 items-center justify-end gap-sm text-body-small font-normal text-muted-foreground">
           <span>{tShared("common.loading")}</span>
         </section>
       )}
@@ -1066,7 +1068,7 @@ export function ProductSolutionDetailPage({
               }
             />
           </SolutionField>
-          <label className="inline-flex items-center gap-xs text-body-sm text-foreground">
+          <label className="inline-flex items-center gap-xs text-body-small text-foreground">
             <Checkbox
               checked={editForm.isPublic}
               onCheckedChange={(checked) =>
@@ -1096,7 +1098,7 @@ export function ProductSolutionDetailPage({
         >
           {dialogError ? <Banner tone="danger" title={dialogError} /> : null}
           {catalog === null ? (
-            <p className="m-0 text-body-sm text-muted-foreground">
+            <p className="m-0 text-body-small text-muted-foreground">
               {tShared("common.loading")}
             </p>
           ) : catalog.length === 0 ? (
@@ -1212,7 +1214,7 @@ export function ProductSolutionDetailPage({
               ))}
             </NativeSelect>
           </Field>
-          <p className="m-0 text-body-sm text-muted-foreground">
+          <p className="m-0 text-body-small text-muted-foreground">
             {t("bindDialog.hint")}
           </p>
         </DialogForm>

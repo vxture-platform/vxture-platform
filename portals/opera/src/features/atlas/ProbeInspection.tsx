@@ -63,7 +63,7 @@ function CopyChip({ value }: { readonly value: string }) {
       }}
       /* 视觉要的是一行可复制的等宽文本 + 图标，不是一个带底的按钮：把 Button 的
          尺寸与内边距归零，只留它的可聚焦/可回车语义（同能力标签那处的做法）。 */
-      className="inline-flex h-auto w-auto items-center gap-2xs p-0 font-mono text-code-sm font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
+      className="inline-flex h-auto w-auto items-center gap-2xs p-0 font-mono text-code font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
       aria-label={copied ? "已复制" : `复制 ${value}`}
     >
       <span className="break-all">{value}</span>
@@ -160,7 +160,7 @@ function RequestError({
   return (
     <div className="flex flex-col gap-sm">
       <Banner tone="danger" title={title} description={hint} />
-      <dl className="grid grid-cols-[auto_1fr] gap-x-lg gap-y-2xs rounded-md border border-border p-sm text-body-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-lg gap-y-2xs rounded-md border border-border p-sm text-body-small">
         <dt className="text-muted-foreground">HTTP 状态</dt>
         <dd className="font-mono">{error.status || "—（无响应）"}</dd>
         {error.code ? (
@@ -203,7 +203,7 @@ function CheckCard({ check }: { readonly check: ProbeCheck }) {
           <StatusBadge tone={check.ok ? "success" : "danger"} dot>
             {check.mode}
           </StatusBadge>
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {check.latencyMs != null ? `${check.latencyMs}ms` : "延迟 —"}
             {check.totalTokens != null ? ` · ${check.totalTokens} tokens` : ""}
           </span>
@@ -224,7 +224,7 @@ function CheckCard({ check }: { readonly check: ProbeCheck }) {
         </div>
       </div>
       {falseGreen ? (
-        <p className="text-body-sm text-danger-foreground">
+        <p className="text-body-small text-danger-foreground">
           回了 usage，却一个 token
           的可交付内容都没有——这正是旧自检会误判成绿灯的那种。
         </p>
@@ -232,11 +232,11 @@ function CheckCard({ check }: { readonly check: ProbeCheck }) {
       {check.error ? (
         <div className="flex flex-col gap-2xs rounded-sm bg-muted/40 p-xs">
           {check.error.code ? (
-            <span className="font-mono text-code-sm text-danger-foreground">
+            <span className="font-mono text-code text-danger-foreground">
               {check.error.code}
             </span>
           ) : null}
-          <span className="text-body-sm break-all text-muted-foreground">
+          <span className="text-body-small break-all text-muted-foreground">
             {check.error.message}
           </span>
         </div>
@@ -284,7 +284,7 @@ function ResultReport({
         />
       ) : null}
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-lg gap-y-2xs text-body-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-lg gap-y-2xs text-body-small">
         <dt className="text-muted-foreground">requestId</dt>
         <dd>
           {body.requestId ? (
@@ -317,7 +317,7 @@ function ResultReport({
 
       <div className="flex flex-col gap-sm">
         {body.checks.length === 0 ? (
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             这次没有返回任何检查项。
           </p>
         ) : (
@@ -331,7 +331,7 @@ function ResultReport({
 export function ProbeInspection({ state }: { readonly state: ProbeState }) {
   if (state.kind === "idle") {
     return (
-      <p className="text-body-sm text-muted-foreground">
+      <p className="text-body-small text-muted-foreground">
         还没有自检记录。自检会发起一次真实上游调用（chat 与 stream
         两路）、消耗少量
         token，用来验证密钥解析、线协议生效值、连通性与延迟，以及上游是否回传
@@ -341,7 +341,7 @@ export function ProbeInspection({ state }: { readonly state: ProbeState }) {
   }
   if (state.kind === "running") {
     return (
-      <p className="flex items-center gap-sm text-body-sm text-muted-foreground">
+      <p className="flex items-center gap-sm text-body-small text-muted-foreground">
         <Icon
           name="spinner"
           size="sm"

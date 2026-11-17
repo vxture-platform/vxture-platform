@@ -68,14 +68,14 @@ export function TenantScopePicker({
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-xs">
                 <span
-                  className="truncate text-label-md text-foreground"
+                  className="truncate text-label text-foreground"
                   title={group.name}
                 >
                   {group.name}
                 </span>
                 <Badge
                   variant="secondary"
-                  className="shrink-0 gap-2xs rounded-full px-xs text-label-sm font-normal"
+                  className="shrink-0 gap-2xs rounded-full px-xs text-label-small font-normal"
                 >
                   <Icon
                     name={group.personal ? "user" : "buildings"}

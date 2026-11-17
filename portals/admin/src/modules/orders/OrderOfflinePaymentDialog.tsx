@@ -219,7 +219,7 @@ export function OrderOfflinePaymentDialog({
         });
       }}
     >
-      <p className="m-0 text-body-sm font-semibold text-foreground">
+      <p className="m-0 text-body-small font-semibold text-foreground">
         {preview}
       </p>
       <FieldGroup columns={2}>

@@ -226,12 +226,12 @@ function TenantKeyMetric({
    * 要并排挂两个标。所以留成页面内的小件，标本身仍是 DS 的。 */
   return (
     <div className="flex min-w-0 flex-col gap-2xs">
-      <span className="truncate text-label-sm text-muted-foreground">
+      <span className="truncate text-label-small text-muted-foreground">
         {label}
       </span>
       <span className="flex min-w-0 flex-wrap items-baseline gap-xs">
         <span
-          className={`truncate text-title-md font-extrabold ${
+          className={`truncate text-heading-2 font-extrabold ${
             danger ? "text-destructive-text" : "text-foreground"
           }`}
         >
@@ -322,7 +322,7 @@ function TenantConfigItem({
         className,
       )}
     >
-      <span className="shrink-0 basis-media-lg whitespace-nowrap text-body-sm font-semibold text-muted-foreground">
+      <span className="shrink-0 basis-media-lg whitespace-nowrap text-body-small font-semibold text-muted-foreground">
         {label}
       </span>
       <div className="flex min-w-0 flex-1 items-center gap-xs">{children}</div>
@@ -401,7 +401,7 @@ function TenantInfoTab({
             {editing ? (
               <>
                 {infoDirty ? (
-                  <span className="whitespace-nowrap text-body-sm font-extrabold text-destructive-text">
+                  <span className="whitespace-nowrap text-body-small font-extrabold text-destructive-text">
                     有未保存修改
                   </span>
                 ) : null}
@@ -683,14 +683,14 @@ function TenantInfoTab({
               placeholder="只有运营看得到。记下这个租户的特殊情况、沟通结论、需要交接的事…"
             />
           ) : (
-            <p className="m-0 text-body-sm leading-relaxed whitespace-pre-wrap text-foreground">
+            <p className="m-0 text-body-small leading-relaxed whitespace-pre-wrap text-foreground">
               {operatorNotes.body || "—"}
             </p>
           )}
           {/* 「有操作人员和信息记录」（owner）。逐次的编辑历史在风控审计里
             （tenant.operator_notes.update，带 before/after），不在这里再列一遍。 */}
           {operatorNotes.updatedAt ? (
-            <p className="m-0 text-body-sm text-muted-foreground">
+            <p className="m-0 text-body-small text-muted-foreground">
               {operatorNotes.updatedBy ?? "未知"} 于{" "}
               {formatDateTime(operatorNotes.updatedAt, locale)} 更新
             </p>
@@ -844,7 +844,7 @@ function useTenantMemberColumns(
               {memberStatusLabel(member.status)}
             </StatusBadge>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {formatDate(member.joinedAt, locale)}
           </span>
         </span>
@@ -1156,9 +1156,9 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
     <div className="grid min-w-0 gap-sm">
       {/* 走 DS FilterBar 而不是手搓一排（owner 2026-09-21：搜索/筛选字号偏大）。
           根因不是没引用 token：DS 的 Input / NativeSelect 默认
-          `text-body-lg md:text-body-md`——`body-lg` 在小屏是防 iOS 聚焦缩放的惯用法，
+          `text-body md:text-body`——`body-lg` 在小屏是防 iOS 聚焦缩放的惯用法，
           对**表单字段**是对的。而 FilterBar 把子控件再降一档（见它第 49~51 行的
-          `[&_[data-slot=input]]:…text-body-sm`）：筛选栏是工具条，不是表单。
+          `[&_[data-slot=input]]:…text-body-small`）：筛选栏是工具条，不是表单。
           手搓的 flex 行拿不到那份契约，所以字大一号。用件而不是手工补字号——
           手工补的下一次还会漏。槽位顺序是件的契约，调用方改不了。 */}
       <FilterBar
@@ -1291,7 +1291,10 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
             )}
           </NativeSelect>
           {roleError ? (
-            <p className="m-0 text-body-sm text-destructive-text" role="alert">
+            <p
+              className="m-0 text-body-small text-destructive-text"
+              role="alert"
+            >
               {roleError}
             </p>
           ) : null}
@@ -1391,7 +1394,7 @@ function TenantSubscriptionCard({
             fallback="placeholder"
             className="shrink-0 text-primary-text"
           />
-          <span className="min-w-0 flex-1 truncate text-label-md text-foreground">
+          <span className="min-w-0 flex-1 truncate text-label text-foreground">
             {title}
           </span>
           <StatusBadge tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}>
@@ -1437,7 +1440,7 @@ function TenantSubscriptionCard({
             ]}
           />
         </span>
-        <span className="block truncate text-body-sm text-muted-foreground">
+        <span className="block truncate text-body-small text-muted-foreground">
           {planLabel}
         </span>
       </CardHeader>
@@ -1459,13 +1462,13 @@ function TenantSubscriptionCard({
 
         {/* ── 走到哪了：图形化那一条 ──────────────────────────────────── */}
         {percent == null ? (
-          <p className="m-0 text-body-sm text-muted-foreground">
+          <p className="m-0 text-body-small text-muted-foreground">
             开通 {formatDate(subscription.startedAt, locale)}
             {" · "}不限期
           </p>
         ) : (
           <div className="flex flex-col gap-2xs">
-            <div className="flex items-baseline justify-between gap-sm text-body-sm">
+            <div className="flex items-baseline justify-between gap-sm text-body-small">
               <span className="text-muted-foreground tabular-nums">
                 {formatDate(subscription.startedAt, locale)} ~{" "}
                 {formatDate(subscription.endsAt!, locale)}
@@ -1640,7 +1643,7 @@ function TenantUsageTab({ usage }: { usage: TenantOperationUsageMetric[] }) {
                     fallback="placeholder"
                     className="shrink-0 text-primary-text"
                   />
-                  <span className="min-w-0 flex-1 truncate text-label-md text-foreground">
+                  <span className="min-w-0 flex-1 truncate text-label text-foreground">
                     {metric.metricKey}
                   </span>
                   {percent !== null && percent >= 80 ? (
@@ -1649,18 +1652,18 @@ function TenantUsageTab({ usage }: { usage: TenantOperationUsageMetric[] }) {
                     </StatusBadge>
                   ) : null}
                 </span>
-                <span className="block text-body-sm text-muted-foreground">
+                <span className="block text-body-small text-muted-foreground">
                   本月用量 {formatNumber(metric.monthUsage)} {unit}
                 </span>
               </CardHeader>
               <CardContent className="grid min-w-0 gap-sm">
                 <div className="flex min-w-0 items-baseline justify-between gap-md">
-                  <b className="text-title-xl text-foreground tabular-nums">
+                  <b className="text-heading-1 text-foreground tabular-nums">
                     {metric.quotaUsed === null
                       ? "—"
                       : formatNumber(metric.quotaUsed)}
                   </b>
-                  <small className="text-body-sm font-semibold text-muted-foreground tabular-nums">
+                  <small className="text-body-small font-semibold text-muted-foreground tabular-nums">
                     {metric.quotaLimit === null
                       ? "未配置配额池"
                       : `/ ${formatNumber(metric.quotaLimit)} ${unit}`}
@@ -1715,22 +1718,28 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
         <DetailSectionHeading icon="shield-check" title="风控审计" />
         <div className="flex min-w-0 flex-wrap items-baseline gap-lg">
           <span className="flex items-baseline gap-sm">
-            <span className="text-body-sm text-muted-foreground">风险等级</span>
+            <span className="text-body-small text-muted-foreground">
+              风险等级
+            </span>
             <b
-              className={`text-title-xl font-extrabold ${RISK_TEXT_TONE[riskLevel]}`}
+              className={`text-heading-1 font-extrabold ${RISK_TEXT_TONE[riskLevel]}`}
             >
               {riskLabel(tenant.riskLevel)}
             </b>
           </span>
           <span className="flex items-baseline gap-sm">
-            <span className="text-body-sm text-muted-foreground">认证状态</span>
+            <span className="text-body-small text-muted-foreground">
+              认证状态
+            </span>
             <StatusBadge tone={VERIFICATION_TONE[tenant.verifiedStatus]}>
               {verifiedLabel(tenant.verifiedStatus)}
             </StatusBadge>
           </span>
           <span className="flex items-baseline gap-sm">
-            <span className="text-body-sm text-muted-foreground">最近活跃</span>
-            <b className="text-body-md text-foreground">
+            <span className="text-body-small text-muted-foreground">
+              最近活跃
+            </span>
+            <b className="text-body text-foreground">
               {tenant.lastActiveAt
                 ? formatDate(tenant.lastActiveAt, locale)
                 : "无活动记录"}
@@ -1845,7 +1854,7 @@ function TenantTicketsTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
               <StatusBadge tone={TICKET_STATUS_TONE[ticket.status]}>
                 {ticketStatusLabel(ticket.status)}
               </StatusBadge>
-              <span className="whitespace-nowrap text-body-sm text-muted-foreground">
+              <span className="whitespace-nowrap text-body-small text-muted-foreground">
                 {formatDate(ticket.updatedAt, locale)}
               </span>
             </span>
@@ -1954,7 +1963,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
     return (
       <ViewLayout className="w-full ">
         <Link
-          className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-sm font-extrabold text-primary-text no-underline"
+          className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-small font-extrabold text-primary-text no-underline"
           href="/tenants"
         >
           <Icon name="arrow-left" size="xs" fallback="placeholder" />
@@ -2113,7 +2122,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
       header={
         <>
           <Link
-            className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-sm font-extrabold text-primary-text no-underline"
+            className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-small font-extrabold text-primary-text no-underline"
             href="/tenants"
           >
             <Icon name="arrow-left" size="xs" fallback="placeholder" />
@@ -2208,7 +2217,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                     <DestructiveButton
                       /* 浅淡靠 className：本件没有 variant（查过 design-ui 的 props）——
                          破坏性动作不该有「换个温和变体」这种选项，那是件的态度。 */
-                      className="text-body-sm font-normal"
+                      className="text-body-small font-normal"
                       size="sm"
                       disabled={resettingLogo || !tenant.logoHash}
                       confirm={withLabels({
@@ -2235,7 +2244,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                   <div className="group flex min-w-0 items-center gap-xs">
                     <h2
                       className={`min-w-0 truncate font-semibold text-foreground ${
-                        summaryExpanded ? "text-title-xl" : "text-title-md"
+                        summaryExpanded ? "text-heading-1" : "text-heading-2"
                       }`}
                     >
                       {/* 全称（owner 2026-09-21）。简称在「基础资料」里单列一格；
@@ -2259,7 +2268,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                     </Badge>
                   </div>
                   <div className="group flex min-w-0 shrink-0 items-center gap-xs">
-                    <p className="m-0 min-w-0 truncate text-body-sm font-extrabold text-muted-foreground">
+                    <p className="m-0 min-w-0 truncate text-body-small font-extrabold text-muted-foreground">
                       {formatPrincipalNoOr(tenant.tenantCode, "tenant", "—")}
                     </p>
                     <Button

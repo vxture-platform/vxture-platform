@@ -83,13 +83,13 @@ export function IdentityCard({
 
       <div className="flex min-w-0 flex-1 flex-col gap-2xs">
         <span className="flex flex-wrap items-center gap-sm">
-          <strong className="text-title-md text-foreground">{name}</strong>
+          <strong className="text-heading-2 text-foreground">{name}</strong>
           {tags ? (
             <span className="flex flex-wrap items-center gap-2xs">{tags}</span>
           ) : null}
         </span>
         {meta ? (
-          <span className="text-body-sm text-muted-foreground">{meta}</span>
+          <span className="text-body-small text-muted-foreground">{meta}</span>
         ) : null}
       </div>
 

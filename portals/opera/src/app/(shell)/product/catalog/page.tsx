@@ -840,7 +840,7 @@ function ProductsPageContent() {
                           className={
                             isValidProductType(r.productType)
                               ? undefined
-                              : "text-code-sm"
+                              : "text-code"
                           }
                         >
                           {productTypeLabel(r.productType, typeLocale)}
@@ -1098,9 +1098,9 @@ function ProductsPageContent() {
         }}
         cancelLabel={tShared("actions.cancel")}
       >
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body-small text-muted-foreground">
           对象：{pendingAction?.product.productName}（
-          <span className="font-mono text-code-sm">
+          <span className="font-mono text-code">
             {pendingAction?.product.productCode}
           </span>
           ）
@@ -1142,9 +1142,9 @@ function ProductsPageContent() {
           />
         ) : (
           <div className="flex flex-col gap-md">
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               对象：{deletion.product.productName}（
-              <span className="font-mono text-code-sm">
+              <span className="font-mono text-code">
                 {deletion.product.productCode}
               </span>
               ）
@@ -1197,7 +1197,7 @@ function IntegrationCell({ product }: { readonly product: ProductRecord }) {
     <StackCell
       main={
         s?.edgeDomain ? (
-          <span className="font-mono text-code-sm">{s.edgeDomain}</span>
+          <span className="font-mono text-code">{s.edgeDomain}</span>
         ) : (
           <span className="text-muted-foreground">未配置边缘域名</span>
         )

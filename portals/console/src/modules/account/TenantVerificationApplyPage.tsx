@@ -124,7 +124,7 @@ export function TenantVerificationApplyPage() {
   /** 能力行:一个图标 + 一句话;可与不可用同一形状,不靠颜色单独承载信息。 */
   const capability = (ok: boolean, label: string) => (
     <span
-      className={`flex items-center gap-xs text-body-sm ${
+      className={`flex items-center gap-xs text-body-small ${
         ok ? "text-foreground" : "text-muted-foreground"
       }`}
     >
@@ -248,10 +248,10 @@ export function TenantVerificationApplyPage() {
                     </CardHeader>
                     <CardContent className="flex flex-col gap-md">
                       <div className="flex flex-col gap-2xs">
-                        <span className="text-label-sm text-muted-foreground">
+                        <span className="text-label-small text-muted-foreground">
                           {t("methods.needLabel")}
                         </span>
-                        <ul className="flex flex-col gap-2xs text-body-sm text-foreground">
+                        <ul className="flex flex-col gap-2xs text-body-small text-foreground">
                           {Array.from({ length: m.itemCount }, (_, i) => (
                             <li key={i} className="flex items-start gap-xs">
                               <Icon
@@ -266,7 +266,7 @@ export function TenantVerificationApplyPage() {
                         </ul>
                       </div>
                       <div className="flex flex-col gap-2xs">
-                        <span className="text-label-sm text-muted-foreground">
+                        <span className="text-label-small text-muted-foreground">
                           {t("methods.capabilityLabel")}
                         </span>
                         {capability(true, t("methods.canSubscribe"))}
@@ -300,7 +300,7 @@ export function TenantVerificationApplyPage() {
         <CardRows>
           <div className="flex max-w-panel-md flex-col gap-sm">
             {/* 与上方选中项的关联:这一段填的是哪种方式的资料,写在明处 */}
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {t("form.selectedMethod", {
                 method: t(`methods.${method}.name`),
               })}

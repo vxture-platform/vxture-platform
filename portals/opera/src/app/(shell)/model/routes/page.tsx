@@ -184,7 +184,7 @@ function ModelRefCell({
   const availability = ref?.availability;
   return (
     <span className="flex flex-col gap-2xs">
-      <span className="text-code-sm">{modelCode}</span>
+      <span className="text-code">{modelCode}</span>
       {availability && availability !== "available" ? (
         <Badge variant="outline" className="w-fit">
           {availabilityMeta(availability).label}
