@@ -250,7 +250,7 @@ export function QuotasPage() {
     iso ? (
       <span className="flex flex-col tabular-nums">
         <span className="text-foreground">{fmtDate(iso)}</span>
-        <span className="text-body-sm text-muted-foreground">
+        <span className="text-body-small text-muted-foreground">
           {fmtTime(iso)}
         </span>
       </span>
@@ -567,7 +567,7 @@ export function QuotasPage() {
       cell: (r) => (
         <span className="flex flex-col">
           <span className="text-foreground">{r.productName}</span>
-          <span className="font-mono text-body-sm text-muted-foreground">
+          <span className="font-mono text-body-small text-muted-foreground">
             {r.productCode}
           </span>
         </span>

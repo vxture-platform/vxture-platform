@@ -443,7 +443,7 @@ export function TenantPage() {
       }
       footer={
         <div className="flex w-full items-center justify-end gap-sm">
-          <span className="mr-auto text-body-sm text-muted-foreground">
+          <span className="mr-auto text-body-small text-muted-foreground">
             {dirtyCount > 0
               ? t("footer.dirty", { count: dirtyCount })
               : t("footer.clean")}

@@ -514,7 +514,7 @@ export default function MeteringPage() {
             width: "sm",
             cell: (r: UsageSummaryRecord) =>
               r.applicationId || r.applicationType ? (
-                <span className="text-body-sm text-foreground">
+                <span className="text-body-small text-foreground">
                   {r.applicationType
                     ? (APPLICATION_TYPE_LABELS[r.applicationType] ??
                       r.applicationType)

@@ -589,7 +589,7 @@ function RunosGrantsPageContent() {
         r.grantType === "derived" ? (
           <div className="flex flex-col items-center gap-2xs">
             <Badge variant="outline">派生 · 只读</Badge>
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               锚点：
               <span className="font-mono">{r.anchorCapabilityId ?? "—"}</span>
             </span>
@@ -611,7 +611,7 @@ function RunosGrantsPageContent() {
             {r.riskScope}
           </StatusBadge>
           {r.riskScope === "critical" ? (
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {r.criticalRequiresApproval ? "需人工确认" : "无需人工确认"}
             </span>
           ) : null}
@@ -932,7 +932,7 @@ function RunosGrantsPageContent() {
                     r.grantType === "derived" ? (
                       <div className="flex flex-col items-center gap-2xs">
                         <Badge variant="outline">派生</Badge>
-                        <span className="text-body-sm text-muted-foreground">
+                        <span className="text-body-small text-muted-foreground">
                           锚点：
                           <span className="font-mono">
                             {r.anchorCapabilityId ?? "—"}
@@ -1020,7 +1020,7 @@ function RunosGrantsPageContent() {
                   屏幕外。 */}
               <div className="flex flex-col gap-2xs rounded-md border border-border p-xs">
                 {pickerRows(grantPicker).length === 0 ? (
-                  <p className="p-sm text-body-sm text-muted-foreground">
+                  <p className="p-sm text-body-small text-muted-foreground">
                     没有匹配的能力。
                   </p>
                 ) : (
@@ -1047,10 +1047,10 @@ function RunosGrantsPageContent() {
                           }
                         />
                         <span className="flex min-w-0 flex-col">
-                          <span className="text-body-sm text-foreground">
+                          <span className="text-body-small text-foreground">
                             {c.displayName?.["zh-CN"] || c.title}
                           </span>
-                          <span className="truncate font-mono text-code-sm text-muted-foreground">
+                          <span className="truncate font-mono text-code text-muted-foreground">
                             {c.capabilityId}
                           </span>
                         </span>

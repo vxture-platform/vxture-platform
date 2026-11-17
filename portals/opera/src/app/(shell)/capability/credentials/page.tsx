@@ -562,7 +562,7 @@ function RunosCredentialsPageContent() {
                   <span className="inline-flex flex-col items-center gap-2xs">
                     <span>{r.appliesTo.length} 个能力</span>
                     {r.subjectScope ? (
-                      <span className="text-body-sm text-muted-foreground">
+                      <span className="text-body-small text-muted-foreground">
                         {r.subjectScope}
                       </span>
                     ) : null}
@@ -579,7 +579,7 @@ function RunosCredentialsPageContent() {
                     <StatusBadge tone={STATE_TONE[r.state] ?? "neutral"} dot>
                       {r.state}
                     </StatusBadge>
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {r.mode}
                     </span>
                   </span>
@@ -727,7 +727,7 @@ function RunosCredentialsPageContent() {
                   <li key={capabilityId}>
                     <Link
                       href={`/capability/registry?capabilityId=${encodeURIComponent(capabilityId)}`}
-                      className="font-mono text-code-sm text-primary hover:underline"
+                      className="font-mono text-code text-primary hover:underline"
                     >
                       {capabilityId}
                     </Link>

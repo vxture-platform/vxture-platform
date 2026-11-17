@@ -9,7 +9,7 @@
  * @date 2026-11-05
  */
 
-import { PhoneNumber, ShellHeaderActions } from "@vxture/design-system";
+import { ShellHeaderActions } from "@vxture/design-system";
 import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -52,11 +52,6 @@ import { buildWorkbenchEntry } from "@/lib/workbench-entry";
 import { accountCenterUrl } from "@/lib/account-center";
 import { TenantPanel } from "./TenantPanel";
 import { useGlobalSearch, type NavSearchEntry } from "./useGlobalSearch";
-
-/** Keep the country code visible and group mainland mobile numbers for scanning. */
-function formatPhone(phone: string | null | undefined) {
-  return phone ? <PhoneNumber {...formatPhoneForDisplay(phone)} /> : "";
-}
 
 export interface ConsoleHeaderProps {
   openDrawer: (type: ShellDrawerType) => void;
@@ -307,7 +302,7 @@ export function ConsoleHeader({
               asChild
               variant="ghost"
               size="md"
-              className="h-icon-xl shrink-0 px-[calc(var(--vx-spacing)*2)] text-label-sm"
+              className="h-icon-xl shrink-0 px-[calc(var(--vx-spacing)*2)] text-label-small"
             >
               <a
                 href={buildWorkbenchEntry(
@@ -352,7 +347,7 @@ export function ConsoleHeader({
               {unreadCount > 0 ? (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-label-sm font-semibold leading-none text-primary-foreground ring-2 ring-background tabular-nums"
+                  className="pointer-events-none absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-label-small font-semibold leading-none text-primary-foreground ring-2 ring-background tabular-nums"
                 >
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
@@ -374,7 +369,9 @@ export function ConsoleHeader({
               avatarAlt: displayName,
               // 手机号/邮箱缺失时给出明确文案而不是留白——留白读作"没这个字段"，
               // 缺失读作"该补了"，两者对用户的含义完全不同。
-              uniqueLine: formatPhone(user?.phone) || t("missingPhone"),
+              ...(user?.phone
+                ? { phone: formatPhoneForDisplay(user.phone) }
+                : { uniqueLine: t("missingPhone") }),
               meta: user?.email || t("missingEmail"),
               ...(typeof user?.realNameVerified === "boolean"
                 ? {

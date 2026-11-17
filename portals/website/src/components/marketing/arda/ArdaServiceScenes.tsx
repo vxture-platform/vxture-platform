@@ -21,7 +21,7 @@ export function LineageScene() {
         {sources.map((source) => (
           <Card
             key={source}
-            className="items-center gap-2 p-4 text-center text-body-sm"
+            className="items-center gap-2 p-4 text-center text-body-small"
           >
             <Icon
               name="database"
@@ -43,7 +43,7 @@ export function LineageScene() {
           className="hidden h-4 w-4 text-primary-text sm:block"
           aria-hidden
         />
-        <div className="w-full rounded-lg border border-primary-border bg-primary-muted p-4 text-center text-body-sm text-primary-text">
+        <div className="w-full rounded-lg border border-primary-border bg-primary-muted p-4 text-center text-body-small text-primary-text">
           {t("assetName")}
         </div>
         <Icon
@@ -61,7 +61,7 @@ export function LineageScene() {
         {consumers.map((consumer) => (
           <Card
             key={consumer}
-            className="items-center gap-2 p-4 text-center text-body-sm"
+            className="items-center gap-2 p-4 text-center text-body-small"
           >
             <Icon
               name="stack"
@@ -82,7 +82,7 @@ export function ServiceScene() {
   return (
     <Card className="gap-5 p-6">
       <div className="flex items-start justify-between gap-4">
-        <p className="text-title-sm font-semibold">{t("service")}</p>
+        <p className="text-heading-3 font-semibold">{t("service")}</p>
         <Icon
           name="code"
           className="h-6 w-6 shrink-0 text-primary-text"
@@ -96,10 +96,10 @@ export function ServiceScene() {
           </Badge>
         ))}
       </div>
-      <p className="text-body-sm leading-6 text-muted-foreground">
+      <p className="text-body-small leading-6 text-muted-foreground">
         {t("serviceConsumers")}
       </p>
-      <p className="flex items-start gap-2 border-t border-border pt-5 text-body-sm text-primary-text">
+      <p className="flex items-start gap-2 border-t border-border pt-5 text-body-small text-primary-text">
         <Icon
           name="shield-check"
           className="mt-1 h-4 w-4 shrink-0"

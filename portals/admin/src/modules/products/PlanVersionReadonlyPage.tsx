@@ -186,7 +186,7 @@ export function PlanVersionReadonlyPage({
       align: "center",
       cell: (row) =>
         row.scope === "unknown" ? (
-          <span className="text-body-sm text-muted-foreground">—</span>
+          <span className="text-body-small text-muted-foreground">—</span>
         ) : (
           <StatusBadge tone={row.scope === "platform" ? "brand" : "neutral"}>
             {row.scope === "platform"
@@ -260,7 +260,7 @@ export function PlanVersionReadonlyPage({
   return (
     <DetailPageTemplate className="min-w-0" header={header}>
       {message ? (
-        <p className="text-body-sm" role="status">
+        <p className="text-body-small" role="status">
           {message}
         </p>
       ) : null}
@@ -291,7 +291,7 @@ export function PlanVersionReadonlyPage({
                         ? t("lifecycle.serving")
                         : t("lifecycle.retiredVersion")}
                   </StatusBadge>
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {t("readonly.frozen", {
                       date: formatDate(detail.createdAt, locale),
                     })}
@@ -399,7 +399,7 @@ export function PlanVersionReadonlyPage({
                 main={
                   <span className="inline-flex flex-wrap items-center gap-2xs">
                     <span>{component.productName}</span>
-                    <span className="font-mono text-body-sm text-muted-foreground">
+                    <span className="font-mono text-body-small text-muted-foreground">
                       {component.productCode}
                     </span>
                   </span>
@@ -409,7 +409,7 @@ export function PlanVersionReadonlyPage({
                     <StatusBadge tone="brand">
                       {t("editorV2.priority", { n: component.priority })}
                     </StatusBadge>
-                    <span className="font-mono text-body-sm text-muted-foreground">
+                    <span className="font-mono text-body-small text-muted-foreground">
                       {Object.keys(component.quota).length}
                     </span>
                   </span>

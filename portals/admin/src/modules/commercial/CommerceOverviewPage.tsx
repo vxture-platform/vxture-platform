@@ -155,7 +155,7 @@ function RiskPanel({ snapshot }: { snapshot: CommerceOverviewSnapshot }) {
       title="风险与待办"
       description="从账单、收款、发票和用量中抽取运营侧需要跟进的事项。"
       action={
-        <span className="text-body-sm text-muted-foreground">
+        <span className="text-body-small text-muted-foreground">
           生成 {formatDate(snapshot.generatedAt, locale)}
         </span>
       }
@@ -290,7 +290,7 @@ export function CommerceOverviewPage() {
       ) : null}
 
       {loading && !snapshot ? (
-        <p className="py-md text-center text-body-sm text-muted-foreground">
+        <p className="py-md text-center text-body-small text-muted-foreground">
           正在读取商业财务快照
         </p>
       ) : null}
@@ -303,7 +303,7 @@ export function CommerceOverviewPage() {
           </div>
           <QuickLinkPanel />
           <footer
-            className={`${SHELL_PANEL_HAIRLINE} flex min-h-icon-xl items-center justify-between gap-md pt-sm pb-md text-body-sm text-muted-foreground`}
+            className={`${SHELL_PANEL_HAIRLINE} flex min-h-icon-xl items-center justify-between gap-md pt-sm pb-md text-body-small text-muted-foreground`}
           >
             <span>已聚合 {formatNumber(metricCount)} 类指标</span>
             <strong className="font-semibold text-foreground">

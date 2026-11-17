@@ -85,10 +85,10 @@ export function InvoiceReviewDialog({
         }
       }}
     >
-      <p className="text-body-sm">
+      <p className="text-body-small">
         {t(action === "issue" ? "issueNotice" : "reviewNotice")}
       </p>
-      <ul className="grid gap-xs text-body-sm">
+      <ul className="grid gap-xs text-body-small">
         {(
           invoice.bills ?? [
             {
@@ -104,7 +104,7 @@ export function InvoiceReviewDialog({
         ))}
       </ul>
       {invoice.companyInfo ? (
-        <dl className="grid gap-xs text-body-sm">
+        <dl className="grid gap-xs text-body-small">
           {(
             [
               "title",

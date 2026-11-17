@@ -925,7 +925,7 @@ export function TicketDetailPage({ ticketId }: { ticketId: string }) {
                         />
                       }
                       trail={
-                        <span className="truncate text-body-sm text-muted-foreground">
+                        <span className="truncate text-body-small text-muted-foreground">
                           {formatDateTime(event.createdAt, locale)}
                         </span>
                       }

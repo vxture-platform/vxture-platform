@@ -33,7 +33,7 @@ export function WorkbenchFaq() {
       >
         <div className="mx-auto grid max-w-page-xl gap-8 px-6 lg:grid-cols-12 lg:gap-16 lg:px-8 xl:max-w-page-2xl">
           <div className="lg:col-span-4">
-            <p className="text-label-sm font-semibold tracking-widest text-primary-text">
+            <p className="text-label-small font-semibold tracking-widest text-primary-text">
               {t("faq.eyebrow")}
             </p>
             <h2
@@ -49,7 +49,7 @@ export function WorkbenchFaq() {
                 <AccordionTrigger className="py-5 text-left text-base">
                   {item.question}
                 </AccordionTrigger>
-                <AccordionContent className="text-body-md leading-7 text-muted-foreground">
+                <AccordionContent className="text-body leading-7 text-muted-foreground">
                   {item.answer}
                 </AccordionContent>
               </AccordionItem>
@@ -60,7 +60,7 @@ export function WorkbenchFaq() {
       <section aria-labelledby="workbench-cta-title" className="pb-16 lg:pb-24">
         <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
           <div className="relative overflow-hidden rounded-xl border border-primary-border bg-linear-to-br from-primary-muted to-background p-7 sm:p-10 lg:p-14">
-            <p className="text-label-sm font-semibold tracking-widest text-primary-text">
+            <p className="text-label-small font-semibold tracking-widest text-primary-text">
               RUYIN / INTELLIGENT WORKBENCH
             </p>
             <div className="mt-5 flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between lg:gap-16">

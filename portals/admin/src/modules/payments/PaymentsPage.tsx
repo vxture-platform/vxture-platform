@@ -427,7 +427,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               </StatusBadge>
             </span>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {payment.billNo ?? "未关联账单"}
           </span>
         </span>
@@ -440,7 +440,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
       cell: (payment) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatCurrency(payment.paidAmount, payment.currency)}
-          <span className="text-body-sm text-muted-foreground">{`应收 ${formatCurrency(
+          <span className="text-body-small text-muted-foreground">{`应收 ${formatCurrency(
             payment.billPayableAmount || payment.totalAmount,
             payment.currency,
           )}`}</span>
@@ -461,7 +461,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               {t(`status.paymentLedger.${payment.paymentStatus}`)}
             </StatusBadge>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {formatDate(payment.paidAt ?? payment.createdAt, locale)}
           </span>
         </span>
@@ -481,7 +481,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               {reconciliationLabel(payment.reconciliationStatus)}
             </StatusBadge>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {payment.remark ?? payment.operatorName}
           </span>
         </span>

@@ -450,7 +450,7 @@ function TimelineEntry({
             description={<>{dayAndClock(event.at, locale)}</>}
           />
           {open ? (
-            <ul className="m-0 grid list-none gap-2xs p-0 text-body-sm text-muted-foreground">
+            <ul className="m-0 grid list-none gap-2xs p-0 text-body-small text-muted-foreground">
               {details.map((line) => (
                 <li key={line}>{line}</li>
               ))}
@@ -532,7 +532,7 @@ function OrderHeader({
           <StatusBadge tone={ORDER_STATUS_TONE_MAP[order.orderStatus]}>
             {tPage(ORDER_STATUS_LABEL_KEY[order.orderStatus])}
           </StatusBadge>
-          <span className="text-body-sm font-normal text-muted-foreground">
+          <span className="text-body-small font-normal text-muted-foreground">
             {tPage(ORDER_STATUS_HINT_KEY[order.orderStatus])}
           </span>
         </span>
@@ -1011,7 +1011,7 @@ function AmountsSection({ order }: { order: Order }) {
           >
             <span className="grid min-w-0 gap-2xs">
               <span>{money(item.totalAmount)}</span>
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {item.itemName}
               </span>
             </span>
@@ -1026,7 +1026,7 @@ function AmountsSection({ order }: { order: Order }) {
           <DetailRow label={tPage("fields.credit")}>
             <span className="grid min-w-0 gap-2xs">
               <span>{`− ${money(order.creditAmount)}`}</span>
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {tPage("fields.creditHint")}
               </span>
             </span>
@@ -1036,7 +1036,7 @@ function AmountsSection({ order }: { order: Order }) {
           <DetailRow label={tPage("fields.leftover")}>
             <span className="grid min-w-0 gap-2xs">
               <span>{money(order.leftoverAmount)}</span>
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {tPage("fields.leftoverHint")}
               </span>
             </span>
@@ -1296,7 +1296,7 @@ function FulfillmentSection({ order }: { order: Order }) {
           </DetailRow>
         </DetailList>
       ) : (
-        <p className="m-0 text-body-sm text-muted-foreground">
+        <p className="m-0 text-body-small text-muted-foreground">
           {order.orderStatus === "closed"
             ? tPage("fulfillment.closed")
             : order.orderStatus === "refunded"
@@ -1349,7 +1349,7 @@ function RefundSection({ order }: { order: Order }) {
               {refundAuditLabel(refund.auditStatus, tPage)}
             </StatusBadge>
             {refund.auditedAt ? (
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {dayAndClock(refund.auditedAt, locale)}
               </span>
             ) : null}
@@ -1376,7 +1376,7 @@ function RefundSection({ order }: { order: Order }) {
               {refundStatusLabel(refund.refundStatus, tPage)}
             </StatusBadge>
             {refund.refundedAt ? (
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {dayAndClock(refund.refundedAt, locale)}
               </span>
             ) : null}
@@ -1635,7 +1635,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
 
   const backLink = (
     <Link
-      className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-sm font-extrabold text-primary-text no-underline"
+      className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-small font-extrabold text-primary-text no-underline"
       href="/orders"
     >
       <Icon name="arrow-left" size="xs" fallback="placeholder" />
@@ -1681,7 +1681,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           </>
         }
       >
-        <p className="m-0 text-body-sm text-muted-foreground">
+        <p className="m-0 text-body-small text-muted-foreground">
           {tShared("common.loading")}
         </p>
       </DetailPageTemplate>

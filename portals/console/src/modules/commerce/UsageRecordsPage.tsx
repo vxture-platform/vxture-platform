@@ -252,7 +252,7 @@ export function UsageRecordsPage() {
               {fmtCount(e.amount)}
             </span>
             {short ? (
-              <span className="text-body-sm text-warning-text">
+              <span className="text-body-small text-warning-text">
                 {t("table.requestedWas", {
                   amount: fmtCount(e.requestedAmount ?? 0),
                 })}
@@ -277,7 +277,7 @@ export function UsageRecordsPage() {
       align: "center",
       cell: (e) =>
         e.requestId ? (
-          <span className="font-mono text-body-sm text-muted-foreground">
+          <span className="font-mono text-body-small text-muted-foreground">
             {e.requestId}
           </span>
         ) : (

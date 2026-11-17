@@ -1185,7 +1185,7 @@ export function ModelPlatformPage() {
           aria-label="模型厂商管理"
         >
           <strong>模型厂商</strong>
-          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(providers.length)}
           </span>
           <span className="flex-1 max-lg:hidden" aria-hidden="true" />
@@ -1232,7 +1232,7 @@ export function ModelPlatformPage() {
           aria-label={t("procurement.managementLabel")}
         >
           <strong>{t("procurement.title")}</strong>
-          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(priceRules.length)}
           </span>
           <span className="flex-1 max-lg:hidden" aria-hidden="true" />
@@ -1248,7 +1248,7 @@ export function ModelPlatformPage() {
           className="grid min-w-0 max-w-full gap-xs"
           aria-label={t("procurement.listLabel")}
         >
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("procurement.description")}
           </p>
           {priceRules.length ? (
@@ -1380,7 +1380,7 @@ export function ModelPlatformPage() {
           aria-label="模型策略管理"
         >
           <strong>模型策略</strong>
-          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(policies.length)}
           </span>
           <span className="flex-1 max-lg:hidden" aria-hidden="true" />
@@ -1567,12 +1567,12 @@ export function ModelPlatformPage() {
           }}
           onSubmit={(event) => void submitPriceRule(event)}
         >
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("procurement.description")}
           </p>
           {/* Keep immutable fields disabled to match the expiry-only update. */}
           {priceRuleDialog.mode === "edit" ? (
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {t("procurement.appendOnlyHint")}
             </p>
           ) : null}
@@ -1631,7 +1631,7 @@ export function ModelPlatformPage() {
                 }
                 placeholder="USD / CNY"
               />
-              <p className="text-body-sm text-muted-foreground">
+              <p className="text-body-small text-muted-foreground">
                 {t("procurement.currencyHint")}
               </p>
             </Field>
@@ -1652,7 +1652,7 @@ export function ModelPlatformPage() {
                   }))
                 }
               />
-              <p className="text-body-sm text-muted-foreground">
+              <p className="text-body-small text-muted-foreground">
                 {t("procurement.unitHint")}
               </p>
             </Field>
@@ -1761,7 +1761,7 @@ export function ModelPlatformPage() {
               />
             </Field>
           </div>
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("procurement.cacheFallbackHint")}
           </p>
           <div>

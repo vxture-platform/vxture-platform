@@ -27,10 +27,10 @@ export function ArdaCapabilityScene({ kind }: { kind: SceneKind }) {
   return (
     <figure className="rounded-xl border border-border bg-muted/30 p-5 sm:p-6">
       <figcaption className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <span className="text-body-sm font-semibold">
+        <span className="text-body-small font-semibold">
           {t(`capabilities.${kind}.sceneTitle`)}
         </span>
-        <span className="text-label-sm text-muted-foreground">
+        <span className="text-label-small text-muted-foreground">
           {t("sample.disclaimer")}
         </span>
       </figcaption>

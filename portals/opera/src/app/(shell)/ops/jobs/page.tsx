@@ -409,7 +409,7 @@ export default function JobSchedulerPage() {
                   sortable: true,
                   width: "sm",
                   cell: (r: JobHeartbeatItem) => (
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       <DateCell value={r.lastStartedAt} locale="zh-CN" />
                     </span>
                   ),
@@ -420,13 +420,13 @@ export default function JobSchedulerPage() {
                   cell: (r: JobHeartbeatItem) =>
                     r.lastError ? (
                       <span
-                        className="text-body-sm text-destructive-text truncate block"
+                        className="text-body-small text-destructive-text truncate block"
                         title={r.lastError}
                       >
                         {r.lastError}
                       </span>
                     ) : (
-                      <span className="text-body-sm text-muted-foreground">
+                      <span className="text-body-small text-muted-foreground">
                         —
                       </span>
                     ),
@@ -633,13 +633,13 @@ export default function JobSchedulerPage() {
                   cell: (r: WebhookDeliveryIssue) =>
                     r.lastError ? (
                       <span
-                        className="text-body-sm text-destructive-text truncate block"
+                        className="text-body-small text-destructive-text truncate block"
                         title={r.lastError}
                       >
                         {r.lastError}
                       </span>
                     ) : (
-                      <span className="text-body-sm text-muted-foreground">
+                      <span className="text-body-small text-muted-foreground">
                         —
                       </span>
                     ),
@@ -650,7 +650,7 @@ export default function JobSchedulerPage() {
                   sortable: true,
                   width: "sm",
                   cell: (r: WebhookDeliveryIssue) => (
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       <DateCell value={r.nextRetryAt} locale="zh-CN" />
                     </span>
                   ),
@@ -661,7 +661,7 @@ export default function JobSchedulerPage() {
                   sortable: true,
                   width: "sm",
                   cell: (r: WebhookDeliveryIssue) => (
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       <DateCell value={r.lastAttemptAt} locale="zh-CN" />
                     </span>
                   ),

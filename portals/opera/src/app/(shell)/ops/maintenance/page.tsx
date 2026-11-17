@@ -568,7 +568,7 @@ export default function MaintenanceWindowsPage() {
                 sortable: true,
                 width: "sm",
                 cell: (r) => (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {formatMoment(r.actualEndAt)}
                   </span>
                 ),
@@ -579,7 +579,7 @@ export default function MaintenanceWindowsPage() {
                 sortable: true,
                 width: "sm",
                 cell: (r) => (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {r.createdByName ?? "—"}
                   </span>
                 ),
@@ -849,10 +849,10 @@ export default function MaintenanceWindowsPage() {
                               }
                             />
                             <span className="flex min-w-0 flex-col">
-                              <span className="text-body-sm text-foreground">
+                              <span className="text-body-small text-foreground">
                                 {p.productName}
                               </span>
-                              <span className="truncate font-mono text-code-sm text-muted-foreground">
+                              <span className="truncate font-mono text-code text-muted-foreground">
                                 {p.productCode}
                               </span>
                             </span>

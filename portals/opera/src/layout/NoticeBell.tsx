@@ -91,7 +91,7 @@ export function NoticeBell() {
       {count > 0 ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -right-2xs -top-2xs inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-2xs text-label-sm leading-4 text-danger-foreground tabular-nums"
+          className="pointer-events-none absolute -right-2xs -top-2xs inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-2xs text-label-small leading-4 text-danger-foreground tabular-nums"
         >
           {/* 三位数以上收成 99+：角标再宽就会盖住旁边那个按钮。读屏念的是
               label 里的真数，不是这里。 */}

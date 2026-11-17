@@ -640,11 +640,11 @@ function ProductGrantsPageContent() {
             cell: (r: ProductGrantRecord) =>
               r.applicationId ? (
                 <span className="flex flex-col items-center gap-2xs">
-                  <span className="text-code-sm">
+                  <span className="text-code">
                     {visibleIdOr(r.applicationId, "应用级")}
                   </span>
                   {r.applicationType ? (
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {r.applicationType}
                     </span>
                   ) : null}
@@ -661,7 +661,7 @@ function ProductGrantsPageContent() {
               r.expiresAt ? (
                 <span
                   className={
-                    isExpired(r) ? "text-warning-foreground" : "text-body-sm"
+                    isExpired(r) ? "text-warning-foreground" : "text-body-small"
                   }
                 >
                   <DateCell value={r.expiresAt} locale={locale} />
@@ -675,7 +675,10 @@ function ProductGrantsPageContent() {
             header: "理由",
             cell: (r: ProductGrantRecord) =>
               r.reason ? (
-                <span className="block truncate text-body-sm" title={r.reason}>
+                <span
+                  className="block truncate text-body-small"
+                  title={r.reason}
+                >
                   {r.reason}
                 </span>
               ) : (

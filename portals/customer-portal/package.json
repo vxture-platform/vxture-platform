@@ -12,7 +12,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@vxture/design-system": "12.17.0",
+    "@vxture/design-system": "15.7.0",
     "next": "^15.5.25",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

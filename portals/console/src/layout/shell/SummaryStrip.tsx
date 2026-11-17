@@ -27,7 +27,7 @@ export function SummaryStrip({ items }: { items: SummaryStripItem[] }) {
         <Card key={item.label} surface="soft" className="gap-sm py-lg">
           <CardContent className="flex flex-col gap-2xs">
             <div className="flex items-start justify-between gap-sm">
-              <span className="text-label-sm text-muted-foreground">
+              <span className="text-label-small text-muted-foreground">
                 {item.label}
               </span>
               {item.aside ? (
@@ -36,11 +36,13 @@ export function SummaryStrip({ items }: { items: SummaryStripItem[] }) {
                 </span>
               ) : null}
             </div>
-            <strong className="text-title-lg text-foreground">
+            <strong className="text-heading-1 text-foreground">
               {item.value}
             </strong>
             {item.hint ? (
-              <p className="text-body-sm text-muted-foreground">{item.hint}</p>
+              <p className="text-body-small text-muted-foreground">
+                {item.hint}
+              </p>
             ) : null}
           </CardContent>
         </Card>

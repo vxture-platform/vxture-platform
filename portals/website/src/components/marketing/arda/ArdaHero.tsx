@@ -38,7 +38,7 @@ export function ArdaHero() {
                 {t("hero.product")}
               </span>
             </div>
-            <p className="text-label-sm font-semibold text-primary-text">
+            <p className="text-label-small font-semibold text-primary-text">
               {t("hero.eyebrow")}
             </p>
             <h1
@@ -66,7 +66,7 @@ export function ArdaHero() {
                 </a>
               </Button>
             </div>
-            <p className="mt-5 text-body-sm text-muted-foreground">
+            <p className="mt-5 text-body-small text-muted-foreground">
               {t("hero.invite")}
             </p>
           </div>
@@ -75,12 +75,12 @@ export function ArdaHero() {
         <div className="mt-12 grid gap-6 border-t border-border pt-6 sm:grid-cols-3 lg:mt-16">
           {outcomes.map((item, index) => (
             <div key={item.title} className="flex gap-4">
-              <span className="font-mono text-label-sm text-muted-foreground">
+              <span className="font-mono text-label-small text-muted-foreground">
                 0{index + 1} /
               </span>
               <div>
                 <p className="font-semibold">{item.title}</p>
-                <p className="mt-1 text-body-sm text-muted-foreground">
+                <p className="mt-1 text-body-small text-muted-foreground">
                   {item.description}
                 </p>
               </div>

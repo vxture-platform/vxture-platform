@@ -646,7 +646,7 @@ export function MembersPage() {
                 `icon?: IconName`,收不了 `UserAvatar` 这样的节点,而全平台只有这一张
                 表是头像打头,不值得为一个调用点给 DS 开一个 `leading` 槽。代价是这两行
                 的字号得手工跟着件走;件改了这里要跟。 */}
-            <span className="truncate text-label-md font-semibold text-foreground">
+            <span className="truncate text-label font-semibold text-foreground">
               {member.name}
             </span>
             {/* 「主管理员」与角色列的「所有者」是**两件事,不要统一**(owner
@@ -660,7 +660,7 @@ export function MembersPage() {
               <StatusBadge tone="neutral">{t("table.selfTag")}</StatusBadge>
             ) : null}
           </span>
-          <span className="truncate text-body-sm text-muted-foreground">
+          <span className="truncate text-body-small text-muted-foreground">
             {username}
           </span>
         </span>
@@ -711,7 +711,7 @@ export function MembersPage() {
             ? t("table.invitedExpires", { date: fmtDate(at) })
             : fmtDate(at)}
         </span>
-        <span className="tabular-nums text-body-sm text-muted-foreground">
+        <span className="tabular-nums text-body-small text-muted-foreground">
           {fmtTime(at)}
         </span>
       </span>
@@ -1183,7 +1183,7 @@ export function MembersPage() {
                       member.workspaces.length === 0 ? (
                         /* 空是**真实状态**：租户成员可以不属于任何工作空间。
                            写「未加入」而不是「—」——后者读起来像没查到。 */
-                        <span className="text-body-sm text-muted-foreground">
+                        <span className="text-body-small text-muted-foreground">
                           {t("table.noWorkspace")}
                         </span>
                       ) : (
@@ -1342,7 +1342,7 @@ export function MembersPage() {
                     让它查不到,静默改成另一个号比查不到糟得多。 */}
                 <div className="flex flex-1 items-center gap-2xs rounded-md border border-input bg-background px-sm focus-within:ring-1 focus-within:ring-ring">
                   <span
-                    className="select-none text-body-sm text-muted-foreground"
+                    className="select-none text-body-small text-muted-foreground"
                     aria-hidden="true"
                   >
                     {USER_NO_PREFIX}
@@ -1386,13 +1386,13 @@ export function MembersPage() {
                   分档给文案(不是纯数字 / 位数不对 / 类别位不对)——说「请填 10 位数字」
                   对一个填了 11 位数字的人没有帮助,他要知道的是「位数不对」。 */}
               {userNoProblem ? (
-                <span className="text-body-sm text-danger-text">
+                <span className="text-body-small text-danger-text">
                   {t(`dialogs.userNoError.${userNoProblem}`)}
                 </span>
               ) : (
                 /* 说明放框后:这条通道与邮箱那条的行为不同(不发邮件、要对方在站内同意),
                    不说清楚的话邀请人会一直等一封不会来的邮件。 */
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {t("dialogs.fields.userNoHint")}
                 </span>
               )}
@@ -1404,10 +1404,10 @@ export function MembersPage() {
                 lookup.found ? (
                   <div className="flex w-full flex-col gap-2xs rounded-lg bg-accent px-md py-sm">
                     <span className="flex flex-wrap items-center gap-sm">
-                      <span className="text-label-md text-foreground">
+                      <span className="text-label text-foreground">
                         {lookup.name ?? t("dialogs.lookup.noName")}
                       </span>
-                      <span className="tabular-nums text-body-sm text-muted-foreground">
+                      <span className="tabular-nums text-body-small text-muted-foreground">
                         {formatPrincipalNoOr(lookup.userNo, "user", "—")}
                       </span>
                       {lookup.alreadyMember ? (
@@ -1416,14 +1416,14 @@ export function MembersPage() {
                         </StatusBadge>
                       ) : null}
                     </span>
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {[lookup.maskedEmail, lookup.maskedPhone]
                         .filter(Boolean)
                         .join(" · ") || t("dialogs.lookup.noContact")}
                     </span>
                   </div>
                 ) : (
-                  <div className="w-full rounded-lg bg-accent px-md py-sm text-body-sm text-muted-foreground">
+                  <div className="w-full rounded-lg bg-accent px-md py-sm text-body-small text-muted-foreground">
                     {t("dialogs.lookup.notFound")}
                   </div>
                 )

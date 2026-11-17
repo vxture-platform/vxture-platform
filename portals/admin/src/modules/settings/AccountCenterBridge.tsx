@@ -12,8 +12,8 @@ import { operatorAccountCenterUrl } from "@/lib/account-center";
 export function AccountCenterBridge() {
   return (
     <div className="flex flex-col gap-md p-lg">
-      <h2 className="text-title-sm font-semibold">账户中心</h2>
-      <p className="text-body-sm text-muted-foreground">
+      <h2 className="text-heading-3 font-semibold">账户中心</h2>
+      <p className="text-body-small text-muted-foreground">
         账户与安全设置（更改并验证邮箱、管理通行密钥等）已统一到账户中心，admin
         / opera / arche 共用同一处，改一次处处生效（新标签打开）。
       </p>

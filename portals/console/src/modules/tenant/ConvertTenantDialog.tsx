@@ -165,7 +165,7 @@ export function ConvertTenantDialog({
           {ACK_ITEMS.map((item) => (
             <li
               key={item.key}
-              className="flex items-start gap-md text-body-md text-foreground"
+              className="flex items-start gap-md text-body text-foreground"
             >
               <Icon
                 name={item.icon}
@@ -184,7 +184,7 @@ export function ConvertTenantDialog({
       <>
         {error ? <Banner tone="danger" title={error} /> : null}
         <div className="flex flex-col gap-xs">
-          <Label htmlFor="convert-org-name" className="text-label-md">
+          <Label htmlFor="convert-org-name" className="text-label">
             {t("nameLabel")}
           </Label>
           <Input
@@ -195,14 +195,16 @@ export function ConvertTenantDialog({
             autoFocus
             required
           />
-          <p className="text-body-sm text-muted-foreground">{t("nameHint")}</p>
+          <p className="text-body-small text-muted-foreground">
+            {t("nameHint")}
+          </p>
         </div>
-        <p className="text-body-md text-foreground">
+        <p className="text-body text-foreground">
           {nameReady
             ? t("summary", { from: currentName, to: name.trim() })
             : t("summaryPending", { from: currentName })}
         </p>
-        <Label className="flex items-start gap-sm text-body-md">
+        <Label className="flex items-start gap-sm text-body">
           <Checkbox
             checked={acknowledged}
             onCheckedChange={(value) => setAcknowledged(value === true)}
@@ -211,7 +213,7 @@ export function ConvertTenantDialog({
           <span>{t("ackConfirm")}</span>
         </Label>
         <div className="flex flex-col gap-xs">
-          <Label htmlFor="convert-confirm-name" className="text-label-md">
+          <Label htmlFor="convert-confirm-name" className="text-label">
             {t("confirmLabel", { name: currentName })}
           </Label>
           <Input
@@ -238,7 +240,7 @@ export function ConvertTenantDialog({
             return (
               <li
                 key={s}
-                className="flex flex-wrap items-center gap-md text-body-md"
+                className="flex flex-wrap items-center gap-md text-body"
               >
                 {state === "done" ? (
                   <StatusBadge tone="success" icon="check">
@@ -289,7 +291,7 @@ export function ConvertTenantDialog({
             title={t("done.title", { name: result?.name ?? name })}
           />
         ) : (
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("runningHint")}
           </p>
         )}
@@ -370,7 +372,7 @@ export function ConvertTenantDialog({
         <div className="flex min-h-panel-sm flex-col gap-lg py-md">{body}</div>
 
         <DialogFooter className="flex items-center justify-between gap-md sm:justify-between">
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {stepIndicator}
             {replaying ? ` · ${t("running")}` : ""}
             {finished ? ` · ${t("completeTitle")}` : ""}

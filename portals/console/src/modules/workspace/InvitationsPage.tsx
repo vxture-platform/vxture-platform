@@ -239,7 +239,7 @@ export function InvitationsPage() {
       sortable: true,
       header: t("table.colCreatedAt"),
       cell: (r) => (
-        <span className="tabular-nums text-body-sm text-muted-foreground">
+        <span className="tabular-nums text-body-small text-muted-foreground">
           {fmtDateTime(r.createdAt)}
         </span>
       ),
@@ -250,7 +250,7 @@ export function InvitationsPage() {
       header: t("table.colExpiresAt"),
       cell: (r) =>
         r.status === "accepted" && r.acceptedAt ? (
-          <span className="tabular-nums text-body-sm text-muted-foreground">
+          <span className="tabular-nums text-body-small text-muted-foreground">
             {t("table.acceptedAt", { date: fmtDate(r.acceptedAt) })}
           </span>
         ) : (

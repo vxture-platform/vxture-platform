@@ -843,7 +843,7 @@ export function ProviderDetailPage({
                   </Button>
                 ) : null}
                 {!row ? (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     密钥与验证接入保存后可用
                   </span>
                 ) : null}
@@ -919,7 +919,7 @@ export function ProviderDetailPage({
             ) : (
               <div className="flex flex-col gap-sm">
                 {keys.length === 0 ? (
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-small text-muted-foreground">
                     暂无密钥。
                   </p>
                 ) : (
@@ -930,7 +930,7 @@ export function ProviderDetailPage({
                     >
                       <div className="flex flex-col gap-2xs">
                         <div className="flex items-center gap-sm">
-                          <span className="font-mono text-code-sm">
+                          <span className="font-mono text-code">
                             {k.keyAlias}
                           </span>
                           <Badge variant="outline">
@@ -946,7 +946,7 @@ export function ProviderDetailPage({
                               : tShared("actions.disable")}
                           </StatusBadge>
                         </div>
-                        <span className="text-body-sm text-muted-foreground">
+                        <span className="text-body-small text-muted-foreground">
                           最近轮换：{k.lastRotatedAt ?? tShared("common.never")}
                         </span>
                       </div>

@@ -40,8 +40,8 @@ export function AccountDeletingGate() {
             <Icon name="warning" size="lg" fallback="placeholder" />
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-2xs">
-            <h1 className="text-title-md text-foreground">{t("title")}</h1>
-            <p className="text-body-sm text-muted-foreground">
+            <h1 className="text-heading-2 text-foreground">{t("title")}</h1>
+            <p className="text-body-small text-muted-foreground">
               {t("body", {
                 requestedAt: formatDay(requestedAt, locale),
                 purgeAt: formatDay(purgeAt, locale),

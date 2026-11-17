@@ -325,7 +325,7 @@ export function ProductCapabilityDetailPage({
   const backLink = (
     /* 面包屑（owner 2026-09-21：二级页面增加面包屑）。 */
     <nav
-      className="flex min-w-0 items-center gap-2xs text-body-sm text-muted-foreground"
+      className="flex min-w-0 items-center gap-2xs text-body-small text-muted-foreground"
       aria-label="面包屑"
     >
       <Link
@@ -370,10 +370,10 @@ export function ProductCapabilityDetailPage({
               aria-hidden="true"
               className="shrink-0 text-muted-foreground"
             />
-            <h1 className="m-0 min-w-0 truncate text-title-xl font-semibold text-foreground">
+            <h1 className="m-0 min-w-0 truncate text-heading-1 font-semibold text-foreground">
               {product.productName}
             </h1>
-            <span className="shrink-0 text-body-sm font-extrabold text-muted-foreground">
+            <span className="shrink-0 text-body-small font-extrabold text-muted-foreground">
               {product.productCode}
             </span>
 

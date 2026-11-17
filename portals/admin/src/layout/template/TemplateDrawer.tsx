@@ -134,7 +134,7 @@ function NotifRows({
   return (
     <>
       {loading ? (
-        <p className="p-md text-body-sm text-muted-foreground">
+        <p className="p-md text-body-small text-muted-foreground">
           {loadingLabel}
         </p>
       ) : items.length === 0 ? (
@@ -172,10 +172,10 @@ function NotifRows({
               <i className={"ph-fill " + n.icon} aria-hidden="true"></i>
             </span>
             <span className="flex min-w-0 flex-1 flex-col gap-2xs">
-              <span className="truncate text-label-md font-semibold text-foreground">
+              <span className="truncate text-label font-semibold text-foreground">
                 {n.title}
               </span>
-              <span className="truncate text-body-sm text-muted-foreground">
+              <span className="truncate text-body-small text-muted-foreground">
                 {n.meta}
               </span>
             </span>

@@ -138,7 +138,7 @@ export function WireReport({
               className="flex flex-col gap-2xs rounded-md border border-border p-sm"
             >
               <div className="flex items-center justify-between gap-sm">
-                <dt className="font-mono text-code-sm">{r.key}</dt>
+                <dt className="font-mono text-code">{r.key}</dt>
                 <StatusBadge
                   tone={isOverflow ? "info" : WIRE_ORIGIN_TONE[origin]}
                   dot
@@ -146,7 +146,7 @@ export function WireReport({
                   {isOverflow ? t("accumulated") : t(`origin.${origin}`)}
                 </StatusBadge>
               </div>
-              <dd className="font-mono text-code-sm whitespace-pre-wrap break-all text-muted-foreground">
+              <dd className="font-mono text-code whitespace-pre-wrap break-all text-muted-foreground">
                 {isJson
                   ? r.value === undefined
                     ? t("unavailable")

@@ -99,7 +99,10 @@ export function PersonalInvitations({
             </Button>
           </div>
         ) : items.length === 0 ? (
-          <p className="py-md text-body-sm text-muted-foreground" role="status">
+          <p
+            className="py-md text-body-small text-muted-foreground"
+            role="status"
+          >
             {t(loading ? "loading" : "empty")}
           </p>
         ) : (
@@ -111,12 +114,12 @@ export function PersonalInvitations({
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-xs">
                   <span className="flex flex-wrap items-center gap-sm">
-                    <strong className="break-words text-label-md">
+                    <strong className="break-words text-label">
                       {item.tenantName || t("unnamedTenant")}
                     </strong>
                     <RoleTag code={item.roleCode} />
                   </span>
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {t("expires", {
                       date: formatBusinessDay(item.expiresAt, locale, "—"),
                     })}

@@ -148,7 +148,7 @@ function DetailCard({
         {children}
       </CardContent>
       {footer ? (
-        <CardFooter className="text-body-sm">{footer}</CardFooter>
+        <CardFooter className="text-body-small">{footer}</CardFooter>
       ) : null}
     </Card>
   );
@@ -178,13 +178,13 @@ export function OrderDetailPanel({
       <DetailCard
         title={t("ownership")}
         footer={
-          <span className="flex min-w-0 items-center gap-xs text-body-md text-foreground">
-            <span className="shrink-0 text-body-sm text-muted-foreground">
+          <span className="flex min-w-0 items-center gap-xs text-body text-foreground">
+            <span className="shrink-0 text-body-small text-muted-foreground">
               {t("subscriber")}
             </span>
             <span
               aria-hidden="true"
-              className="flex size-control-xs shrink-0 items-center justify-center rounded-full bg-primary-muted-hover text-label-sm text-primary-hover"
+              className="flex size-control-xs shrink-0 items-center justify-center rounded-full bg-primary-muted-hover text-label-small text-primary-hover"
             >
               {subscriberInitials}
             </span>
@@ -206,7 +206,7 @@ export function OrderDetailPanel({
             <Icon name="buildings" size="sm" />
           </span>
           <span className={infoRowText}>
-            <b className="truncate text-label-md text-foreground">
+            <b className="truncate text-label text-foreground">
               {[order.tenantName, order.workspaceName]
                 .filter(Boolean)
                 .join(" · ") || "—"}
@@ -215,7 +215,7 @@ export function OrderDetailPanel({
               no={order.workspaceNo}
               kind="workspace"
               fallback="—"
-              className="text-body-sm text-muted-foreground tabular-nums"
+              className="text-body-small text-muted-foreground tabular-nums"
             />
           </span>
         </div>
@@ -225,7 +225,7 @@ export function OrderDetailPanel({
       <DetailCard
         title={t("content")}
         footer={
-          <span className="flex w-full items-baseline justify-between gap-md text-body-md font-semibold text-foreground">
+          <span className="flex w-full items-baseline justify-between gap-md text-body font-semibold text-foreground">
             <span>{t("payable")}</span>
             <span className="tabular-nums">{money(order.amount)}</span>
           </span>
@@ -242,23 +242,23 @@ export function OrderDetailPanel({
             <Icon name="package" size="sm" />
           </span>
           <span className={infoRowText}>
-            <b className="truncate text-label-md text-foreground">
+            <b className="truncate text-label text-foreground">
               {order.productName ?? order.planName}
               {order.tier ? ` ${order.tier}` : ""} ·{" "}
               {order.cycleUnit === "year" ? t("cycleYear") : t("cycleMonth")} ×
               1
             </b>
-            <span className="text-body-sm text-muted-foreground tabular-nums">
+            <span className="text-body-small text-muted-foreground tabular-nums">
               {order.startAt && order.endAt
                 ? `${fmtDate(order.startAt)} ~ ${fmtDate(order.endAt)}`
                 : t("periodOnActivation")}
             </span>
           </span>
-          <span className="shrink-0 text-body-sm text-muted-foreground tabular-nums">
+          <span className="shrink-0 text-body-small text-muted-foreground tabular-nums">
             {t("listPrice", { amount: money(order.listPrice) })}
           </span>
         </div>
-        <div className="flex items-baseline justify-between gap-md text-body-sm text-muted-foreground">
+        <div className="flex items-baseline justify-between gap-md text-body-small text-muted-foreground">
           <span>{t("discountTotal")}</span>
           <span className="tabular-nums">−{money(order.voucherOff)}</span>
         </div>
@@ -273,7 +273,7 @@ export function OrderDetailPanel({
               <li
                 key={step.key}
                 className={cn(
-                  "flex items-center gap-sm text-body-sm",
+                  "flex items-center gap-sm text-body-small",
                   step.now
                     ? "font-medium text-warning-text"
                     : done
@@ -298,7 +298,7 @@ export function OrderDetailPanel({
                     <span className="tabular-nums"> · {step.note}</span>
                   ) : null}
                 </span>
-                <span className="shrink-0 text-body-sm text-muted-foreground tabular-nums">
+                <span className="shrink-0 text-body-small text-muted-foreground tabular-nums">
                   {fmtDateTime(step.at)}
                 </span>
               </li>

@@ -120,7 +120,7 @@ export function TemplateDrawer({
         {todos.length > 0 ? (
           <div className="flex flex-col gap-2xs">
             {labels.todosTitle ? (
-              <span className="px-md pt-xs text-label-sm text-muted-foreground">
+              <span className="px-md pt-xs text-label-small text-muted-foreground">
                 {labels.todosTitle}
               </span>
             ) : null}
@@ -140,10 +140,10 @@ export function TemplateDrawer({
                   />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col gap-2xs">
-                  <span className="truncate text-label-md font-semibold text-foreground">
+                  <span className="truncate text-label font-semibold text-foreground">
                     {todo.title}
                   </span>
-                  <span className="truncate text-body-sm text-muted-foreground">
+                  <span className="truncate text-body-small text-muted-foreground">
                     {todo.detail}
                   </span>
                 </span>
@@ -159,14 +159,14 @@ export function TemplateDrawer({
               </div>
             ))}
             {labels.messagesTitle && notifications.length > 0 ? (
-              <span className="px-md pt-sm text-label-sm text-muted-foreground">
+              <span className="px-md pt-sm text-label-small text-muted-foreground">
                 {labels.messagesTitle}
               </span>
             ) : null}
           </div>
         ) : null}
         {notifications.length === 0 && todos.length === 0 && labels.empty ? (
-          <p className="p-md text-center text-body-sm text-muted-foreground">
+          <p className="p-md text-center text-body-small text-muted-foreground">
             {labels.empty}
           </p>
         ) : null}
@@ -192,11 +192,11 @@ export function TemplateDrawer({
             </span>
             <span className="flex min-w-0 flex-1 flex-col gap-2xs">
               <span
-                className={`truncate text-label-md text-foreground ${n.unread ? "font-semibold" : "font-normal"}`}
+                className={`truncate text-label text-foreground ${n.unread ? "font-semibold" : "font-normal"}`}
               >
                 {n.title}
               </span>
-              <span className="truncate text-body-sm text-muted-foreground">
+              <span className="truncate text-body-small text-muted-foreground">
                 {n.meta}
               </span>
             </span>

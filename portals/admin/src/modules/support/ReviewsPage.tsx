@@ -204,7 +204,7 @@ export function ReviewsPage() {
                 cell: (item) => (
                   <span className="inline-flex flex-col gap-2xs">
                     <span>{item.tenantName}</span>
-                    <span className="font-mono text-body-sm text-muted-foreground">
+                    <span className="font-mono text-body-small text-muted-foreground">
                       {formatPrincipalNoOr(item.tenantNo, "tenant", "—")}
                     </span>
                   </span>
@@ -256,7 +256,7 @@ export function ReviewsPage() {
                 cell: (item) => (
                   <span className="inline-flex flex-col gap-2xs">
                     <span>{formatDay(item.createdAt, locale)}</span>
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {formatClock(item.createdAt, locale)}
                     </span>
                   </span>

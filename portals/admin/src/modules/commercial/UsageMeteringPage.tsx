@@ -209,7 +209,7 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       cell: (record) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatUsageValue(record.usedValue, record.metricUnit)}
-          <span className="text-body-sm text-muted-foreground">{`配额 ${formatUsageValue(record.quotaValue, record.metricUnit)} · ${formatPercent(record.usageRate)}`}</span>
+          <span className="text-body-small text-muted-foreground">{`配额 ${formatUsageValue(record.quotaValue, record.metricUnit)} · ${formatPercent(record.usageRate)}`}</span>
         </span>
       ),
     },

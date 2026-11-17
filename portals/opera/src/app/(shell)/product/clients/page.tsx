@@ -341,10 +341,10 @@ function ProductClients() {
                       }
                       className="flex flex-col items-center gap-2xs hover:text-primary-text"
                     >
-                      <span className="text-label-md">
+                      <span className="text-label">
                         {productName(c.productId) ?? c.productCode ?? "—"}
                       </span>
-                      <span className="font-mono text-code-sm text-muted-foreground">
+                      <span className="font-mono text-code text-muted-foreground">
                         {c.productCode ?? "—"}
                       </span>
                     </Link>
@@ -379,7 +379,7 @@ function ProductClients() {
                   <StackCell
                     main={
                       c.redirectUris[0] ? (
-                        <span className="font-mono text-code-sm text-muted-foreground">
+                        <span className="font-mono text-code text-muted-foreground">
                           {c.redirectUris[0]}
                         </span>
                       ) : (

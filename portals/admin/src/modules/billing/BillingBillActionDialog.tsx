@@ -244,7 +244,7 @@ export function BillingBillActionDialog({
         });
       }}
     >
-      <p className="m-0 text-body-sm text-muted-foreground">
+      <p className="m-0 text-body-small text-muted-foreground">
         {actionDescription(action)}
       </p>
 
@@ -326,7 +326,7 @@ export function BillingBillActionDialog({
       />
 
       {error ? (
-        <p className="m-0 text-body-sm text-destructive-text">{error}</p>
+        <p className="m-0 text-body-small text-destructive-text">{error}</p>
       ) : null}
     </DialogForm>
   );

@@ -208,7 +208,7 @@ export function SecretsDrawer({
                 readOnly
                 rows={reveal.lines.length + 1}
                 value={reveal.lines.join("\n")}
-                className="font-mono text-code-sm"
+                className="font-mono text-code"
                 onFocus={(e) => e.currentTarget.select()}
               />
               <div className="flex flex-wrap items-center gap-sm">
@@ -235,7 +235,7 @@ export function SecretsDrawer({
               description="client_secret 只在签发与轮换后明文出现一次，库里只有哈希——所以没有「查看」，只有「轮换」。轮换后旧密钥当场失效。"
             />
             {clients.length === 0 ? (
-              <p className="text-body-sm text-muted-foreground">
+              <p className="text-body-small text-muted-foreground">
                 还没有登录客户端。在「登录接入」添加并保存后，密钥会在保存时签发。
               </p>
             ) : (
@@ -247,7 +247,7 @@ export function SecretsDrawer({
                     className="flex flex-wrap items-center justify-between gap-sm rounded-md border border-border p-sm"
                   >
                     <div className="flex min-w-0 flex-wrap items-center gap-sm">
-                      <span className="truncate font-mono text-code-sm text-foreground">
+                      <span className="truncate font-mono text-code text-foreground">
                         {c.clientId}
                       </span>
                       <Badge variant="outline">
@@ -290,7 +290,7 @@ export function SecretsDrawer({
                 </StatusBadge>
               }
             />
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               平台用这把密钥给发往产品的开通、停用事件签名，产品侧用同一个值验签。
             </p>
             {/* 引用是**旧路径**（引用名 → 平台容器环境变量，每接一个产品要改一次 .env），
@@ -305,7 +305,7 @@ export function SecretsDrawer({
                   id="sk-ref"
                   value={secretRef}
                   disabled={!canManage}
-                  className="font-mono text-code-sm"
+                  className="font-mono text-code"
                   onChange={(e) => setSecretRef(e.target.value)}
                 />
               </FormField>
@@ -325,7 +325,7 @@ export function SecretsDrawer({
                   placeholder={
                     webhook?.hasWebhookSecret ? "留空则不更换" : "至少 16 位"
                   }
-                  className="font-mono text-code-sm"
+                  className="font-mono text-code"
                   onChange={(e) => setSecret(e.target.value)}
                 />
                 {canManage ? (

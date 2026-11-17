@@ -491,7 +491,7 @@ export function TicketsPage() {
         filters={
           /* 走 DS FilterBar（owner 2026-09-21：搜索/筛选字号偏大）。手搓的 flex 行
              拿不到 FilterBar 给子控件降一档的那份契约（它第 49~51 行），于是
-             落回 DS 表单字段的默认 `text-body-lg md:text-body-md`。 */
+             落回 DS 表单字段的默认 `text-body md:text-body`。 */
           <FilterBar
             view="list"
             onViewChange={() => {}}
@@ -558,7 +558,7 @@ export function TicketsPage() {
             className="grid min-w-0 max-w-full gap-xs vx-ticket-directory"
             aria-label="工单列表"
           >
-            <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
+            <header className="flex min-h-0 items-center justify-end gap-sm text-body-small font-normal text-muted-foreground">
               <strong>工单队列</strong>
               <span>{formatNumber(visibleTickets.length)} 条匹配</span>
             </header>

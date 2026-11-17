@@ -32,20 +32,20 @@ export function ArdaDataFlow() {
         <figure aria-label={t("diagramLabel")}>
           <Card className="gap-6 p-5 sm:p-8 lg:flex-row">
             <div className="min-w-0 flex-1">
-              <p className="mb-3 text-body-sm font-semibold">
+              <p className="mb-3 text-body-small font-semibold">
                 {t("consumersLabel")}
               </p>
               <div className="grid gap-3 sm:grid-cols-3">
                 {(t.raw("consumers") as string[]).map((item) => (
                   <div
                     key={item}
-                    className="rounded-md border border-border bg-muted/30 px-3 py-4 text-center text-body-sm"
+                    className="rounded-md border border-border bg-muted/30 px-3 py-4 text-center text-body-small"
                   >
                     {item}
                   </div>
                 ))}
               </div>
-              <p className="flex items-center justify-center gap-3 py-4 text-label-sm text-primary-text">
+              <p className="flex items-center justify-center gap-3 py-4 text-label-small text-primary-text">
                 <Icon name="arrow-up" className="h-4 w-4" aria-hidden />
                 {t("supply")}
               </p>
@@ -58,24 +58,24 @@ export function ArdaDataFlow() {
                   {(t.raw("modules") as string[]).map((item) => (
                     <div
                       key={item}
-                      className="rounded-md border border-primary-border px-3 py-4 text-center text-body-sm text-primary-text"
+                      className="rounded-md border border-primary-border px-3 py-4 text-center text-body-small text-primary-text"
                     >
                       {item}
                     </div>
                   ))}
                 </div>
-                <p className="mt-5 flex items-center justify-center gap-2 border-t border-primary-border pt-4 text-body-sm text-primary-text">
+                <p className="mt-5 flex items-center justify-center gap-2 border-t border-primary-border pt-4 text-body-small text-primary-text">
                   <Icon name="code" className="h-4 w-4 shrink-0" aria-hidden />
                   {t("service")}
                 </p>
               </div>
-              <p className="flex items-center justify-center gap-3 py-4 text-label-sm text-primary-text">
+              <p className="flex items-center justify-center gap-3 py-4 text-label-small text-primary-text">
                 <Icon name="arrow-up" className="h-4 w-4" aria-hidden />
                 {t("intake")}
               </p>
-              <div className="mb-3 flex flex-wrap justify-between gap-2 text-body-sm">
+              <div className="mb-3 flex flex-wrap justify-between gap-2 text-body-small">
                 <span className="font-semibold">{t("sourcesLabel")}</span>
-                <span className="text-label-sm text-muted-foreground">
+                <span className="text-label-small text-muted-foreground">
                   {t("sourcesNote")}
                 </span>
               </div>
@@ -83,7 +83,7 @@ export function ArdaDataFlow() {
                 {(t.raw("sources") as string[]).map((item) => (
                   <div
                     key={item}
-                    className="rounded-md border border-border bg-muted/30 px-3 py-4 text-center text-body-sm"
+                    className="rounded-md border border-border bg-muted/30 px-3 py-4 text-center text-body-small"
                   >
                     {item}
                   </div>
@@ -96,15 +96,15 @@ export function ArdaDataFlow() {
             >
               {(t.raw("guards") as Guard[]).map((guard) => (
                 <div key={guard.title}>
-                  <p className="text-body-sm font-semibold">{guard.title}</p>
-                  <p className="mt-2 text-label-sm text-muted-foreground">
+                  <p className="text-body-small font-semibold">{guard.title}</p>
+                  <p className="mt-2 text-label-small text-muted-foreground">
                     {guard.description}
                   </p>
                 </div>
               ))}
             </aside>
           </Card>
-          <figcaption className="mt-4 flex flex-wrap justify-between gap-2 text-label-sm text-muted-foreground">
+          <figcaption className="mt-4 flex flex-wrap justify-between gap-2 text-label-small text-muted-foreground">
             <span>{t("caption")}</span>
             <span>{t("illustration")}</span>
           </figcaption>

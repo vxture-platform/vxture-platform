@@ -135,7 +135,7 @@ function AssistantPlaceholder({
       }
     >
       <div className="flex items-center justify-between gap-sm">
-        <span className="text-label-md font-medium text-foreground">
+        <span className="text-label font-medium text-foreground">
           Varda（开发占位）
         </span>
         <div className="flex items-center gap-2xs">
@@ -159,7 +159,7 @@ function AssistantPlaceholder({
           />
         </div>
       </div>
-      <p className="text-body-sm text-muted-foreground">
+      <p className="text-body-small text-muted-foreground">
         真实助手待后端鉴权支持；此面板仅开发构建有，用来验证布局三态。
       </p>
     </aside>
@@ -360,7 +360,7 @@ export function ArcheShell({
                       600——字号颜色都与 admin 相同，只有字重差一档，在 muted 灰上
                       看起来像换了颜色。排版角色是字号/字重/行高/字距一整套，
                       单挑一项覆盖，同一个角色在各处就会长得不一样。 */}
-                  <span className="hidden truncate text-label-md text-muted-foreground md:inline">
+                  <span className="hidden truncate text-label text-muted-foreground md:inline">
                     治理平面
                   </span>
                 </>

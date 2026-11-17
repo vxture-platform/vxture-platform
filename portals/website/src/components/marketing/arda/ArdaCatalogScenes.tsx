@@ -22,15 +22,15 @@ export function CatalogScene() {
           className="mb-5 h-8 w-8 text-primary-text"
           aria-hidden
         />
-        <p className="text-title-sm font-semibold">{t("assetName")}</p>
-        <p className="mb-6 mt-2 text-label-sm text-muted-foreground">
+        <p className="text-heading-3 font-semibold">{t("assetName")}</p>
+        <p className="mb-6 mt-2 text-label-small text-muted-foreground">
           {t("assetDomain")}
         </p>
         <dl className="divide-y divide-border">
           {properties.map((item) => (
             <div
               key={item.label}
-              className="flex flex-wrap justify-between gap-2 py-3 text-body-sm"
+              className="flex flex-wrap justify-between gap-2 py-3 text-body-small"
             >
               <dt className="text-muted-foreground">{item.label}</dt>
               <dd>{item.value}</dd>
@@ -40,20 +40,20 @@ export function CatalogScene() {
       </Card>
       <div className="grid grid-rows-2 gap-3">
         <Card className="justify-center gap-2 p-5">
-          <p className="text-label-sm text-muted-foreground">
+          <p className="text-label-small text-muted-foreground">
             {t("termLabel")}
           </p>
           <p className="font-semibold">{t("term")}</p>
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("termDescription")}
           </p>
         </Card>
         <Card className="justify-center gap-2 p-5">
-          <p className="text-label-sm text-muted-foreground">
+          <p className="text-label-small text-muted-foreground">
             {t("governanceLabel")}
           </p>
           <p className="font-semibold">{t("governance")}</p>
-          <p className="flex items-center gap-2 text-body-sm text-primary-text">
+          <p className="flex items-center gap-2 text-body-small text-primary-text">
             <Icon name="check" className="h-4 w-4" aria-hidden />
             {t("linked")}
           </p>
@@ -74,7 +74,7 @@ export function QualityScene() {
           key={rule}
           className="flex-row flex-wrap items-center justify-between gap-3 p-4"
         >
-          <p className="flex items-center gap-3 text-body-sm">
+          <p className="flex items-center gap-3 text-body-small">
             <Icon
               name="file-text"
               className="h-4 w-4 shrink-0 text-primary-text"
@@ -87,7 +87,7 @@ export function QualityScene() {
           </Badge>
         </Card>
       ))}
-      <p className="border-l-2 border-primary-border py-2 pl-4 text-body-sm leading-6 text-muted-foreground">
+      <p className="border-l-2 border-primary-border py-2 pl-4 text-body-small leading-6 text-muted-foreground">
         {t("qualityNote")}
       </p>
     </div>

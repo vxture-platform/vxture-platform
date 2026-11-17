@@ -57,16 +57,16 @@ export function ArdaTeamsAndFaq() {
                   className="mb-7 h-8 w-8 text-primary-text"
                   aria-hidden
                 />
-                <p className="text-label-sm text-muted-foreground">
+                <p className="text-label-small text-muted-foreground">
                   {team.role}
                 </p>
                 <h3 className="font-display mb-4 mt-3 text-2xl font-semibold leading-snug text-balance">
                   {team.title}
                 </h3>
-                <p className="mb-6 text-body-md leading-7 text-muted-foreground">
+                <p className="mb-6 text-body leading-7 text-muted-foreground">
                   {team.description}
                 </p>
-                <p className="mt-auto flex items-start gap-2 border-t border-border pt-5 text-body-sm text-primary-text">
+                <p className="mt-auto flex items-start gap-2 border-t border-border pt-5 text-body-small text-primary-text">
                   <Icon
                     name="arrow-right"
                     className="mt-1 h-4 w-4 shrink-0"
@@ -103,7 +103,7 @@ export function ArdaTeamsAndFaq() {
                 <AccordionTrigger className="py-5 text-left text-base">
                   {item.question}
                 </AccordionTrigger>
-                <AccordionContent className="text-body-md leading-7 text-muted-foreground">
+                <AccordionContent className="text-body leading-7 text-muted-foreground">
                   {item.answer}
                 </AccordionContent>
               </AccordionItem>
@@ -115,7 +115,7 @@ export function ArdaTeamsAndFaq() {
         <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
           <Card className="gap-8 border-primary-border bg-primary-muted p-8 lg:flex-row lg:items-center lg:justify-between lg:p-12">
             <div>
-              <p className="text-label-sm font-semibold text-primary-text">
+              <p className="text-label-small font-semibold text-primary-text">
                 {t("cta.eyebrow")}
               </p>
               <h2
@@ -135,7 +135,7 @@ export function ArdaTeamsAndFaq() {
                   <Icon name="arrow-right" className="h-4 w-4" aria-hidden />
                 </Link>
               </Button>
-              <p className="mt-3 text-label-sm text-muted-foreground">
+              <p className="mt-3 text-label-small text-muted-foreground">
                 {t("cta.note")}
               </p>
             </div>

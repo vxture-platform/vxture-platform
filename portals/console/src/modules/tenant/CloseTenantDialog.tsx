@@ -123,13 +123,10 @@ export function CloseTenantDialog({
   ) =>
     items.length === 0 ? null : (
       <div className="flex flex-col gap-sm">
-        <p className="text-label-md text-foreground">{title}</p>
+        <p className="text-label text-foreground">{title}</p>
         <ul className="flex flex-col gap-sm">
           {items.map((item) => (
-            <li
-              key={item.code}
-              className="flex items-start gap-md text-body-md"
-            >
+            <li key={item.code} className="flex items-start gap-md text-body">
               <StatusBadge tone={tone}>
                 {t(`${prefix}.${item.code}.tag`)}
               </StatusBadge>
@@ -163,7 +160,7 @@ export function CloseTenantDialog({
         {error ? <Banner tone="danger" title={error} /> : null}
         {failed ? <Banner tone="danger" title={t("loadFailed")} /> : null}
         {loading ? (
-          <span className="flex items-center gap-sm text-body-md text-muted-foreground">
+          <span className="flex items-center gap-sm text-body text-muted-foreground">
             <Spinner size="sm" />
             {t("loading")}
           </span>
@@ -191,8 +188,8 @@ export function CloseTenantDialog({
         ) : null}
 
         <div className="flex flex-col gap-sm">
-          <p className="text-label-md text-foreground">{t("confirmTitle")}</p>
-          <Label className="flex items-start gap-sm text-body-md">
+          <p className="text-label text-foreground">{t("confirmTitle")}</p>
+          <Label className="flex items-start gap-sm text-body">
             <Checkbox
               checked={acknowledged}
               disabled={!state?.canClose}
@@ -202,7 +199,7 @@ export function CloseTenantDialog({
             <span>{t("ackConfirm")}</span>
           </Label>
           <div className="flex flex-col gap-xs">
-            <Label htmlFor="close-tenant-confirm" className="text-label-md">
+            <Label htmlFor="close-tenant-confirm" className="text-label">
               {t("confirmLabel", { name: tenantName })}
             </Label>
             <Input

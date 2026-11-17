@@ -236,7 +236,9 @@ export function CustomerPortalPanel({
     <Card>
       <CardHeader>
         <h2 className="text-heading-sm">{t("title")}</h2>
-        <p className="text-body-sm text-muted-foreground">{t("description")}</p>
+        <p className="text-body-small text-muted-foreground">
+          {t("description")}
+        </p>
       </CardHeader>
       <CardContent className="grid gap-lg">
         {error && <Banner tone="danger" title={error} />}
@@ -255,7 +257,7 @@ export function CustomerPortalPanel({
                 {t("refresh")}
               </Button>
               {dirty && (
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {t("unsavedChanges")}
                 </span>
               )}
@@ -264,7 +266,7 @@ export function CustomerPortalPanel({
                   href={`https://${record.hostname}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-body-sm underline"
+                  className="text-body-small underline"
                 >
                   {t("openPublished")}
                 </a>
@@ -314,7 +316,7 @@ export function CustomerPortalPanel({
                       <p
                         id={`portal-host-status-${tenantId}`}
                         role="status"
-                        className="text-body-sm text-muted-foreground"
+                        className="text-body-small text-muted-foreground"
                       >
                         {hostnameStatus === "invalid" && locale.startsWith("zh")
                           ? (hostnameCheck?.message ?? hostnameHint)
@@ -366,7 +368,7 @@ export function CustomerPortalPanel({
                   <Switch checked={enabled} onCheckedChange={setEnabled} />
                   {t("enableAccess")}
                 </label>
-                <p className="text-body-sm text-muted-foreground">
+                <p className="text-body-small text-muted-foreground">
                   {t("hostnameRules")}
                 </p>
                 <Button
@@ -394,7 +396,7 @@ export function CustomerPortalPanel({
             }
             {record && draft && (
               <>
-                <p className="text-body-sm text-muted-foreground">
+                <p className="text-body-small text-muted-foreground">
                   {record.hostname} · {t("draftRevision")} {record.revision} ·{" "}
                   {t("lastEdited")}:{" "}
                   {record.updatedSurface === "admin" ? "Admin" : "Console"} ·{" "}
@@ -509,12 +511,12 @@ export function CustomerPortalPanel({
                       </Field>
                     ))}
                   </div>
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-small text-muted-foreground">
                     {t("assetRights")}
                   </p>
                   <section className="grid gap-sm">
                     <h3>{t("applicationRules")}</h3>
-                    <p className="text-body-sm text-muted-foreground">
+                    <p className="text-body-small text-muted-foreground">
                       {t("applicationRulesHelp")}
                     </p>
                     {draft.applications.map((app, i) => (
@@ -522,7 +524,7 @@ export function CustomerPortalPanel({
                         key={app.code}
                         className="flex flex-wrap items-center gap-sm"
                       >
-                        <span className="text-body-sm">{app.code}</span>
+                        <span className="text-body-small">{app.code}</span>
                         <Input
                           aria-label={t("group")}
                           value={app.group}
@@ -646,7 +648,7 @@ export function CustomerPortalPanel({
                 <section className="grid gap-md">
                   <h3>{t("historyTitle")}</h3>
                   {record.versions.length === 0 && (
-                    <p className="text-body-sm text-muted-foreground">
+                    <p className="text-body-small text-muted-foreground">
                       {t("noSubmissions")}
                     </p>
                   )}
@@ -662,20 +664,20 @@ export function CustomerPortalPanel({
                           <strong>{t("currentlyPublished")}</strong>
                         )}
                       </div>
-                      <p className="text-body-sm">
+                      <p className="text-body-small">
                         {formatDateTime(version.submittedAt, locale)} ·{" "}
                         {version.note}
                       </p>
                       {version.reviewNote && (
-                        <p className="text-body-sm">
+                        <p className="text-body-small">
                           {t("reviewNote")}: {version.reviewNote}
                         </p>
                       )}
                       <details>
-                        <summary className="cursor-pointer text-body-sm">
+                        <summary className="cursor-pointer text-body-small">
                           {t("viewSnapshot")}
                         </summary>
-                        <pre className="mt-md max-h-80 overflow-auto whitespace-pre-wrap break-all rounded border p-md text-body-sm">
+                        <pre className="mt-md max-h-80 overflow-auto whitespace-pre-wrap break-all rounded border p-md text-body-small">
                           {JSON.stringify(version.configuration, null, 2)}
                         </pre>
                         <div className="flex flex-wrap gap-md">

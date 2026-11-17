@@ -1608,7 +1608,7 @@ function CapabilitiesPageContent() {
                             {n.operational ? (
                               /* 运营名与业务名不同时两个都要在：运营者在跨仓 issue、
                                日志里读到的是运营名，只显示业务名会对不上。 */
-                              <span className="text-body-sm font-normal text-muted-foreground">
+                              <span className="text-body-small font-normal text-muted-foreground">
                                 {n.operational}
                               </span>
                             ) : null}
@@ -1639,7 +1639,7 @@ function CapabilitiesPageContent() {
                   cell: (r: CapabilityRecord) => (
                     <span className="inline-flex flex-col items-center gap-2xs">
                       <span>{r.providerId}</span>
-                      <span className="text-body-sm text-muted-foreground">
+                      <span className="text-body-small text-muted-foreground">
                         {r.ownerRef}
                       </span>
                     </span>
@@ -1909,7 +1909,7 @@ function CapabilitiesPageContent() {
                   setDraft({ ...draft, contractJson: e.target.value })
                 }
                 rows={draft.primitiveType === "skill" ? 6 : 12}
-                className="font-mono text-code-sm"
+                className="font-mono text-code"
               />
             </Field>
             {draft.primitiveType === "executor" ? (
@@ -1929,7 +1929,7 @@ function CapabilitiesPageContent() {
                     setDraft({ ...draft, executorJson: e.target.value })
                   }
                   rows={6}
-                  className="font-mono text-code-sm"
+                  className="font-mono text-code"
                 />
               </Field>
             ) : null}
@@ -1951,7 +1951,7 @@ function CapabilitiesPageContent() {
                       setDraft({ ...draft, skillJson: e.target.value })
                     }
                     rows={8}
-                    className="font-mono text-code-sm"
+                    className="font-mono text-code"
                   />
                 </Field>
                 <Field span="full">
@@ -1969,7 +1969,7 @@ function CapabilitiesPageContent() {
                       setDraft({ ...draft, dependenciesJson: e.target.value })
                     }
                     rows={4}
-                    className="font-mono text-code-sm"
+                    className="font-mono text-code"
                     placeholder={`[{ "capabilityId": "runos.code-sandbox", "kind": "required", "note": "脚本执行依赖" }]`}
                   />
                 </Field>
@@ -2029,13 +2029,13 @@ function CapabilitiesPageContent() {
                 >
                   {detail.admissionTier}
                 </StatusBadge>
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   Provider {detail.providerId} · Owner {detail.ownerRef}
                 </span>
                 {/* 三个名字在详情里一次摆全：表格上主名 + 机器标识就够了，但要核对
                     「最终用户看到的到底是哪几个字」时，得能一眼看到整张 locale 表。 */}
                 <span className="flex flex-wrap items-center gap-2xs">
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     运营名 {detail.title}
                   </span>
                   {Object.entries(detail.displayName ?? {}).length === 0 ? (
@@ -2100,7 +2100,7 @@ function CapabilitiesPageContent() {
             </div>
 
             <Section title="别名" icon="link" level={2}>
-              <div className="flex flex-col gap-2xs text-body-sm">
+              <div className="flex flex-col gap-2xs text-body-small">
                 <div>
                   <span className="text-muted-foreground">latest → </span>
                   <span className="font-mono">
@@ -2119,7 +2119,7 @@ function CapabilitiesPageContent() {
             <Section title="版本" icon="git-branch" level={2}>
               <div className="flex flex-col gap-sm">
                 {detail.versions.length === 0 ? (
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-small text-muted-foreground">
                     暂无版本。
                   </p>
                 ) : (
@@ -2130,7 +2130,7 @@ function CapabilitiesPageContent() {
                     >
                       <div className="flex items-center justify-between gap-sm">
                         <div className="flex items-center gap-sm">
-                          <span className="font-mono text-code-sm">
+                          <span className="font-mono text-code">
                             {v.version}
                           </span>
                           <StatusBadge
@@ -2281,7 +2281,7 @@ function CapabilitiesPageContent() {
             >
               <div className="flex flex-col gap-sm">
                 {detail.endpoints.length === 0 ? (
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-small text-muted-foreground">
                     暂无 Endpoint。
                   </p>
                 ) : (
@@ -2293,7 +2293,7 @@ function CapabilitiesPageContent() {
                       <div className="flex flex-col gap-2xs">
                         <div className="flex items-center gap-sm">
                           <Badge variant="outline">{ep.environment}</Badge>
-                          <span className="font-mono text-code-sm">
+                          <span className="font-mono text-code">
                             {ep.version}
                           </span>
                           <StatusBadge
@@ -2303,7 +2303,7 @@ function CapabilitiesPageContent() {
                             {ep.state}
                           </StatusBadge>
                         </div>
-                        <span className="text-code-sm text-muted-foreground break-all">
+                        <span className="text-code text-muted-foreground break-all">
                           {ep.baseUrl}
                         </span>
                       </div>
@@ -2463,7 +2463,7 @@ function CapabilitiesPageContent() {
                 />
                 <FieldLabel htmlFor={`cert-${c.key}`}>
                   {c.label}
-                  <span className="font-mono text-code-sm text-muted-foreground">
+                  <span className="font-mono text-code text-muted-foreground">
                     {c.key}
                   </span>
                 </FieldLabel>

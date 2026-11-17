@@ -333,7 +333,7 @@ function SubscriptionDetails({
           </DetailRow>
         </DetailList>
         <div className="grid min-w-0 gap-xs">
-          <p className="m-0 text-body-sm leading-loose text-muted-foreground">
+          <p className="m-0 text-body-small leading-loose text-muted-foreground">
             {subscription.solutionAssociation.note}
           </p>
         </div>
@@ -391,11 +391,11 @@ function SubscriptionDetails({
                 <span className="grid max-w-panel-sm gap-2xs text-right">
                   <span
                     title={item.quotaSummary}
-                    className="truncate text-body-md font-semibold text-foreground"
+                    className="truncate text-body font-semibold text-foreground"
                   >
                     {item.included ? "包含" : "不包含"} | {item.quotaSummary}
                   </span>
-                  <span className="truncate text-body-sm text-muted-foreground">
+                  <span className="truncate text-body-small text-muted-foreground">
                     {item.note}
                   </span>
                 </span>
@@ -466,13 +466,13 @@ function SubscriptionDetails({
               }
               main={
                 <span className="grid min-w-0 gap-2xs">
-                  <strong className="block text-body-md font-semibold text-foreground">
+                  <strong className="block text-body font-semibold text-foreground">
                     {event.title}
                   </strong>
-                  <p className="m-0 text-body-sm leading-relaxed text-muted-foreground">
+                  <p className="m-0 text-body-small leading-relaxed text-muted-foreground">
                     {event.description}
                   </p>
-                  <small className="block text-body-sm text-muted-foreground">
+                  <small className="block text-body-small text-muted-foreground">
                     {event.actor} · {formatDate(event.at, locale)}
                   </small>
                 </span>
@@ -708,7 +708,7 @@ export function SubscriptionDetailPage({
       }
     >
       {operationFeedback ? (
-        <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
+        <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-small text-success-text">
           {operationFeedback}
         </div>
       ) : null}
@@ -729,7 +729,7 @@ export function SubscriptionDetailPage({
           />
         </>
       ) : (
-        <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
+        <section className="flex min-h-0 items-center justify-end gap-sm text-body-small font-normal text-muted-foreground">
           <span>{tShared("common.loading")}</span>
         </section>
       )}

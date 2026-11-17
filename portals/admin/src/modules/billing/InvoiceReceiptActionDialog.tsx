@@ -156,7 +156,7 @@ export function InvoiceReceiptActionDialog({
         });
       }}
     >
-      <p className="m-0 text-body-sm text-muted-foreground">
+      <p className="m-0 text-body-small text-muted-foreground">
         {actionDescription(action)}
       </p>
       {showsShipping ? (
@@ -203,7 +203,7 @@ export function InvoiceReceiptActionDialog({
         maxLength={512}
       />
       {error ? (
-        <p className="m-0 text-body-sm text-destructive-text">{error}</p>
+        <p className="m-0 text-body-small text-destructive-text">{error}</p>
       ) : null}
     </DialogForm>
   );

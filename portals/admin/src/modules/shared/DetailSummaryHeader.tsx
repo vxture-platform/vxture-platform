@@ -54,11 +54,11 @@ export function DetailSummaryHeader({
           <Icon name={icon} size="lg" fallback="placeholder" />
         </span>
         <div className="min-w-0">
-          <h2 className="m-0 truncate text-title-xl leading-tight font-semibold text-foreground">
+          <h2 className="m-0 truncate text-heading-1 leading-tight font-semibold text-foreground">
             {title}
           </h2>
           {subtitle ? (
-            <p className="mt-2xs mb-0 truncate text-body-sm font-extrabold text-muted-foreground">
+            <p className="mt-2xs mb-0 truncate text-body-small font-extrabold text-muted-foreground">
               {subtitle}
             </p>
           ) : null}

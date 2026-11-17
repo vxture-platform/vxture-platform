@@ -53,7 +53,7 @@ export function GenderMark({
       role="img"
       aria-label={labels[value]}
       title={labels[value]}
-      className={className ?? "text-body-lg leading-none text-muted-foreground"}
+      className={className ?? "text-body leading-none text-muted-foreground"}
     >
       {SYMBOL[value]}
     </span>
@@ -88,7 +88,7 @@ export function GenderRadio({
             key={item.value}
             htmlFor={`${id}-${item.value}`}
             title={text}
-            className="flex cursor-pointer items-center gap-xs text-body-lg leading-none text-foreground"
+            className="flex cursor-pointer items-center gap-xs text-body leading-none text-foreground"
           >
             <RadioGroupItem
               id={`${id}-${item.value}`}

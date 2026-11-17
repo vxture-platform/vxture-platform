@@ -36,7 +36,7 @@ export function WorkbenchHero() {
           <p className="mt-6 text-lg font-medium leading-relaxed text-balance sm:text-xl">
             {t("hero.tagline")}
           </p>
-          <p className="mx-auto mt-3 max-w-website-2xl text-body-md leading-7 text-pretty text-muted-foreground">
+          <p className="mx-auto mt-3 max-w-website-2xl text-body leading-7 text-pretty text-muted-foreground">
             {t("hero.description")}
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">

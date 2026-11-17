@@ -352,7 +352,7 @@ export function BillingPage() {
             {money(b.payableAmount, b.currency)}
           </span>
           {Number.parseFloat(b.discountAmount) > 0 ? (
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("table.discountOff", {
                 amount: money(b.discountAmount, b.currency),
               })}
@@ -379,7 +379,7 @@ export function BillingPage() {
         b.paidAt ? (
           <span className="flex flex-col items-center tabular-nums">
             <span className="text-foreground">{fmtDate(b.paidAt)}</span>
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {fmtTime(b.paidAt)}
             </span>
           </span>
@@ -543,7 +543,7 @@ export function BillingPage() {
           <Banner tone="warning" title={selectionError} />
         ) : null}
         {selectedBills.length ? (
-          <p className="text-body-sm">
+          <p className="text-body-small">
             {t("invoicing.application.selected", {
               count: selectedBills.length,
             })}
@@ -599,7 +599,7 @@ export function BillingPage() {
             )
           }
           footer={
-            <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
+            <div className="flex w-full items-center justify-between gap-md text-body-small text-muted-foreground">
               <span className="tabular-nums">
                 {loadFailed ? "—" : t("table.total", { count: billsTotal })}
               </span>

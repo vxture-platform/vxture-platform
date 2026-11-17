@@ -985,7 +985,7 @@ export function ProductDetailPage({
                 <StatusBadge tone="warning" dot>
                   {tShared("productMaintenance.badge")}
                 </StatusBadge>
-                <span className="text-label-sm text-muted-foreground">
+                <span className="text-label-small text-muted-foreground">
                   {tShared("productMaintenance.until", {
                     time: formatDateTime(product.maintenance.until, locale),
                   })}
@@ -1209,7 +1209,7 @@ export function ProductDetailPage({
                         autoFocus={!isCreate}
                         disabled={!canManage}
                         aria-invalid={!!errors["productCode"]}
-                        className="font-mono text-code-sm"
+                        className="font-mono text-code"
                         onChange={(e) =>
                           draft &&
                           setDraft({ ...draft, productCode: e.target.value })
@@ -1220,7 +1220,7 @@ export function ProductDetailPage({
                         id="pd-code"
                         locked
                         value={draft?.productCode ?? product?.productCode ?? ""}
-                        className="font-mono text-code-sm"
+                        className="font-mono text-code"
                         {...(codeEditable
                           ? { onUnlock: () => setCodeUnlocked(true) }
                           : {})}
@@ -1272,7 +1272,7 @@ export function ProductDetailPage({
                         ) : (
                           <span
                             aria-hidden="true"
-                            className="flex size-control-md shrink-0 items-center justify-center rounded-lg bg-muted text-label-sm text-muted-foreground"
+                            className="flex size-control-md shrink-0 items-center justify-center rounded-lg bg-muted text-label-small text-muted-foreground"
                           >
                             {product.productName.slice(0, 2).toUpperCase()}
                           </span>
@@ -1304,7 +1304,7 @@ export function ProductDetailPage({
                         ) : null}
                       </div>
                     ) : (
-                      <p className="text-body-sm text-muted-foreground">
+                      <p className="text-body-small text-muted-foreground">
                         保存后可以上传。
                       </p>
                     )}
@@ -1491,7 +1491,7 @@ export function ProductDetailPage({
                 </FieldGrid>
 
                 {product ? (
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-small text-muted-foreground">
                     创建于 {formatDateTime(product.createdAt, locale)} ·
                     最近更新 {formatDateTime(product.updatedAt, locale)}
                   </p>
@@ -1506,13 +1506,13 @@ export function ProductDetailPage({
               <SectionBody>
                 <FieldGrid>
                   <div className="flex min-w-0 flex-col gap-sm">
-                    <SectionHeader level={4} title="可见性" />
+                    <SectionHeader level={3} title="可见性" />
                     {/* 客户域可见性归 admin 的产品目录（owner 2026-10-04）。这里不放一个
                         灰掉的开关——灰开关读不出「不能改」还是「还没轮到你改」；同一行形状
                         里放当前值与一句去处，运维者知道去哪改。新建时显示列默认值。 */}
                     <div className="flex h-control-md items-center justify-between gap-sm rounded-md border border-border px-sm">
                       <span className="flex min-w-0 items-center gap-2xs">
-                        <span className="truncate text-body-sm">客户域</span>
+                        <span className="truncate text-body-small">客户域</span>
                         <HelpHint label="客户域">
                           这个产品在 console
                           与官网出不出现，由运营平台（admin）的产品目录设置，运维台只显示。
@@ -1550,7 +1550,7 @@ export function ProductDetailPage({
                   </div>
 
                   <div className="flex min-w-0 flex-col gap-sm">
-                    <SectionHeader level={4} title="终端支持" />
+                    <SectionHeader level={3} title="终端支持" />
                     {PRODUCT_SURFACE_DEFS.map((d) => (
                       <ToggleRow
                         key={d.value}
@@ -1584,7 +1584,7 @@ export function ProductDetailPage({
                       disabled={!canManage}
                       aria-invalid={!!errors["edgeDomain"]}
                       placeholder={derivedDomain}
-                      className="font-mono text-code-sm"
+                      className="font-mono text-code"
                       onChange={(e) =>
                         edgeDraft &&
                         setEdgeDraft({
@@ -1607,7 +1607,7 @@ export function ProductDetailPage({
                       disabled={!canManage}
                       aria-invalid={!!errors["edgeUpstream"]}
                       placeholder="<tailnet-ip>:4050"
-                      className="font-mono text-code-sm"
+                      className="font-mono text-code"
                       onChange={(e) =>
                         edgeDraft &&
                         setEdgeDraft({
@@ -1630,7 +1630,7 @@ export function ProductDetailPage({
                       disabled={!canManage}
                       aria-invalid={!!errors["webhookUrl"]}
                       placeholder={`https://${domainForHints}${WEBHOOK_PATH}`}
-                      className="font-mono text-code-sm"
+                      className="font-mono text-code"
                       onChange={(e) =>
                         edgeDraft &&
                         setEdgeDraft({
@@ -1653,7 +1653,7 @@ export function ProductDetailPage({
                       disabled={!canManage}
                       aria-invalid={!!errors["homeUrl"]}
                       placeholder={`https://${domainForHints}`}
-                      className="font-mono text-code-sm"
+                      className="font-mono text-code"
                       onChange={(e) =>
                         edgeDraft &&
                         setEdgeDraft({ ...edgeDraft, homeUrl: e.target.value })
@@ -1701,7 +1701,7 @@ export function ProductDetailPage({
                     canManage={canManage}
                   />
                 ) : (
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-small text-muted-foreground">
                     保存后配置。指标键是跨仓契约，产品按这个键上报用量。
                   </p>
                 )}
@@ -1737,7 +1737,7 @@ export function ProductDetailPage({
                   密钥管理
                 </Button>
                 {!product ? (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     保存后可用
                   </span>
                 ) : null}
@@ -1890,7 +1890,7 @@ export function ProductDetailPage({
           readOnly
           rows={Math.min(10, (handover?.lines.length ?? 0) + 1)}
           value={(handover?.lines ?? []).join("\n")}
-          className="font-mono text-code-sm"
+          className="font-mono text-code"
           onFocus={(e) => e.currentTarget.select()}
         />
         <Button

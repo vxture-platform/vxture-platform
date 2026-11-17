@@ -143,18 +143,18 @@ export function NotificationDrawer({
               className="flex flex-col gap-sm border-b border-border pb-lg"
             >
               <div className="flex items-start justify-between gap-md">
-                <h3 className="text-title-sm">{item.title}</h3>
+                <h3 className="text-heading-3">{item.title}</h3>
                 {!item.readAt && (
-                  <span className="shrink-0 text-body-sm text-primary">
+                  <span className="shrink-0 text-body-small text-primary">
                     {t("未读")}
                   </span>
                 )}
               </div>
-              <p className="whitespace-pre-wrap break-words text-body-sm text-muted-foreground">
+              <p className="whitespace-pre-wrap break-words text-body-small text-muted-foreground">
                 {item.body}
               </p>
               <time
-                className="text-body-sm text-muted-foreground"
+                className="text-body-small text-muted-foreground"
                 dateTime={item.createdAt}
               >
                 {formatDateTime(item.createdAt, locale)}
@@ -192,7 +192,7 @@ export function NotificationDrawer({
         </ul>
       )}
       {actionError && (
-        <p role="alert" className="text-body-sm text-destructive">
+        <p role="alert" className="text-body-small text-destructive">
           {t(actionError)}
         </p>
       )}

@@ -417,10 +417,10 @@ export function SystemNoticesSection({
                     ) : null}
                     <span className="font-medium">{notice.title}</span>
                   </span>
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {notice.body}
                   </span>
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {formatDay(notice.publishedAt, locale)}{" "}
                     {formatClock(notice.publishedAt, locale)} ·{" "}
                     {/* system 来源没有人，写「系统」而不是「—」——后者会被当成读不到。 */}

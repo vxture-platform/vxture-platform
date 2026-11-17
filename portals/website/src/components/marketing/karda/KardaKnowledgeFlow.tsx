@@ -38,7 +38,7 @@ export function KardaKnowledgeFlow() {
                   className="min-w-0 rounded-lg border border-border p-5"
                 >
                   <div className="mb-5 flex items-center justify-between text-primary-text">
-                    <span className="font-mono text-label-sm">
+                    <span className="font-mono text-label-small">
                       0{index + 1}
                     </span>
                     <Icon
@@ -48,7 +48,7 @@ export function KardaKnowledgeFlow() {
                     />
                   </div>
                   <h3 className="font-semibold">{step.title}</h3>
-                  <p className="mt-3 text-body-sm leading-6 text-muted-foreground">
+                  <p className="mt-3 text-body-small leading-6 text-muted-foreground">
                     {step.description}
                   </p>
                 </li>
@@ -63,7 +63,7 @@ export function KardaKnowledgeFlow() {
                 />
                 {t("service")}
               </p>
-              <div className="flex flex-wrap gap-3 text-body-sm">
+              <div className="flex flex-wrap gap-3 text-body-small">
                 {(t.raw("consumers") as string[]).map((consumer) => (
                   <span
                     key={consumer}
@@ -75,7 +75,7 @@ export function KardaKnowledgeFlow() {
               </div>
             </div>
           </Card>
-          <figcaption className="mt-4 text-label-sm text-muted-foreground">
+          <figcaption className="mt-4 text-label-small text-muted-foreground">
             {t("caption")}
           </figcaption>
         </figure>

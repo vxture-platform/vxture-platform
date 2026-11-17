@@ -394,7 +394,7 @@ function AdminRolePermissionDialog({
         <div className="grid min-h-0 gap-md overflow-auto pr-2xs">
           {(["menu", "button", "api"] as const).map((type) => (
             <section key={type} className="grid gap-sm">
-              <h3 className="m-0 text-body-md font-semibold text-foreground">
+              <h3 className="m-0 text-body font-semibold text-foreground">
                 {type === "menu"
                   ? "菜单权限"
                   : type === "button"
@@ -408,16 +408,16 @@ function AdminRolePermissionDialog({
                       key={permission.id}
                       className="grid min-w-0 gap-2xs rounded-lg border border-primary/10 p-sm"
                     >
-                      <strong className="truncate text-body-sm font-semibold text-foreground">
+                      <strong className="truncate text-body-small font-semibold text-foreground">
                         {permissionDisplayName(
                           permission.permName || permission.permCode,
                         )}
                       </strong>
-                      <code className="truncate font-mono text-body-sm text-muted-foreground">
+                      <code className="truncate font-mono text-body-small text-muted-foreground">
                         {permission.permCode}
                       </code>
                       {permission.description ? (
-                        <small className="truncate text-body-sm text-muted-foreground">
+                        <small className="truncate text-body-small text-muted-foreground">
                           {permission.description}
                         </small>
                       ) : null}
@@ -425,7 +425,7 @@ function AdminRolePermissionDialog({
                   ))}
                 </div>
               ) : (
-                <p className="m-0 text-body-sm text-muted-foreground">-</p>
+                <p className="m-0 text-body-small text-muted-foreground">-</p>
               )}
             </section>
           ))}
@@ -484,7 +484,7 @@ function PermissionAuthorizationNode({
           }
         />
         <span className="grid min-w-0 justify-items-start gap-2xs text-left">
-          <strong className="truncate text-body-md font-extrabold text-foreground">
+          <strong className="truncate text-body font-extrabold text-foreground">
             {permissionLabel(node.permission)}
           </strong>
           <span className="flex min-w-0 flex-wrap items-center justify-start gap-2xs">
@@ -508,7 +508,7 @@ function PermissionAuthorizationNode({
               </StatusBadge>
             ) : null}
           </span>
-          <small className="truncate text-body-sm text-muted-foreground">
+          <small className="truncate text-body-small text-muted-foreground">
             {parent
               ? parent.permName || parent.permCode
               : node.permission.permCode}
@@ -692,7 +692,7 @@ function AdminRoleAuthorizationDialog({
           </Button>
         </section>
         {error ? (
-          <p className="m-0 rounded-lg bg-destructive-muted p-sm text-body-sm text-destructive-text">
+          <p className="m-0 rounded-lg bg-destructive-muted p-sm text-body-small text-destructive-text">
             {error}
           </p>
         ) : null}
@@ -712,7 +712,7 @@ function AdminRoleAuthorizationDialog({
               />
             ))
           ) : (
-            <p className="m-0 text-body-sm text-muted-foreground">
+            <p className="m-0 text-body-small text-muted-foreground">
               没有匹配的权限
             </p>
           )}

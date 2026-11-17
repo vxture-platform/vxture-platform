@@ -254,16 +254,16 @@ function formatChecks(checks: Record<string, string> | null): string | null {
 }
 
 /** prod 是主读数，beta 是辅助参照——用字重 + 颜色区分，不用字号：内容区（标题列
- * 以外）统一 `text-body-sm`，一屏里两种字号会读成两套系统。prod 加粗
+ * 以外）统一 `text-body-small`，一屏里两种字号会读成两套系统。prod 加粗
  * （`font-semibold`）、深色前景；beta 常规字重、`text-muted-foreground` 淡化
- * （2026-08-12，原先 prod 用 `text-label-md`/`text-body-sm`、beta 用
- * `text-body-xs`，字号本身就在做强调，跟标题列的字号连成一片，分不出主次）。 */
+ * （2026-08-12，原先 prod 用 `text-label`/`text-body-small`、beta 用
+ * `text-body-small`，字号本身就在做强调，跟标题列的字号连成一片，分不出主次）。 */
 type ChannelEmphasis = "prod" | "beta";
 
 /** 两个 emphasis 共用同一套字号，只在字重/颜色上分叉。 */
 const EMPHASIS_TEXT: Record<ChannelEmphasis, string> = {
-  prod: "text-body-sm font-semibold text-foreground",
-  beta: "text-body-sm font-normal text-muted-foreground",
+  prod: "text-body-small font-semibold text-foreground",
+  beta: "text-body-small font-normal text-muted-foreground",
 };
 
 /**
@@ -1076,10 +1076,10 @@ function ProbePoints({
       ) : (
         <>
           <Section title="源" icon="globe" level={2}>
-            <p className="font-mono text-code-sm text-foreground">
+            <p className="font-mono text-code text-foreground">
               {channel.origin ?? "—"}
             </p>
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               客户端 {channel.clientId}
               {channel.origin === null
                 ? " · 回调地址解析不出 origin，无法探测"
@@ -1161,7 +1161,7 @@ function ProbeDetail({
           </Badge>
         ))}
       </div>
-      <dl className="flex flex-col gap-2xs text-body-sm">
+      <dl className="flex flex-col gap-2xs text-body-small">
         <FactLine
           label="HTTP"
           value={httpStatus !== null ? String(httpStatus) : null}
@@ -1183,7 +1183,7 @@ function FactLine({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex gap-sm">
       <dt className="w-panel-3xs shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="font-mono text-code-sm text-foreground">{value ?? "—"}</dd>
+      <dd className="font-mono text-code text-foreground">{value ?? "—"}</dd>
     </div>
   );
 }

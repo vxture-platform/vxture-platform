@@ -18,7 +18,7 @@ export function WorkbenchDataBoundary() {
   return (
     <div className="mt-14 grid gap-8 border-t border-border pt-8 lg:mt-16 lg:grid-cols-12 lg:gap-16 lg:pt-10">
       <div className="lg:col-span-4">
-        <span className="font-mono text-label-sm text-primary-text">
+        <span className="font-mono text-label-small text-primary-text">
           02 / {t("data.label")}
         </span>
         <h3 className="font-display mt-4 text-2xl font-semibold leading-snug text-balance">
@@ -41,7 +41,7 @@ export function WorkbenchDataBoundary() {
             </p>
             <ul className="mt-5 space-y-3">
               {localItems.map((item) => (
-                <li key={item} className="flex items-center gap-2 text-body-md">
+                <li key={item} className="flex items-center gap-2 text-body">
                   <Icon
                     name="folder"
                     className="h-4 w-4 shrink-0 text-muted-foreground"
@@ -51,7 +51,7 @@ export function WorkbenchDataBoundary() {
                 </li>
               ))}
             </ul>
-            <p className="mt-6 border-t border-border pt-4 text-body-sm text-muted-foreground">
+            <p className="mt-6 border-t border-border pt-4 text-body-small text-muted-foreground">
               {t("data.localNote")}
             </p>
           </div>
@@ -66,7 +66,7 @@ export function WorkbenchDataBoundary() {
             </p>
             <ul className="mt-5 flex-1 space-y-3">
               {serviceItems.map((item) => (
-                <li key={item} className="flex items-center gap-2 text-body-md">
+                <li key={item} className="flex items-center gap-2 text-body">
                   <Icon
                     name="check"
                     className="h-4 w-4 shrink-0 text-muted-foreground"
@@ -76,12 +76,12 @@ export function WorkbenchDataBoundary() {
                 </li>
               ))}
             </ul>
-            <p className="mt-6 border-t border-border pt-4 text-body-sm text-muted-foreground">
+            <p className="mt-6 border-t border-border pt-4 text-body-small text-muted-foreground">
               {t("data.serviceNote")}
             </p>
           </div>
         </div>
-        <div className="mt-4 flex items-start gap-3 rounded-lg border border-primary-border bg-primary-muted px-4 py-4 text-body-md leading-6">
+        <div className="mt-4 flex items-start gap-3 rounded-lg border border-primary-border bg-primary-muted px-4 py-4 text-body leading-6">
           <Icon
             name="shield-check"
             className="mt-1 h-5 w-5 shrink-0 text-primary-text"

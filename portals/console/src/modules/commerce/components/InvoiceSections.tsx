@@ -196,7 +196,7 @@ export function InvoiceSections({
       id: "bill",
       header: t("records.colBill"),
       cell: (r) => (
-        <span className="flex flex-col gap-xs text-body-sm">
+        <span className="flex flex-col gap-xs text-body-small">
           {(
             r.bills ?? (r.billNo ? [{ id: r.billId, billNo: r.billNo }] : [])
           ).map((bill) => (
@@ -211,7 +211,7 @@ export function InvoiceSections({
       cell: (r) => (
         <span className="flex flex-col">
           <span className="text-foreground">{r.invoiceTitle}</span>
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {typeLabel(r.invoiceType)}
           </span>
         </span>
@@ -253,14 +253,14 @@ export function InvoiceSections({
         }
         if (r.expressNo) {
           return (
-            <span className="text-body-sm text-muted-foreground tabular-nums">
+            <span className="text-body-small text-muted-foreground tabular-nums">
               {r.expressCompany ?? ""} {r.expressNo}
             </span>
           );
         }
         if (r.invoiceStatus === "rejected" && r.statusRemark) {
           return (
-            <span className="text-body-sm text-warning-text">
+            <span className="text-body-small text-warning-text">
               {r.statusRemark}
             </span>
           );
@@ -335,7 +335,7 @@ export function InvoiceSections({
       header: t("addresses.colTaxNo"),
       cell: (a) =>
         a.taxNo ? (
-          <span className="font-mono text-body-sm">{a.taxNo}</span>
+          <span className="font-mono text-body-small">{a.taxNo}</span>
         ) : (
           "—"
         ),

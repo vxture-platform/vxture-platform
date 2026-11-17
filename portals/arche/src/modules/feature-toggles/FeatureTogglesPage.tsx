@@ -624,7 +624,7 @@ export function FeatureTogglesPage() {
             />
           </Field>
           {Object.keys(form.tenantOverrides).length > 0 ? (
-            <p className="m-0 text-body-sm text-muted-foreground">
+            <p className="m-0 text-body-small text-muted-foreground">
               逐租户覆盖：{overrideSummary(form.tenantOverrides)}
               （本页保留不变，逐租户配置在专用界面维护）
             </p>

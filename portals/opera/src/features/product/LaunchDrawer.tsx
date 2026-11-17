@@ -668,7 +668,7 @@ export function LaunchDrawer({
             <StatusBadge tone={meta.tone} dot>
               {meta.label}
             </StatusBadge>
-            <span className="text-label-md text-foreground">{row.label}</span>
+            <span className="text-label text-foreground">{row.label}</span>
             <Badge variant={row.source === "auto" ? "secondary" : "outline"}>
               {row.source === "auto" ? "平台实测" : "人工确认"}
             </Badge>
@@ -704,14 +704,14 @@ export function LaunchDrawer({
           </div>
         </div>
         {row.source === "manual" ? (
-          <p className="text-body-sm text-muted-foreground">{row.what}</p>
+          <p className="text-body-small text-muted-foreground">{row.what}</p>
         ) : null}
         {row.detail ? (
-          <p className="text-body-sm text-foreground">{row.detail}</p>
+          <p className="text-body-small text-foreground">{row.detail}</p>
         ) : null}
         {row.legacyAuthThisMonth !== undefined ? (
           /* E6：一句事实，不是控件、不进判定。E3a（产品面停收旧头）那天看这个数。 */
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {tShared("integrationSignals.legacyAuthThisMonth", {
               count: row.legacyAuthThisMonth,
             })}
@@ -720,17 +720,19 @@ export function LaunchDrawer({
         {row.delegatedReporter !== undefined ? (
           /* 代上报（决策 3 PR C）：同样一句事实——这次 C2 读是谁替它发起的。没有这句，
              E3a 关旧 header 那天「经 S2S 令牌」会被读成「产品已换票」。 */
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {tShared("integrationSignals.delegatedReporter", {
               reporter: row.delegatedReporter,
             })}
           </p>
         ) : null}
         {row.remedy ? (
-          <p className="text-body-sm text-warning-text">下一步：{row.remedy}</p>
+          <p className="text-body-small text-warning-text">
+            下一步：{row.remedy}
+          </p>
         ) : null}
         {row.confirmedAt ? (
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {formatDateTime(row.confirmedAt, locale)} 确认
           </p>
         ) : null}
@@ -855,9 +857,9 @@ export function LaunchDrawer({
             </div>
           }
         />
-        <p className="text-body-sm text-muted-foreground">{s.hint}</p>
+        <p className="text-body-small text-muted-foreground">{s.hint}</p>
         {s.state === "locked" ? (
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             上一环节完成后开始。这一屏有 {s.rows.length}{" "}
             项，到时在这里实测或确认。
           </p>
@@ -881,7 +883,7 @@ export function LaunchDrawer({
         {/* ── 汇总 ─────────────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-sm">
           <div className="flex min-w-0 flex-col gap-2xs">
-            <p className="text-label-md text-foreground">
+            <p className="text-label text-foreground">
               {running && !checks
                 ? "检查中…"
                 : current
@@ -892,7 +894,7 @@ export function LaunchDrawer({
                     }`
                   : "四个环节全部完成 —— 已是正式版"}
             </p>
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {checkedAt
                 ? `实测于 ${checkedAt}。实测只读平台自己的存储，不向对方端点发任何请求。`
                 : "实测只读平台自己的存储，不向对方端点发任何请求。"}
@@ -932,7 +934,7 @@ export function LaunchDrawer({
               </Button>
             }
           />
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             接入是双边的：平台侧配完之后，下面这些要发给产品侧。密钥不在这里——它们只在签发与轮换时明文出现一次。
           </p>
           <HandoverRow
@@ -980,11 +982,11 @@ function HandoverRow({
 }) {
   return (
     <div className="flex flex-col gap-2xs rounded-md border border-border p-sm">
-      <span className="text-label-md text-foreground">{term}</span>
-      <span className="break-all font-mono text-code-sm text-foreground">
+      <span className="text-label text-foreground">{term}</span>
+      <span className="break-all font-mono text-code text-foreground">
         {value}
       </span>
-      <span className="text-body-sm text-muted-foreground">{note}</span>
+      <span className="text-body-small text-muted-foreground">{note}</span>
     </div>
   );
 }

@@ -21,7 +21,7 @@ export function KardaWorkspace() {
   const sources = t.raw("sources") as Source[];
   return (
     <figure className="min-w-0">
-      <figcaption className="mb-3 flex flex-wrap justify-between gap-2 text-label-sm text-muted-foreground">
+      <figcaption className="mb-3 flex flex-wrap justify-between gap-2 text-label-small text-muted-foreground">
         <span>KARDA / KNOWLEDGE WORKSPACE</span>
         <span>{t("disclaimer")}</span>
       </figcaption>
@@ -35,15 +35,15 @@ export function KardaWorkspace() {
             />
             Karda
           </span>
-          <span className="text-label-sm text-muted-foreground">
+          <span className="text-label-small text-muted-foreground">
             {t("workspace")}
           </span>
         </div>
         <div className="p-4 sm:p-5">
-          <p className="text-label-sm text-muted-foreground">
+          <p className="text-label-small text-muted-foreground">
             {t("breadcrumb")}
           </p>
-          <div className="my-4 flex items-start gap-3 rounded-md border border-primary-border bg-primary-muted p-4 text-body-sm">
+          <div className="my-4 flex items-start gap-3 rounded-md border border-primary-border bg-primary-muted p-4 text-body-small">
             <Icon
               name="search"
               className="mt-1 h-4 w-4 shrink-0 text-primary-text"
@@ -60,7 +60,7 @@ export function KardaWorkspace() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="min-w-0">
-              <p className="mb-3 text-label-sm text-muted-foreground">
+              <p className="mb-3 text-label-small text-muted-foreground">
                 {t("resultsLabel")}
               </p>
               <ol className="space-y-3">
@@ -69,14 +69,14 @@ export function KardaWorkspace() {
                     key={source.title}
                     className={`flex items-start gap-2 rounded-lg border p-3 ${index === 0 ? "border-primary-border bg-primary-muted" : "border-border"}`}
                   >
-                    <span className="font-mono text-label-sm text-primary-text">
+                    <span className="font-mono text-label-small text-primary-text">
                       [{index + 1}]
                     </span>
                     <div className="min-w-0">
-                      <p className="text-body-sm font-semibold">
+                      <p className="text-body-small font-semibold">
                         {source.title}
                       </p>
-                      <p className="mt-2 text-label-sm text-muted-foreground">
+                      <p className="mt-2 text-label-small text-muted-foreground">
                         {source.location}
                       </p>
                     </div>
@@ -85,10 +85,10 @@ export function KardaWorkspace() {
               </ol>
             </div>
             <div className="flex min-w-0 flex-col rounded-lg border border-border bg-muted/30 p-4">
-              <p className="text-label-sm text-muted-foreground">
+              <p className="text-label-small text-muted-foreground">
                 {t("excerptLabel")}
               </p>
-              <p className="mt-3 flex items-start gap-2 text-body-sm font-semibold">
+              <p className="mt-3 flex items-start gap-2 text-body-small font-semibold">
                 <Icon
                   name="file-text"
                   className="mt-1 h-4 w-4 shrink-0 text-primary-text"
@@ -96,15 +96,15 @@ export function KardaWorkspace() {
                 />
                 {sources[0]?.title}
               </p>
-              <blockquote className="my-4 border-l-2 border-primary-border pl-3 text-body-sm leading-7 text-muted-foreground">
+              <blockquote className="my-4 border-l-2 border-primary-border pl-3 text-body-small leading-7 text-muted-foreground">
                 {t("excerpt")}
               </blockquote>
-              <p className="mt-auto border-t border-border pt-3 text-label-sm text-primary-text">
+              <p className="mt-auto border-t border-border pt-3 text-label-small text-primary-text">
                 {t("citation")}
               </p>
             </div>
           </div>
-          <p className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-label-sm text-muted-foreground">
+          <p className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-label-small text-muted-foreground">
             <Icon
               name="shield-check"
               className="h-4 w-4 shrink-0 text-primary-text"
@@ -114,7 +114,7 @@ export function KardaWorkspace() {
           </p>
         </div>
       </Card>
-      <div className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-primary-border bg-primary-muted px-3 py-3 text-center text-label-sm text-primary-text">
+      <div className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-primary-border bg-primary-muted px-3 py-3 text-center text-label-small text-primary-text">
         <Icon name="book-open" className="h-4 w-4 shrink-0" aria-hidden />
         {t("footer")}
       </div>

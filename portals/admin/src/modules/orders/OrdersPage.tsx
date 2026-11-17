@@ -260,7 +260,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
           layout="stacked"
           title={
             isUnset(order.solutionName) ? (
-              <span className="text-body-md text-muted-foreground">
+              <span className="text-body text-muted-foreground">
                 {UNSET_LABEL}
               </span>
             ) : (
@@ -279,7 +279,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
           {
             <span className="inline-flex flex-wrap gap-2xs">
               {isUnset(order.tierName) ? (
-                <span className="text-body-md text-muted-foreground">
+                <span className="text-body text-muted-foreground">
                   {UNSET_LABEL}
                 </span>
               ) : (
@@ -292,7 +292,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
               </StatusBadge>
             </span>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {order.servicePlanName}
           </span>
         </span>
@@ -305,7 +305,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       cell: (order) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatCurrency(order.amount, order.currency)}
-          <span className="text-body-sm text-muted-foreground">{`已收 ${formatCurrency(order.paidAmount, order.currency)}`}</span>
+          <span className="text-body-small text-muted-foreground">{`已收 ${formatCurrency(order.paidAmount, order.currency)}`}</span>
         </span>
       ),
     },
@@ -323,7 +323,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
               {orderStatusLabels[order.orderStatus]}
             </StatusBadge>
           }
-          <span className="text-body-sm text-muted-foreground">{`${t(`status.orderPayment.${order.paymentStatus}`)} · ${paySourceLabel(order.paySource)}`}</span>
+          <span className="text-body-small text-muted-foreground">{`${t(`status.orderPayment.${order.paymentStatus}`)} · ${paySourceLabel(order.paySource)}`}</span>
         </span>
       ),
     },
@@ -577,7 +577,7 @@ export function OrdersPage() {
             />
 
             {operationFeedback ? (
-              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
+              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-small text-success-text">
                 {operationFeedback}
               </div>
             ) : null}

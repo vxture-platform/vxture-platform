@@ -298,7 +298,7 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
                 {verifiedLabel(tenant.verifiedStatus)}
               </StatusBadge>
             }
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {riskLabel(normalizeTenantRiskLevel(tenant.riskLevel))}
             </span>
           </span>
@@ -316,7 +316,7 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
               <Badge>{tenant.scale}</Badge>
             </span>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {tenant.tenantName}
           </span>
         </span>

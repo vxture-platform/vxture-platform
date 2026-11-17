@@ -33,7 +33,7 @@ export function AgentIntroduction({
       <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
         <h2
           id="agent-introduction-title"
-          className="text-body-sm font-medium leading-8 text-muted-foreground"
+          className="text-body-small font-medium leading-8 text-muted-foreground"
         >
           {t("detailLabel")}
         </h2>

@@ -400,7 +400,7 @@ export function WorkspacesPage() {
       header: t("table.colDescription"),
       align: "center",
       cell: (w) => (
-        <span className="text-body-sm text-muted-foreground">
+        <span className="text-body-small text-muted-foreground">
           {w.description ?? "—"}
         </span>
       ),
@@ -411,7 +411,7 @@ export function WorkspacesPage() {
       header: t("table.colCreatedAt"),
       align: "center",
       cell: (w) => (
-        <span className="tabular-nums text-body-sm text-muted-foreground">
+        <span className="tabular-nums text-body-small text-muted-foreground">
           {fmtDate(w.createdAt)}
         </span>
       ),

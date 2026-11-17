@@ -419,7 +419,7 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
             void handleDeclare();
           }}
         >
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {t("pay.referenceNote", { orderNo })}
           </p>
         </DialogForm>

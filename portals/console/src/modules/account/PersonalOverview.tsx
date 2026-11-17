@@ -98,12 +98,10 @@ export function PersonalGrowth({
             <CardContent className="flex flex-col gap-sm">
               <div className="flex items-center gap-sm">
                 <Icon name={icon} size="sm" aria-hidden />
-                <span className="flex-1 text-label-md">
-                  {t(`${key}.title`)}
-                </span>
+                <span className="flex-1 text-label">{t(`${key}.title`)}</span>
                 <StatusBadge tone="neutral">{t("planned")}</StatusBadge>
               </div>
-              <p className="text-body-sm text-muted-foreground">
+              <p className="text-body-small text-muted-foreground">
                 {t(`${key}.description`)}
               </p>
             </CardContent>
@@ -111,17 +109,17 @@ export function PersonalGrowth({
         ))}
         <Card className="min-w-0">
           <CardContent className="flex flex-col gap-sm">
-            <span className="text-label-md">{t("badges.title")}</span>
+            <span className="text-label">{t("badges.title")}</span>
             {membershipState === "member" ? (
               <StatusBadge tone="brand" icon="medal">
                 {t("badges.member")}
               </StatusBadge>
             ) : (
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {t(`badges.${membershipState}`)}
               </span>
             )}
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {t("badges.description")}
             </p>
           </CardContent>

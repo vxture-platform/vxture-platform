@@ -30,7 +30,7 @@ export function AgentCapabilityTags({ tags }: { tags: readonly string[] }) {
                 <Icon name="sparkles" className="h-5 w-5" aria-hidden />
               </span>
               <span
-                className="font-mono text-label-sm text-muted-foreground/60"
+                className="font-mono text-label-small text-muted-foreground/60"
                 aria-hidden
               >
                 {String(index + 1).padStart(2, "0")}

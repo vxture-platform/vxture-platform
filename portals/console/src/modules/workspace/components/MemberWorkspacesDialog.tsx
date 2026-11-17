@@ -167,14 +167,14 @@ export function MemberWorkspacesDialog({
               >
                 <span className="flex min-w-0 flex-col gap-2xs">
                   <span className="flex items-center gap-sm">
-                    <span className="truncate text-label-md text-foreground">
+                    <span className="truncate text-label text-foreground">
                       {ws.name}
                     </span>
                     {ws.isDefault ? (
                       <StatusBadge tone="info">{t("defaultTag")}</StatusBadge>
                     ) : null}
                   </span>
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {lockedOut
                       ? t("defaultLockedHint")
                       : isIn

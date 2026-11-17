@@ -427,14 +427,16 @@ export default function MetricsPage() {
               width: "sm",
               cell: (r: LogSummary["items"][number]) =>
                 r.endpointCode ? (
-                  <span className="text-code-sm">{r.endpointCode}</span>
+                  <span className="text-code">{r.endpointCode}</span>
                 ) : r.endpointCode === null ? (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     未走入口
                   </span>
                 ) : (
                   /* 字段根本没回——这台 Atlas 没按入口分过组，不是"没走入口"。 */
-                  <span className="text-body-sm text-muted-foreground">—</span>
+                  <span className="text-body-small text-muted-foreground">
+                    —
+                  </span>
                 ),
             },
             {
@@ -857,7 +859,7 @@ export default function MetricsPage() {
           </Button>
         }
       >
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body-small text-muted-foreground">
           请求数、Token 用量与事实成本按租户 × 结算周期回传，完整视图见 Metering
           页。
         </p>

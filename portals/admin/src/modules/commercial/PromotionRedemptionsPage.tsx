@@ -202,7 +202,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
               {billStatusLabels[record.billStatus]}
             </Tag>
           }
-          <span className="text-body-sm text-muted-foreground">{`${record.billNo} · ${record.orderNo ?? "未关联订单"}`}</span>
+          <span className="text-body-small text-muted-foreground">{`${record.billNo} · ${record.orderNo ?? "未关联订单"}`}</span>
         </span>
       ),
     },
@@ -213,7 +213,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       cell: (record) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatCurrency(record.discountAmount, record.currency)}
-          <span className="text-body-sm text-muted-foreground">{`应付 ${formatCurrency(record.payableAmount, record.currency)} / 原价 ${formatCurrency(record.orderAmount, record.currency)}`}</span>
+          <span className="text-body-small text-muted-foreground">{`应付 ${formatCurrency(record.payableAmount, record.currency)} / 原价 ${formatCurrency(record.orderAmount, record.currency)}`}</span>
         </span>
       ),
     },

@@ -15,7 +15,7 @@ export function RetrievalScene() {
   const t = useTranslations("products.karda.sample");
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-3 rounded-lg border border-primary-border bg-primary-muted p-4 text-body-sm">
+      <div className="flex items-start gap-3 rounded-lg border border-primary-border bg-primary-muted p-4 text-body-small">
         <Icon
           name="search"
           className="mt-1 h-4 w-4 shrink-0 text-primary-text"
@@ -24,21 +24,21 @@ export function RetrievalScene() {
         {t("query")}
       </div>
       <Card className="gap-4 p-5">
-        <p className="text-label-sm text-muted-foreground">
+        <p className="text-label-small text-muted-foreground">
           {t("excerptLabel")}
         </p>
         <p className="flex items-start gap-3 font-semibold">
           <span className="font-mono text-primary-text">[1]</span>
           {t("sourceTitle")}
         </p>
-        <blockquote className="border-l-2 border-primary-border pl-4 text-body-sm leading-7 text-muted-foreground">
+        <blockquote className="border-l-2 border-primary-border pl-4 text-body-small leading-7 text-muted-foreground">
           {t("excerpt")}
         </blockquote>
-        <p className="border-t border-border pt-4 text-label-sm text-primary-text">
+        <p className="border-t border-border pt-4 text-label-small text-primary-text">
           {t("citation")}
         </p>
       </Card>
-      <p className="text-body-sm leading-6 text-muted-foreground">
+      <p className="text-body-small leading-6 text-muted-foreground">
         {t("retrievalNote")}
       </p>
     </div>
@@ -71,7 +71,7 @@ export function SharingScene() {
         {(t.raw("consumers") as string[]).map((consumer) => (
           <Card
             key={consumer}
-            className="items-center gap-3 p-4 text-center text-body-sm"
+            className="items-center gap-3 p-4 text-center text-body-small"
           >
             <Icon
               name="shield-check"
@@ -82,7 +82,7 @@ export function SharingScene() {
           </Card>
         ))}
       </div>
-      <p className="border-l-2 border-primary-border py-2 pl-4 text-body-sm leading-6 text-muted-foreground">
+      <p className="border-l-2 border-primary-border py-2 pl-4 text-body-small leading-6 text-muted-foreground">
         {t("accessNote")}
       </p>
     </div>

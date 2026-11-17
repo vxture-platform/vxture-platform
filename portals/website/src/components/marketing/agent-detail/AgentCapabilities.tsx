@@ -35,7 +35,7 @@ export function AgentCapabilities({
       className="scroll-mt-24 py-12 lg:py-16"
     >
       <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
-        <p className="text-label-sm font-semibold text-primary-text">
+        <p className="text-label-small font-semibold text-primary-text">
           {t("capabilitiesEyebrow")}
         </p>
         <h2
@@ -57,7 +57,7 @@ export function AgentCapabilities({
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-muted text-primary-text">
                   <Icon name="squares-four" className="h-4 w-4" />
                 </span>
-                <span className="font-mono text-label-sm text-muted-foreground/70">
+                <span className="font-mono text-label-small text-muted-foreground/70">
                   {String(index + 1).padStart(2, "0")}
                 </span>
               </div>

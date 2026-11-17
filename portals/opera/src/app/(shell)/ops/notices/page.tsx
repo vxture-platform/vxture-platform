@@ -500,7 +500,7 @@ export default function OperatorNoticesPage() {
   const pagination = (
     <span className="flex w-full flex-col gap-2xs">
       {truncated ? (
-        <span className="text-body-sm text-muted-foreground">
+        <span className="text-body-small text-muted-foreground">
           {t("truncated", { matched, shown: rows.length })}
         </span>
       ) : null}
@@ -711,7 +711,7 @@ export default function OperatorNoticesPage() {
                   /* 三态，不是两态：投给别的平面的通告在这一页上也列着，但它没有
                      「我读过没有」可言——画成「已读」会是个凭空的答案。 */
                   !r.onThisPlane ? (
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {t("readState.offPlane")}
                     </span>
                   ) : r.readAt === null ? (
@@ -719,7 +719,7 @@ export default function OperatorNoticesPage() {
                       {t("readState.unread")}
                     </StatusBadge>
                   ) : (
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {t("readState.read")}
                     </span>
                   ),
@@ -729,7 +729,7 @@ export default function OperatorNoticesPage() {
                 header: t("columns.planes"),
                 width: "sm",
                 cell: (r) => (
-                  <span className="text-body-sm">
+                  <span className="text-body-small">
                     {r.targetPlanes.length === 0
                       ? t("allPlanes")
                       : r.targetPlanes.map((p) => t(`planes.${p}`)).join(" · ")}
@@ -760,7 +760,7 @@ export default function OperatorNoticesPage() {
                 sortable: true,
                 width: "sm",
                 cell: (r) => (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {/* 不设失效时间就是长期有效,写「—」会被读成"没读到"。 */}
                     {r.expiresAt
                       ? formatDateTime(r.expiresAt, locale)
@@ -774,7 +774,7 @@ export default function OperatorNoticesPage() {
                 sortable: true,
                 width: "sm",
                 cell: (r) => (
-                  <span className="text-body-sm text-muted-foreground">
+                  <span className="text-body-small text-muted-foreground">
                     {/* system 来源没有人,写「系统」而不是「—」——后者会被当成读不到。 */}
                     {r.source === "system"
                       ? t("systemAuthor")
@@ -921,7 +921,7 @@ export default function OperatorNoticesPage() {
                   {PLANES.map((plane) => (
                     <label
                       key={plane}
-                      className="inline-flex items-center gap-2xs text-body-sm"
+                      className="inline-flex items-center gap-2xs text-body-small"
                     >
                       <Checkbox
                         checked={form.planes.has(plane)}

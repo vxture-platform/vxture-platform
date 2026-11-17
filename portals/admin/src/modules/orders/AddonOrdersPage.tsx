@@ -112,7 +112,7 @@ export function AddonOrdersPage() {
       header: "账单号",
       cell: (o) =>
         o.billNo ? (
-          <span className="font-mono text-body-sm">{o.billNo}</span>
+          <span className="font-mono text-body-small">{o.billNo}</span>
         ) : (
           "—"
         ),

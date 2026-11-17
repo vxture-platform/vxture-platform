@@ -247,7 +247,7 @@ export function RunosChangeTable() {
             id: "event",
             header: "事件",
             cell: (r: MgmtEventRecord) => (
-              <span className="font-mono text-code-sm">{r.action}</span>
+              <span className="font-mono text-code">{r.action}</span>
             ),
           },
           {
@@ -264,7 +264,7 @@ export function RunosChangeTable() {
             header: tShared("columns.actor"),
             width: "sm",
             cell: (r: MgmtEventRecord) => (
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {r.actorName ?? "未归属"}
               </span>
             ),

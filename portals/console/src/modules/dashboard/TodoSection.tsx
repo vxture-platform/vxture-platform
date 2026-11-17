@@ -71,11 +71,11 @@ export function TodoSection() {
                     {t("badge")}
                   </StatusBadge>
                   <Badge variant="outline">{tTodo(`kind.${todo.kind}`)}</Badge>
-                  <span className="min-w-0 truncate text-label-md font-semibold text-foreground">
+                  <span className="min-w-0 truncate text-label font-semibold text-foreground">
                     {todo.title}
                   </span>
                 </span>
-                <span className="text-body-sm text-muted-foreground">
+                <span className="text-body-small text-muted-foreground">
                   {todo.detail}
                 </span>
               </span>
@@ -85,7 +85,7 @@ export function TodoSection() {
             </li>
           ))}
           {more > 0 ? (
-            <li className="py-md text-body-sm text-muted-foreground">
+            <li className="py-md text-body-small text-muted-foreground">
               {t("more", { count: more })}
             </li>
           ) : null}
@@ -95,7 +95,7 @@ export function TodoSection() {
       {/* 部分来源读失败时说一句：待办是多路数据推出来的，少一路就可能少几条，
           静默少列比报错更坏——人会以为那件事不用处理了。 */}
       {derived.partialFailed ? (
-        <span className="text-body-sm text-warning-text">
+        <span className="text-body-small text-warning-text">
           {tTodo("loadFailed")}
         </span>
       ) : null}

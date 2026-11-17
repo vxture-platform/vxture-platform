@@ -174,11 +174,11 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
             />
           </Field>
           {error ? (
-            <p className="text-body-sm text-danger-foreground" role="alert">
+            <p className="text-body-small text-danger-foreground" role="alert">
               {error}
             </p>
           ) : null}
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             未绑定验证器？请先在 accounts 门户的安全设置里完成绑定，再回来重试。
             验证有效期 5 分钟，期间的同类操作不会重复询问。
           </p>

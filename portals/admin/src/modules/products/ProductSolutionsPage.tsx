@@ -530,7 +530,7 @@ export function ProductSolutionsPage() {
               </StatusBadge>
             </span>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {[
               solution.industry
                 ? industryLabel(solution.industry, labelLocale)
@@ -550,7 +550,7 @@ export function ProductSolutionsPage() {
         solution.products.length ? (
           <span className="inline-flex flex-col items-center gap-2xs">
             {<CapabilityTags products={solution.products} />}
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("columns.productsMeta", {
                 count: solution.products.length,
                 partner: solution.products.filter(
@@ -560,7 +560,7 @@ export function ProductSolutionsPage() {
             </span>
           </span>
         ) : (
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {t("columns.noProducts")}
           </span>
         ),
@@ -585,7 +585,7 @@ export function ProductSolutionsPage() {
                 ))}
               </span>
             }
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("columns.tiersMeta", {
                 count: solution.tiers.length,
                 total: TIERS.length,
@@ -594,7 +594,7 @@ export function ProductSolutionsPage() {
             </span>
           </span>
         ) : (
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {t("columns.noTiers")}
           </span>
         ),
@@ -606,7 +606,7 @@ export function ProductSolutionsPage() {
       cell: (solution) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatMoney(solution.monthlyRevenue)}
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {t("columns.operationMeta", {
               subscriptions: solution.subscriptionCount,
               tenants: solution.activeTenantCount,

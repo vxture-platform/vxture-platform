@@ -142,7 +142,7 @@ export function CursorPagination({
     <div
       className={`flex flex-wrap items-center justify-between gap-sm ${className ?? ""}`}
     >
-      <span className="flex flex-wrap items-center gap-sm text-body-sm text-muted-foreground tabular-nums">
+      <span className="flex flex-wrap items-center gap-sm text-body-small text-muted-foreground tabular-nums">
         <span>{t("total", { total })}</span>
         <span>{t("position", { page, pageCount })}</span>
       </span>

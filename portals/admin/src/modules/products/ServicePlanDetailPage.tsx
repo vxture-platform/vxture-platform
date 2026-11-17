@@ -170,12 +170,12 @@ function ServicePlanDetails({
         {plan.summary || plan.deliveryMode ? (
           <div className="grid min-w-0 gap-xs">
             {plan.summary ? (
-              <strong className="text-body-md leading-relaxed font-semibold text-foreground">
+              <strong className="text-body leading-relaxed font-semibold text-foreground">
                 {plan.summary}
               </strong>
             ) : null}
             {plan.deliveryMode ? (
-              <p className="m-0 text-body-sm leading-loose text-muted-foreground">
+              <p className="m-0 text-body-small leading-loose text-muted-foreground">
                 {plan.deliveryMode}
               </p>
             ) : null}
@@ -241,7 +241,7 @@ function ServicePlanDetails({
                   <span className="grid max-w-panel-sm gap-2xs text-right">
                     <span
                       title={item.quotaSummary}
-                      className={`truncate text-body-md font-semibold ${
+                      className={`truncate text-body font-semibold ${
                         item.included
                           ? "text-success-text"
                           : "text-destructive-text"
@@ -253,7 +253,7 @@ function ServicePlanDetails({
                           : t("entitlement.included")
                         : t("entitlement.excluded")}
                     </span>
-                    <span className="truncate text-body-sm text-muted-foreground">
+                    <span className="truncate text-body-small text-muted-foreground">
                       {item.included
                         ? item.note || t("entitlement.noFeatures")
                         : t("entitlement.excludedNote")}
@@ -400,7 +400,7 @@ export function ServicePlanDetailPage({
           <ServicePlanDetails plan={plan} />
         </>
       ) : (
-        <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
+        <section className="flex min-h-0 items-center justify-end gap-sm text-body-small font-normal text-muted-foreground">
           <span>{tShared("common.loading")}</span>
         </section>
       )}

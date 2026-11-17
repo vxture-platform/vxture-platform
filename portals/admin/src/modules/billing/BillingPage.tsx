@@ -375,7 +375,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
               {bill.tierName ?? "未关联"}
             </Badge>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {bill.servicePlanName ?? bill.orderNo ?? "未关联订阅"}
           </span>
         </span>
@@ -388,7 +388,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       cell: (bill) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatCurrency(bill.payableAmount, bill.currency)}
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {bill.discountAmount > 0
               ? `原价 ${formatCurrency(bill.totalAmount, bill.currency)} · 减免 ${formatCurrency(bill.discountAmount, bill.currency)}`
               : `原价 ${formatCurrency(bill.totalAmount, bill.currency)}`}
@@ -420,7 +420,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
               "-"
             )}
             {bill.operationRemark ? (
-              <span className="text-body-sm text-muted-foreground">
+              <span className="text-body-small text-muted-foreground">
                 {bill.operationRemark}
               </span>
             ) : null}
@@ -442,7 +442,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
               {billStatusLabels[bill.billStatus]}
             </StatusBadge>
           }
-          <span className="text-body-sm text-muted-foreground">{`已收 ${formatCurrency(bill.paidAmount, bill.currency)}`}</span>
+          <span className="text-body-small text-muted-foreground">{`已收 ${formatCurrency(bill.paidAmount, bill.currency)}`}</span>
         </span>
       ),
     },
@@ -457,7 +457,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
               {t(`status.invoice.${bill.invoiceStatus}`)}
             </StatusBadge>
           }
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {bill.invoiceNo ??
               `已登记 ${formatCurrency(bill.invoicedAmount, bill.currency)}`}
           </span>
@@ -744,7 +744,7 @@ export function BillingPage() {
               ]}
             />
             {operationFeedback ? (
-              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
+              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-small text-success-text">
                 {operationFeedback}
               </div>
             ) : null}

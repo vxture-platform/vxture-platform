@@ -240,7 +240,7 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
                 {riskLabel(riskLevel)}
               </StatusBadge>
             }
-            <span className="text-body-sm text-muted-foreground">{`待处理工单 ${formatNumber(tenant.ticketOpenCount)}`}</span>
+            <span className="text-body-small text-muted-foreground">{`待处理工单 ${formatNumber(tenant.ticketOpenCount)}`}</span>
           </span>
         );
       },

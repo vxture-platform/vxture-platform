@@ -44,9 +44,9 @@ export function StackCell({
 }) {
   return (
     <span className="flex flex-col items-center gap-2xs">
-      <span className="text-body-sm">{main}</span>
+      <span className="text-body-small">{main}</span>
       {sub ? (
-        <span className="text-body-sm text-muted-foreground">{sub}</span>
+        <span className="text-body-small text-muted-foreground">{sub}</span>
       ) : null}
     </span>
   );
@@ -84,19 +84,19 @@ export function ConfigPopover({
         align="start"
         className="flex w-panel-md flex-col gap-md"
       >
-        <span className="text-label-md">{title}</span>
+        <span className="text-label">{title}</span>
         <dl className="flex flex-col gap-xs">
           {rows.map((row) => (
             <div key={row.label} className="flex items-baseline gap-md">
-              <dt className="w-media-xl shrink-0 text-label-sm text-muted-foreground">
+              <dt className="w-media-xl shrink-0 text-label-small text-muted-foreground">
                 {row.label}
               </dt>
               <dd
                 title={row.value}
                 className={
                   row.mono
-                    ? "min-w-0 flex-1 truncate font-mono text-code-sm text-foreground"
-                    : "min-w-0 flex-1 truncate text-body-sm text-foreground"
+                    ? "min-w-0 flex-1 truncate font-mono text-code text-foreground"
+                    : "min-w-0 flex-1 truncate text-body-small text-foreground"
                 }
               >
                 {row.value}
@@ -132,6 +132,6 @@ export function DateCell({
   readonly fallback?: string;
 }) {
   const day = formatDay(value, locale, "");
-  if (day === "") return <span className="text-body-sm">{fallback}</span>;
+  if (day === "") return <span className="text-body-small">{fallback}</span>;
   return <StackCell main={day} sub={formatClock(value, locale, "")} />;
 }

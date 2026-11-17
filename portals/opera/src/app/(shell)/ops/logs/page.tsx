@@ -596,7 +596,7 @@ export default function LogsPage() {
                   >
                     <span>{d.primary}</span>
                     {d.secondary ? (
-                      <span className="text-body-sm text-muted-foreground">
+                      <span className="text-body-small text-muted-foreground">
                         {d.secondary}
                       </span>
                     ) : null}
@@ -620,7 +620,7 @@ export default function LogsPage() {
                   <Button
                     variant="link"
                     size="sm"
-                    className="font-mono text-code-sm"
+                    className="font-mono text-code"
                     title="按这个任务串联上下两张表"
                     onClick={() => setTaskId(r.taskId ?? "")}
                   >

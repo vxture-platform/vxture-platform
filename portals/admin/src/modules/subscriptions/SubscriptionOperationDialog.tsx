@@ -228,7 +228,7 @@ export function SubscriptionOperationDialog({
         );
       }}
     >
-      <p className="m-0 text-body-sm text-muted-foreground">
+      <p className="m-0 text-body-small text-muted-foreground">
         {subscriptionActionDescription(action)}
       </p>
       {action === "suspend" ? (
@@ -250,7 +250,7 @@ export function SubscriptionOperationDialog({
               </option>
             ))}
           </NativeSelect>
-          <p className="m-0 text-body-sm text-muted-foreground">
+          <p className="m-0 text-body-small text-muted-foreground">
             {suspendReasonHint(suspendReason, tSuspension)}
           </p>
           <Label htmlFor="vx-subscription-expected-resume">
@@ -262,7 +262,7 @@ export function SubscriptionOperationDialog({
             value={expectedResumeAt}
             onChange={(event) => setExpectedResumeAt(event.target.value)}
           />
-          <p className="m-0 text-body-sm text-muted-foreground">
+          <p className="m-0 text-body-small text-muted-foreground">
             {tSuspension("expectedResumeHint")}
           </p>
         </>
@@ -277,7 +277,7 @@ export function SubscriptionOperationDialog({
         autoFocus
       />
       {error ? (
-        <p className="m-0 text-body-sm text-destructive-text">{error}</p>
+        <p className="m-0 text-body-small text-destructive-text">{error}</p>
       ) : null}
     </DialogForm>
   );

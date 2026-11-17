@@ -557,7 +557,7 @@ function CapabilityMeteringContent() {
                 pager.resetPage();
               }}
             >
-              <span className="font-mono text-code-sm">
+              <span className="font-mono text-code">
                 能力：{capabilityFilter}
               </span>
               <Icon name="x" size="sm" aria-hidden="true" />
@@ -673,7 +673,7 @@ function CapabilityMeteringContent() {
                   {/* 成功率由放行数而不是调用数算：被裁决挡掉的那些从来没跑过，
                       算进分母会把一次严格的策略读成一次故障。 */}
                   {r.allowedCalls > 0 ? (
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {Math.round((r.successCalls / r.allowedCalls) * 100)}%
                     </span>
                   ) : null}
@@ -687,7 +687,7 @@ function CapabilityMeteringContent() {
               align: "numeric",
               width: "sm",
               cell: (r: UsageSummaryRow) => (
-                <span className="font-mono text-code-sm">{r.costAmount}</span>
+                <span className="font-mono text-code">{r.costAmount}</span>
               ),
             },
           ]}

@@ -502,7 +502,7 @@ function WorkPortalContent({
                         </div>
                       ) : (
                         <div className="work-empty">
-                          <p className="text-body-md text-muted-foreground">
+                          <p className="text-body text-muted-foreground">
                             {activity.apps.length === 0
                               ? t("尚未订阅应用")
                               : activity.view === "recent"
@@ -511,7 +511,7 @@ function WorkPortalContent({
                           </p>
                           <Link
                             href="/apps"
-                            className="text-body-sm text-primary"
+                            className="text-body-small text-primary"
                           >
                             {t("浏览应用中心")}
                           </Link>
@@ -697,7 +697,7 @@ function WorkPortalContent({
       >
         {overview ? (
           <div className="work-detail-body">
-            <p className="text-body-md text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {overview.description || t("产品介绍暂未提供")}
             </p>
             <dl className="work-detail-facts">
@@ -725,10 +725,10 @@ function WorkPortalContent({
           </div>
         ) : (
           <div className="flex flex-col gap-lg">
-            <p className="text-body-md text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t("选择应用卡片查看产品概要，点击“进入”直接开始工作。")}
             </p>
-            <p className="text-body-md text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t(
                 "在顶部单位面板切换组织或工作空间，账号与账务信息可在管理控制台查看。",
               )}

@@ -284,7 +284,7 @@ function useProductColumns(
           {/* 副题原来还并了一个 `健康/关注`，而 healthStatus 是由 status 派生的
               （active→normal，其余→warning）——同一件事说两遍。留可见性：那是
               另一根真轴，运营改得动。 */}
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {product.visibility === "public" ? "客户端可见" : "仅运营端"}
           </span>
         </span>
@@ -301,7 +301,7 @@ function useProductColumns(
               {productAccessLabel(product.integration.status)}
             </StatusBadge>
           }
-          <span className="text-body-sm text-muted-foreground">{`${formatNumber(product.modelPolicyCount)} 模型授权`}</span>
+          <span className="text-body-small text-muted-foreground">{`${formatNumber(product.modelPolicyCount)} 模型授权`}</span>
         </span>
       ),
     },

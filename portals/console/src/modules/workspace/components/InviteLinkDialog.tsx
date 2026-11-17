@@ -91,7 +91,7 @@ export function InviteLinkDialog({
           onFocus={(event) => event.currentTarget.select()}
         />
       </Field>
-      <p className="text-body-sm text-muted-foreground">
+      <p className="text-body-small text-muted-foreground">
         {t("expires", {
           date: fmtDateTime(result.expiresAt),
         })}

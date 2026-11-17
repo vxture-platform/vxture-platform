@@ -243,7 +243,7 @@ export function PlanPublishingListPage() {
       header: t("list.sellingTiers"),
       cell: (row) =>
         row.liveTiers.length === 0 && row.draftTiers.length === 0 ? (
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             {t("list.noTier")}
           </span>
         ) : (

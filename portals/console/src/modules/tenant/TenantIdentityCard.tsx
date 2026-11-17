@@ -254,7 +254,7 @@ export function TenantIdentityCard({
                 >
                   <Icon name="cube" size="sm" fallback="placeholder" />
                 </span>
-                <span className="text-label-md text-foreground">
+                <span className="text-label text-foreground">
                   {ws.name ?? t("workspaces.unnamed")}
                 </span>
                 {ws.isDefault ? (
@@ -265,7 +265,7 @@ export function TenantIdentityCard({
                 <PrincipalNo
                   no={ws.workspaceNo}
                   kind="workspace"
-                  className="text-body-sm text-muted-foreground"
+                  className="text-body-small text-muted-foreground"
                 />
                 {/* 「管理 →」(owner 2026-09-10):**展开后、与工作空间同行、居右**。
                     起初放在折叠按钮旁边——那是收起状态下的一行控件,与它要管的东西
@@ -289,7 +289,7 @@ export function TenantIdentityCard({
               </li>
             ))}
             {workspaces.length === 0 ? (
-              <li className="py-md text-body-sm text-muted-foreground">
+              <li className="py-md text-body-small text-muted-foreground">
                 {loading ? t("common.loading") : t("workspaces.empty")}
               </li>
             ) : null}

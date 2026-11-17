@@ -211,7 +211,7 @@ export function OfflineInvoiceDialog({
         });
       }}
     >
-      <p className="m-0 text-body-sm text-muted-foreground">
+      <p className="m-0 text-body-small text-muted-foreground">
         仅记录线下已处理的发票结果，不调用在线开票接口。登记后会更新账单的开票进度和发票记录。
       </p>
       <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
@@ -348,7 +348,7 @@ export function OfflineInvoiceDialog({
         maxLength={512}
       />
       {error ? (
-        <p className="m-0 text-body-sm text-destructive-text">{error}</p>
+        <p className="m-0 text-body-small text-destructive-text">{error}</p>
       ) : null}
     </DialogForm>
   );

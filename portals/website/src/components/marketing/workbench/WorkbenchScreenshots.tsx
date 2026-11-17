@@ -32,13 +32,13 @@ export function WorkbenchScreenshots() {
             <TabsTrigger
               key={id}
               value={id}
-              className="h-auto min-w-0 whitespace-normal px-3 py-2 text-body-sm sm:flex-none sm:whitespace-nowrap sm:px-5"
+              className="h-auto min-w-0 whitespace-normal px-3 py-2 text-body-small sm:flex-none sm:whitespace-nowrap sm:px-5"
             >
               {t(`${id}.label`)}
             </TabsTrigger>
           ))}
         </TabsList>
-        <span className="hidden text-label-sm text-muted-foreground sm:block">
+        <span className="hidden text-label-small text-muted-foreground sm:block">
           {t("badge")}
         </span>
       </div>
@@ -62,12 +62,12 @@ export function WorkbenchScreenshots() {
                 priority={id === "workspace"}
                 className="h-auto w-full"
               />
-              <span className="absolute bottom-3 right-3 flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-label-sm text-foreground shadow-sm sm:bottom-4 sm:right-4">
+              <span className="absolute bottom-3 right-3 flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-label-small text-foreground shadow-sm sm:bottom-4 sm:right-4">
                 <Icon name="external-link" className="h-4 w-4" aria-hidden />
                 {t("view")}
               </span>
             </a>
-            <figcaption className="mt-3 text-body-sm leading-6 text-muted-foreground">
+            <figcaption className="mt-3 text-body-small leading-6 text-muted-foreground">
               {t("note")}
             </figcaption>
           </figure>

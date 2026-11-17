@@ -86,10 +86,10 @@ export function ResourceSection({
             <Card key={tile.code} surface="base" className="py-md">
               <CardContent className="flex items-center gap-md">
                 <span className="flex min-w-0 flex-1 flex-col gap-2xs">
-                  <span className="truncate text-label-md text-foreground">
+                  <span className="truncate text-label text-foreground">
                     {tile.name}
                   </span>
-                  <span className="truncate text-body-sm text-muted-foreground">
+                  <span className="truncate text-body-small text-muted-foreground">
                     {tile.planName}
                   </span>
                 </span>
@@ -104,7 +104,7 @@ export function ResourceSection({
         </div>
       )}
       {more > 0 ? (
-        <span className="text-body-sm text-muted-foreground">
+        <span className="text-body-small text-muted-foreground">
           {t("moreProducts", { count: more })}
         </span>
       ) : null}
@@ -116,7 +116,7 @@ export function ResourceSection({
         <div className="flex flex-col gap-sm">
           {quotaRows.map((r) => (
             <div key={r.label} className="flex flex-col gap-2xs">
-              <div className="flex items-baseline justify-between gap-sm text-body-sm">
+              <div className="flex items-baseline justify-between gap-sm text-body-small">
                 <span className="text-foreground">{r.label}</span>
                 <span
                   className={

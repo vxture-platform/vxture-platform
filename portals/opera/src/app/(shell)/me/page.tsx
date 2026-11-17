@@ -65,7 +65,7 @@ export default function PersonalInfoPage() {
 
           <Section title="账户中心" icon="external-link" level={2}>
             <div className="flex flex-col gap-sm">
-              <p className="text-body-sm text-muted-foreground">
+              <p className="text-body-small text-muted-foreground">
                 更改邮箱、管理通行密钥等账户与安全设置，统一在账户中心完成（新标签打开）。
               </p>
               <div>

@@ -215,7 +215,7 @@ function PackCard({
             与智能体卡同构：名字在左，来源标签在右上角。 */}
         {/* 单行标题 + 徽章同一行盒,用 items-center——与智能体卡同一条对齐规则。 */}
         <div className="flex items-center gap-md">
-          <span className="min-w-0 flex-1 truncate text-label-md text-foreground">
+          <span className="min-w-0 flex-1 truncate text-label text-foreground">
             {label}
           </span>
           <StatusBadge tone={look.tone}>
@@ -225,7 +225,7 @@ function PackCard({
 
         {/* ── 权益区：给了多少 ──────────────────────────────────────────
             这是「权益结果」——订阅管理这一页要答的就是它。不出现价格。 */}
-        <div className="text-title-md tabular-nums text-foreground">
+        <div className="text-heading-2 tabular-nums text-foreground">
           {formatAmount(pool.metric, pool.limit)}
         </div>
 
@@ -235,7 +235,7 @@ function PackCard({
             `bg-primary`（品牌色，当前就是蓝），不需要为「蓝色进度线」再造一个档；
             也不在这里记具体色值——DS 改了色，抄在注释里的那个数就成了错的记载。 */}
         <div className="flex flex-col gap-2xs">
-          <div className="flex items-baseline justify-between gap-sm text-body-sm">
+          <div className="flex items-baseline justify-between gap-sm text-body-small">
             <span className="text-muted-foreground tabular-nums">
               {perpetual
                 ? t("perpetual")
@@ -266,7 +266,7 @@ function PackCard({
 
           {/* 周期性重置的池：额度每周期回满，与「到期作废」是两件事，要说清楚。 */}
           {pool.resetPeriod !== "none" ? (
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {t("resets", { period: t(`period.${pool.resetPeriod}`) })}
             </span>
           ) : null}
@@ -274,7 +274,7 @@ function PackCard({
           {/* 平台发放的来由。不显示的话，租户只会看到总额度比自己买的多，
               却不知道为什么（owner 2026-09-09 裁定要显示）。 */}
           {pool.source === "manual_override" && pool.grantReason ? (
-            <span className="flex items-start gap-2xs text-body-sm text-muted-foreground">
+            <span className="flex items-start gap-2xs text-body-small text-muted-foreground">
               <Icon name="info" size="xs" fallback="placeholder" />
               <span>{pool.grantReason}</span>
             </span>

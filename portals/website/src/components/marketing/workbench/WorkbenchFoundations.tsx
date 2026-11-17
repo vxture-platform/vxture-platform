@@ -38,7 +38,7 @@ export function WorkbenchFoundations() {
         />
         <div className="mt-12 grid gap-8 border-t border-border pt-8 lg:grid-cols-12 lg:gap-16 lg:pt-10">
           <div className="lg:col-span-4">
-            <span className="font-mono text-label-sm text-primary-text">
+            <span className="font-mono text-label-small text-primary-text">
               01 / {t("connection.label")}
             </span>
             <h3 className="font-display mt-4 text-2xl font-semibold leading-snug text-balance">
@@ -49,7 +49,7 @@ export function WorkbenchFoundations() {
             </p>
             <Link
               href="/appcenter"
-              className="mt-5 inline-flex items-center gap-2 rounded-md text-body-md font-medium text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-5 inline-flex items-center gap-2 rounded-md text-body font-medium text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {t("connection.action")}
               <Icon name="arrow-right" className="h-4 w-4" aria-hidden />
@@ -68,18 +68,18 @@ export function WorkbenchFoundations() {
                       className="h-6 w-6 text-primary-text"
                       aria-hidden
                     />
-                    <span className="font-mono text-label-sm text-muted-foreground">
+                    <span className="font-mono text-label-small text-muted-foreground">
                       0{i + 1}
                     </span>
                   </div>
                   <p className="mt-6 text-base font-semibold">{node.title}</p>
-                  <p className="mt-2 text-body-md leading-6 text-muted-foreground">
+                  <p className="mt-2 text-body leading-6 text-muted-foreground">
                     {node.detail}
                   </p>
                 </div>
               ))}
             </div>
-            <p className="mt-5 border-t border-border pt-4 text-body-sm leading-6 text-muted-foreground">
+            <p className="mt-5 border-t border-border pt-4 text-body-small leading-6 text-muted-foreground">
               {t("connection.note")}
             </p>
           </div>

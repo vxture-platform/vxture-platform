@@ -218,7 +218,7 @@ export function CreditPricingSection() {
       cell: (r) => (
         <span className="flex flex-col gap-2xs">
           <span>{r.model.modelName}</span>
-          <span className="font-mono text-code-sm text-muted-foreground">
+          <span className="font-mono text-code text-muted-foreground">
             {r.model.modelCode}
           </span>
         </span>
@@ -229,7 +229,7 @@ export function CreditPricingSection() {
       header: "供应商成本（入/出 ¥/1M）",
       cell: (r) =>
         r.priceRule ? (
-          <span className="text-body-sm">
+          <span className="text-body-small">
             {r.priceRule.inputUnitPrice} / {r.priceRule.outputUnitPrice}
           </span>
         ) : (
@@ -241,12 +241,14 @@ export function CreditPricingSection() {
       header: "现行费率（入/出 cr/1K）",
       cell: (r) =>
         r.current ? (
-          <span className="text-body-sm">
+          <span className="text-body-small">
             {creditPer1k(r.current.input_micro_per_1k)} /{" "}
             {creditPer1k(r.current.output_micro_per_1k)}
           </span>
         ) : (
-          <span className="text-body-sm text-muted-foreground">默认兜底</span>
+          <span className="text-body-small text-muted-foreground">
+            默认兜底
+          </span>
         ),
     },
     {
@@ -254,12 +256,12 @@ export function CreditPricingSection() {
       header: "推导（入/出 cr/1K）",
       cell: (r) =>
         r.derived ? (
-          <span className="text-body-sm text-info-foreground">
+          <span className="text-body-small text-info-foreground">
             {creditPer1k(r.derived.input_micro_per_1k)} /{" "}
             {creditPer1k(r.derived.output_micro_per_1k)}
           </span>
         ) : (
-          <span className="text-body-sm text-muted-foreground">—</span>
+          <span className="text-body-small text-muted-foreground">—</span>
         ),
     },
     {
@@ -297,7 +299,7 @@ export function CreditPricingSection() {
       {/* 配置摘要 + 推导 */}
       <div className="flex flex-wrap items-center justify-between gap-sm rounded-md border border-border p-md">
         <div className="flex flex-col gap-2xs">
-          <span className="text-body-sm text-muted-foreground">
+          <span className="text-body-small text-muted-foreground">
             积分换算基准（ADR-014：按目标毛利逐维反推，各模型毛利趋同）
           </span>
           <span className="text-body">
@@ -349,7 +351,7 @@ export function CreditPricingSection() {
       />
 
       {config ? (
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body-small text-muted-foreground">
           没采集到供应商价目的模型推不出费率，调用时回落到默认兜底档（2K tokens
           = 1 credit）；要它们也按目标毛利计费，先在上方「供应商价目」里补价。
         </p>
