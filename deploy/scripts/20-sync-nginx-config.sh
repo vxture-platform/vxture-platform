@@ -16,6 +16,7 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # 统一变量入口：compose 里的 ${VX_*} 在调用方进程环境求值，tailnet 地址既不能
 # 空默认（会绑定全网卡）也不能缺值即炸（排障脚本正是最需要能跑的时候）。
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
+. "$COMPOSE_DIR/scripts/lib/env-values.sh"
 . "$COMPOSE_DIR/scripts/lib/site-takeover.sh"
 . "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
@@ -60,7 +61,7 @@ customer_portal_env="${CUSTOMER_PORTAL_ENV_FILE:-$COMPOSE_ENV_RUNTIME_DIR/.env.c
 customer_portal_template="$SRC/templates/customer-portal.vhost.template"
 customer_portal_hosts=()
 if [ -f "$customer_portal_env" ]; then
-  customer_portal_host_list="$(sed -n 's/^CUSTOMER_PORTAL_HOSTS=//p' "$customer_portal_env" | tail -n 1)"
+  customer_portal_host_list="$(env_value "$customer_portal_env" CUSTOMER_PORTAL_HOSTS)"
   if [ -n "$customer_portal_host_list" ]; then
     customer_portal_label='(a|[a-z][a-z0-9]{2,7})'
     customer_portal_host="${customer_portal_label}\.ruyin\.work"
