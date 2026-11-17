@@ -36,6 +36,16 @@ export interface OidcLogoutWork {
   attempts: number;
 }
 
+/** Aggregate monitoring data; never contains session or subject identifiers. */
+export interface OidcLogoutBacklog {
+  pending: number;
+  unknownAge: number;
+  oldestAgeSeconds: number;
+  sampled: number;
+  corruptSamples: number;
+  clients: Record<string, { pending: number; maxAttempts: number }>;
+}
+
 /** Encrypted enrollment staged separately from the active workforce factor. */
 export interface OperatorTotpPending {
   secret: string;
@@ -1652,18 +1662,20 @@ return 0`,
            clientIds=sub and redis.call('SMEMBERS', KEYS[3]) or {}, cleanupComplete=false, attempts=0}
          raw = cjson.encode(work)
          redis.call('SET', KEYS[4], raw)
+         redis.call('ZADD', KEYS[7], 'NX', redis.call('TIME')[1], ARGV[1])
        end
        redis.call('ZADD', KEYS[5], 'NX', redis.call('TIME')[1], ARGV[1])
        redis.call('DEL', KEYS[1], KEYS[2], KEYS[3])
        redis.call('ZREM', KEYS[6], ARGV[1])
        return raw`,
-      6,
+      7,
       this.sessionKey(sid),
       this.sessionActiveOrgKey(sid),
       this.sessionClientsKey(sid),
       `${this.prefix}oidc:logout:work:${sid}`,
       `${this.prefix}oidc:logout:pending`,
       this.operatorSessionIndexKey(),
+      `${this.prefix}oidc:logout:created`,
       sid,
     );
     return this.parseOidcLogoutWork(raw);
@@ -1701,16 +1713,18 @@ return 0`,
        if ARGV[4] == '1' then
          redis.call('DEL', KEYS[1])
          redis.call('ZREM', KEYS[3], ARGV[1])
+         redis.call('ZREM', KEYS[4], ARGV[1])
        else
          redis.call('SET', KEYS[1], ARGV[3])
          redis.call('ZADD', KEYS[3], tonumber(redis.call('TIME')[1])+tonumber(ARGV[5]), ARGV[1])
        end
        redis.call('DEL', KEYS[2])
        return 1`,
-          3,
+          4,
           `${this.prefix}oidc:logout:work:${work.sid}`,
           `${this.prefix}oidc:logout:lease:${work.sid}`,
           `${this.prefix}oidc:logout:pending`,
+          `${this.prefix}oidc:logout:created`,
           work.sid,
           lease,
           JSON.stringify(work),
@@ -1734,6 +1748,49 @@ return 0`,
       0,
       20,
     );
+  }
+
+  /**
+   * Read exact queue depth and known age with a bounded recipient sample.
+   * @returns An atomic snapshot with explicit age gaps for pre-upgrade work.
+   * @throws When Redis is unavailable or the stored snapshot is malformed.
+   */
+  async oidcLogoutBacklog(): Promise<OidcLogoutBacklog> {
+    const raw: unknown = await this.requireReadyClient().eval(
+      `local now = tonumber(redis.call('TIME')[1])
+       local pending = redis.call('ZCARD', KEYS[1])
+       local known = redis.call('ZCARD', KEYS[2])
+       local oldest = redis.call('ZRANGE', KEYS[2], 0, 0, 'WITHSCORES')
+       local out = {pending=pending, unknownAge=math.max(0,pending-known),
+         oldestAgeSeconds=oldest[2] and math.max(0,now-tonumber(oldest[2])) or 0,
+         sampled=0, corruptSamples=0, clients={}}
+       for _,sid in ipairs(redis.call('ZRANGE', KEYS[1], 0, 19)) do
+         out.sampled = out.sampled + 1
+         local value = redis.call('GET', ARGV[1]..sid)
+         local ok,work = pcall(cjson.decode, value or '')
+         if not ok or type(work) ~= 'table' or type(work.clientIds) ~= 'table'
+           or type(work.attempts) ~= 'number' or work.attempts < 0 then
+           out.corruptSamples = out.corruptSamples + 1
+         else
+           for i,client in ipairs(work.clientIds) do
+             if i > 20 then break end
+             if type(client) == 'string' then
+               local item = out.clients[client] or {pending=0,maxAttempts=0}
+               item.pending = item.pending + 1
+               item.maxAttempts = math.max(item.maxAttempts,work.attempts)
+               out.clients[client] = item
+             end
+           end
+         end
+       end
+       return cjson.encode(out)`,
+      2,
+      `${this.prefix}oidc:logout:pending`,
+      `${this.prefix}oidc:logout:created`,
+      `${this.prefix}oidc:logout:work:`,
+    );
+    if (typeof raw !== "string") throw new Error("Invalid logout backlog");
+    return JSON.parse(raw) as OidcLogoutBacklog;
   }
 
   private parseOidcLogoutWork(raw: unknown): OidcLogoutWork {

@@ -607,6 +607,37 @@ export class OidcService {
   // Resumable logout cleanup and delivery
   // ============================================================================
 
+  private logoutBacklogAlerted = false;
+  private logoutBacklogLastAlertAt = 0;
+
+  /**
+   * Emit aggregate queue telemetry and rate-limited sustained-failure alerts.
+   * @returns Resolves after one bounded Redis snapshot, independently of retries.
+   * @throws When monitoring storage is unavailable; the job isolates this failure.
+   */
+  async reportLogoutBacklog(): Promise<void> {
+    const snapshot = await this.redis.oidcLogoutBacklog();
+    const alert =
+      snapshot.pending >= 100 ||
+      snapshot.oldestAgeSeconds >= 60 ||
+      snapshot.unknownAge > 0 ||
+      snapshot.corruptSamples > 0;
+    this.logger.log({ event: "oidc_logout_backlog", ...snapshot });
+    if (alert) {
+      const now = Date.now();
+      if (
+        !this.logoutBacklogAlerted ||
+        now - this.logoutBacklogLastAlertAt >= 300_000
+      ) {
+        this.logger.error({ event: "oidc_logout_backlog_alert", ...snapshot });
+        this.logoutBacklogLastAlertAt = now;
+      }
+    } else if (this.logoutBacklogAlerted) {
+      this.logger.log({ event: "oidc_logout_backlog_recovered", ...snapshot });
+    }
+    this.logoutBacklogAlerted = alert;
+  }
+
   /** Retry a bounded due batch; each record remains until cleanup and delivery succeed. */
   async retryPendingLogouts(): Promise<void> {
     await Promise.all(

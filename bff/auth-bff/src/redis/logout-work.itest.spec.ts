@@ -153,4 +153,69 @@ describe.runIf(enabled)("persisted logout work (live Redis)", () => {
     );
     expect(claims.filter(Boolean)).toHaveLength(1);
   });
+
+  it("retains original queue age across retries and removes the age index on completion", async () => {
+    const sid = await seed();
+    await service.beginOidcLogout(sid);
+    const now = Number((await raw.time())[0]);
+    await raw.zadd(`${prefix}oidc:logout:created`, now - 120, sid);
+    const work = (await service.claimOidcLogout(sid, "metrics-worker"))!;
+    work.attempts = 4;
+    await service.saveOidcLogout(work, "metrics-worker");
+    const summary = await service.oidcLogoutBacklog();
+    expect(summary.oldestAgeSeconds).toBeGreaterThanOrEqual(120);
+    expect(summary.clients.yucer?.maxAttempts).toBe(4);
+    expect(await raw.zscore(`${prefix}oidc:logout:created`, sid)).toBe(
+      String(now - 120),
+    );
+    const done = (await service.claimOidcLogout(sid, "done-worker"))!;
+    done.cleanupComplete = true;
+    done.clientIds = [];
+    await service.saveOidcLogout(done, "done-worker");
+    expect(await raw.zscore(`${prefix}oidc:logout:created`, sid)).toBeNull();
+  });
+
+  it("reports bounded samples and legacy age gaps without leaking session metadata", async () => {
+    const isolatedPrefix = `vxtest-monitor-${randomUUID()}:`;
+    const isolated = new RedisService({
+      redis: { REDIS_URL: url, REDIS_KEY_PREFIX: isolatedPrefix },
+    } as ConstructorParameters<typeof RedisService>[0]);
+    await isolated.onModuleInit();
+    try {
+      expect(await isolated.oidcLogoutBacklog()).toMatchObject({
+        pending: 0,
+        unknownAge: 0,
+        sampled: 0,
+      });
+      const now = Number((await raw.time())[0]);
+      for (let i = 0; i < 25; i++) {
+        const sid = `synthetic-${i}`;
+        await raw.zadd(`${isolatedPrefix}oidc:logout:pending`, now + i, sid);
+        await raw.set(
+          `${isolatedPrefix}oidc:logout:work:${sid}`,
+          i === 0
+            ? "malformed"
+            : JSON.stringify({
+                sid,
+                sub: "usr_synthetic",
+                clientIds: ["cospace"],
+                attempts: 3,
+              }),
+        );
+      }
+      const summary = await isolated.oidcLogoutBacklog();
+      expect(summary).toMatchObject({
+        pending: 25,
+        unknownAge: 25,
+        sampled: 20,
+        corruptSamples: 1,
+        clients: { cospace: { pending: 19, maxAttempts: 3 } },
+      });
+      expect(JSON.stringify(summary)).not.toMatch(/usr_synthetic|synthetic-/);
+    } finally {
+      const keys = await raw.keys(`${isolatedPrefix}*`);
+      if (keys.length) await raw.del(...keys);
+      await isolated.onModuleDestroy();
+    }
+  });
 });

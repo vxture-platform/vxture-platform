@@ -65,6 +65,78 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("logout backlog telemetry", () => {
+  it("alerts on sustained backlog, throttles repeats and records recovery without identity data", async () => {
+    const snapshot = {
+      pending: 2,
+      unknownAge: 0,
+      oldestAgeSeconds: 60,
+      sampled: 2,
+      corruptSamples: 0,
+      clients: { yucer: { pending: 2, maxAttempts: 6 } },
+    };
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const oidcLogoutBacklog = vi.fn(async () => snapshot);
+    const service: OidcService = Object.assign(
+      Object.create(OidcService.prototype),
+      {
+        redis: { oidcLogoutBacklog },
+        logger,
+      },
+    );
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+    await service.reportLogoutBacklog();
+    expect(logger.error).toHaveBeenCalledExactlyOnceWith({
+      event: "oidc_logout_backlog_alert",
+      ...snapshot,
+    });
+    await service.reportLogoutBacklog();
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    clock.mockReturnValue(301_000);
+    await service.reportLogoutBacklog();
+    expect(logger.error).toHaveBeenCalledTimes(2);
+    Object.assign(snapshot, {
+      pending: 0,
+      oldestAgeSeconds: 0,
+      sampled: 0,
+      clients: {},
+    });
+    await service.reportLogoutBacklog();
+    expect(logger.log).toHaveBeenLastCalledWith({
+      event: "oidc_logout_backlog_recovered",
+      ...snapshot,
+    });
+    expect(JSON.stringify(logger.log.mock.calls)).not.toMatch(
+      /usr_|sid|token/i,
+    );
+  });
+
+  it.each([{ pending: 100 }, { unknownAge: 1 }, { corruptSamples: 1 }])(
+    "alerts on excessive depth, unknown legacy age or corrupt work: %j",
+    async (overrides) => {
+      const logger = { log: vi.fn(), error: vi.fn() };
+      const snapshot = {
+        pending: 1,
+        unknownAge: 0,
+        oldestAgeSeconds: 0,
+        sampled: 1,
+        corruptSamples: 0,
+        clients: {},
+        ...overrides,
+      };
+      const service: OidcService = Object.assign(
+        Object.create(OidcService.prototype),
+        {
+          redis: { oidcLogoutBacklog: async () => snapshot },
+          logger,
+        },
+      );
+      await service.reportLogoutBacklog();
+      expect(logger.error).toHaveBeenCalledOnce();
+    },
+  );
+});
+
 describe("resumable central logout", () => {
   it("retires only the old browser session and records work before database cleanup", async () => {
     const f = fixture();
