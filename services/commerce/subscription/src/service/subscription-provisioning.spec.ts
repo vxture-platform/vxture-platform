@@ -158,6 +158,42 @@ describe("upgradeSubscription → provision new set, deprovision dropped set", (
     m.repo.update.mockResolvedValue({ ...SUB, planVersionId: "pv-2" });
   });
 
+  it.each(["active", "trialing", "expiring", "overdue"])(
+    "upgrades an in-service %s subscription using a status compare-and-set",
+    async (status) => {
+      m.repo.getById.mockResolvedValue({ ...SUB, status });
+      await m.service.upgradeSubscription("sub-1", "pv-2");
+      expect(m.repo.update).toHaveBeenCalledWith(
+        "sub-1",
+        expect.objectContaining({ status }),
+        expect.objectContaining({
+          status: "active",
+          expectedStatus: status,
+          toPlanVersionId: "pv-2",
+        }),
+      );
+    },
+  );
+
+  it.each(["suspended", "expired", "cancelled"])(
+    "does not upgrade a %s subscription",
+    async (status) => {
+      m.repo.getById.mockResolvedValue({ ...SUB, status });
+      await expect(
+        m.service.upgradeSubscription("sub-1", "pv-2"),
+      ).rejects.toThrow();
+      expect(m.repo.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not provision when a concurrent suspension invalidates the upgrade", async () => {
+    m.repo.update.mockResolvedValue(null);
+    await expect(
+      m.service.upgradeSubscription("sub-1", "pv-2"),
+    ).rejects.toThrow("订阅状态已变化");
+    expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
+  });
+
   it("provisions the new version's products and deprovisions dropped ones", async () => {
     m.repo.listVersionProducts.mockImplementation(async (pv: string) =>
       pv === "pv-2" ? [RUNOS] : [ARDA, RUNOS],

@@ -316,6 +316,12 @@ export class PgOrderRepository {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+      await this.assertNoOtherSubscription(
+        input.workspaceId,
+        input.planVersionId,
+        input.intent === "new" ? undefined : input.fromSubscriptionId,
+        client,
+      );
       const orderNo = visibleCode("ORD");
       const billNo = visibleCode("INV");
       const currency = input.currency ?? "CNY";
@@ -640,6 +646,7 @@ export class PgOrderRepository {
     toPlanVersionId: string,
   ): Promise<{
     samePlan: boolean;
+    sameProduct: boolean;
     toIsCurrent: boolean;
     toPlanStatus: string;
     toPlanCode: string;
@@ -648,6 +655,7 @@ export class PgOrderRepository {
   } | null> {
     const res = await this.pool.query<{
       same_plan: boolean;
+      same_product: boolean;
       to_is_current: boolean;
       to_plan_status: string;
       to_plan_code: string;
@@ -655,6 +663,7 @@ export class PgOrderRepository {
       to_tier: string | null;
     }>(
       `select (pv_from.plan_id = pv_to.plan_id)      as same_plan,
+              (pc_from.product_id = pc_to.product_id) as same_product,
               (pl_to.current_version_id = pv_to.id)  as to_is_current,
               pl_to.status                           as to_plan_status,
               pl_to.plan_code                        as to_plan_code,
@@ -675,6 +684,7 @@ export class PgOrderRepository {
     return res.rows[0]
       ? {
           samePlan: res.rows[0].same_plan,
+          sameProduct: res.rows[0].same_product,
           toIsCurrent: res.rows[0].to_is_current,
           toPlanStatus: res.rows[0].to_plan_status,
           toPlanCode: res.rows[0].to_plan_code,
@@ -682,6 +692,50 @@ export class PgOrderRepository {
           toTier: res.rows[0].to_tier,
         }
       : null;
+  }
+
+  /**
+   * Reject a second primary purchase, including a same-tier purchase.
+   * Bundled components never occupy a product's direct-purchase slot.
+   * @param workspaceId - Verified purchase workspace.
+   * @param planVersionId - Target plan version.
+   * @param excludeSubscriptionId - Subscription explicitly renewed or upgraded.
+   * @param client - Existing order transaction, when available.
+   * @returns Resolves when no other held subscription covers the product.
+   * @throws {ConflictException} When the purchase would duplicate an existing subscription.
+   */
+  async assertNoOtherSubscription(
+    workspaceId: string,
+    planVersionId: string,
+    excludeSubscriptionId?: string,
+    client?: PoolClient,
+  ): Promise<void> {
+    const { rows } = await (client ?? this.pool).query<{ status: string }>(
+      `select s.status
+         from metering.subscriptions s
+         join product.plan_components old_pc on old_pc.plan_version_id = s.plan_version_id
+          and old_pc.component_role = 'primary'
+         join product.plan_components new_pc on new_pc.product_id = old_pc.product_id
+          and new_pc.component_role = 'primary'
+        where s.workspace_id = $1 and new_pc.plan_version_id = $2
+          and s.deleted_at is null
+          and s.status in ('active', 'trialing', 'expiring', 'overdue', 'suspended')
+          and ($3::uuid is null or s.id <> $3)
+        limit 1`,
+      [workspaceId, planVersionId, excludeSubscriptionId ?? null],
+    );
+    if (rows.length > 0) {
+      throw new ConflictException({
+        code:
+          rows[0]!.status === "suspended"
+            ? "SUBSCRIPTION_SUSPENDED"
+            : "SUBSCRIPTION_ALREADY_EXISTS",
+        message:
+          rows[0]!.status === "suspended"
+            ? "该产品订阅已暂停，请联系支持恢复，不能重复下单。"
+            : "该工作空间已订阅此产品，不能重复购买。请明确选择续订或升级。",
+      });
+    }
   }
 
   async getPlanDisplay(
@@ -1772,6 +1826,14 @@ export class PgOrderRepository {
       if (invoice && Number(invoice.paidAmount) > 0) {
         throw new ConflictException("订单已有支付记录，不能恢复");
       }
+      await this.assertNoOtherSubscription(
+        row.workspace_id,
+        row.plan_version_id,
+        row.intent === "new"
+          ? undefined
+          : (row.from_subscription_id ?? undefined),
+        client,
+      );
       if (invoice) {
         await client.query(
           `update billing.invoice_items set deleted_at = null, updated_at = now()

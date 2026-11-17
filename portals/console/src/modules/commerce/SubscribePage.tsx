@@ -7,7 +7,7 @@
  * Entry: /subscribe?product=..&intent=subscribe|upgrade|renew|addon[&target_tier][&cycle]
  * Fault-tolerance (arda_303 §2.2): unknown intent/product → degrade to the
  * subscription home. State machine (product_320 + owner 2026-08-20 修订):
- *  - a pending offline order exists → hand off to the payment page panel;
+ *  - review current subscriptions before explicitly opening any pending order;
  *  - otherwise the confirm-order layout: 「给谁买（租户/工作区归属）→ 买什么
  *    （已选套餐只读卡，档位来自 target_tier，不再二次选择）→ 买多久（周期）」
  *    + 右栏订单摘要。三卡只留标题不带描述文字。
@@ -22,6 +22,7 @@ import { useLocale, useTranslations } from "next-intl";
 import {
   formatCurrency,
   isTierUpgrade,
+  tierRank,
   type Locale,
 } from "@vxture-platform/shared";
 import {
@@ -56,6 +57,10 @@ import { OrderFlowStrip } from "./components/OrderFlowStrip";
 import { PlanSummaryCard } from "./components/PlanSummaryCard";
 import { SECTION_TIGHT, SectionTitle } from "./components/sectionKit";
 import { WorkspacePicker } from "./components/WorkspacePicker";
+import {
+  HELD_SUBSCRIPTION_STATUSES,
+  resolveSubscriptionPurchase,
+} from "./subscription-purchase";
 
 const STATUS_KEYS = new Set([
   "active",
@@ -193,7 +198,6 @@ function UpgradeQuoteSummary({
 
 export function SubscribePage() {
   const t = useTranslations("subscribePage");
-  const tLoad = useTranslations("loadState");
   const router = useRouter();
   const params = useSearchParams();
   const formatMoney = moneyFor(useLocale() as Locale);
@@ -238,6 +242,8 @@ export function SubscribePage() {
     let cancelled = false;
     setLoading(true);
     setLoadFailed(false);
+    setPickedVersionId(null);
+    setError(null);
     fetchSubscribeContext(query)
       .then((result) => {
         if (cancelled) return;
@@ -252,20 +258,7 @@ export function SubscribePage() {
           router.replace("/subscription?notice=unknown-link");
           return;
         }
-        /* 在途订单：直接落到订单状态页（owner 2026-09-27：「进入后应该直接到流程，
-           显示当前的状态」）。此前这里渲染一块「订单待确认 / 去付款」中间面板，客户已经
-           申报过付款还被要求再点一次「去付款」。深链要的档位 / 周期随 query 带过去，
-           与在途单不一致时订单页提示一句。 */
-        if (result.pendingOrder) {
-          const requested = new URLSearchParams();
-          if (query.targetTier)
-            requested.set("requested_tier", query.targetTier);
-          requested.set("requested_cycle", initialCycle);
-          router.replace(
-            `/subscribe/pay/${result.pendingOrder.orderId}?${requested.toString()}`,
-          );
-          return;
-        }
+        // Existing orders must not bypass the subscription and intent review.
         setCtx(result);
         setAutoRenew(result.current?.autoRenew ?? false);
         setLoading(false);
@@ -281,15 +274,20 @@ export function SubscribePage() {
   }, [query, router, reloadKey, initialCycle]);
 
   const reload = useCallback(async () => {
+    setLoading(true);
+    setPickedVersionId(null);
+    setError(null);
     try {
       const fresh = await fetchSubscribeContext(query);
       setCtx(fresh);
       // 换了工作区就换了 current，预填随之重算。
       setAutoRenew(fresh.current?.autoRenew ?? false);
-    } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : tLoad("title"));
+    } catch {
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
     }
-  }, [query, tLoad]);
+  }, [query]);
 
   if (loadFailed) {
     return (
@@ -332,6 +330,8 @@ export function SubscribePage() {
 
   const stateKey = (() => {
     if (!current) return "none";
+    if (current.status === "expiring")
+      return current.autoRenew ? "active" : "renewOff";
     if (current.status === "active" && !current.autoRenew) return "renewOff";
     /*
      * 暂停分两句（2026-09-25 步骤三）：顺延只在这一次暂停「不是客户自己违规」时成立，
@@ -347,7 +347,9 @@ export function SubscribePage() {
     return STATUS_KEYS.has(current.status) ? current.status : "none";
   })();
 
-  const isLive = current?.status === "active" || current?.status === "trialing";
+  const isLive = Boolean(
+    current && HELD_SUBSCRIPTION_STATUSES.has(current.status),
+  );
 
   // ── 套餐解析：target_tier 直达；缺席/无匹配时兜底 ──────────────────────────
   const currentLiveVersionId = isLive && current ? current.planVersionId : null;
@@ -375,16 +377,18 @@ export function SubscribePage() {
     current !== null &&
     currentLiveVersionId !== null &&
     tierMatched.planCode !== current.planCode &&
-    !isTierUpgrade(current.tier, tierMatched.tier);
+    tierRank(current.tier) > tierRank(tierMatched.tier);
 
   // 兜底预选不选当前套餐：同套餐"升级"是付费空操作（服务端同样拒绝）。
   // 阶梯按 TIERS 升序，优先当前档之上的第一档；已是顶档则不预选。
   const fallbackPlan = (() => {
-    if (!currentLiveVersionId || !current) return plans[0] ?? null;
+    if (!current) return plans[0] ?? null;
+    if (intent === "renew")
+      return plans.find((p) => p.planCode === current.planCode) ?? null;
+    if (!currentLiveVersionId) return plans[0] ?? null;
     /* 按**套餐码**找当前档的位置，不按版本：套餐发布新版本后阶梯里是新版本 id，
        按版本找会找不到（idx = -1）→ 预选落到 plans[0]，把人送去最低档。 */
-    const idx = plans.findIndex((p) => p.planCode === current.planCode);
-    return plans[idx + 1] ?? null;
+    return plans.find((p) => isTierUpgrade(current.tier, p.tier)) ?? null;
   })();
 
   const plan: SubscribePlanOption | null =
@@ -397,7 +401,7 @@ export function SubscribePage() {
   const showTierFallback =
     (!targetTier || tierMissing || tierDowngrade) && plans.length > 1;
   /*
-   * 选中的就是在用套餐 → 走「续订」（延长周期）。
+   * Compare plan identity across versions. Renewal requires an explicit choice.
    *
    * 判据是**套餐码**，不是版本（owner 2026-09-22）。套餐一旦发布新版本，阶梯送的就是
    * 新版本 id，按版本判会把同一档的老客户判成「升级」——周期从现在重置、走折抵报价、
@@ -429,7 +433,7 @@ export function SubscribePage() {
     current !== null &&
     currentLiveVersionId !== null &&
     plan.planCode !== current.planCode &&
-    !isTierUpgrade(current.tier, plan.tier);
+    tierRank(current.tier) > tierRank(plan.tier);
 
   const isEnterprise = plan !== null && plan.prices.length === 0;
   const price = plan ? priceForCycle(plan, cycle) : undefined;
@@ -444,25 +448,45 @@ export function SubscribePage() {
     return save > 0 ? { amount: save, currency: y.currency } : null;
   })();
 
-  // 意图（product_330）：没有订阅 → new；在用且选了别的档 → upgrade；在用且选了同档 → renew（延期）；
-  // 已到期/取消 → renew（同档复活；换档时服务端按 new 建新订阅）。
-  const orderIntent: "new" | "renew" | "upgrade" = !current
-    ? "new"
-    : isLive
-      ? isCurrentPlan
-        ? "renew"
-        : "upgrade"
-      : "renew";
+  const { orderIntent, blocked: purchaseBlocked } = resolveSubscriptionPurchase(
+    current,
+    plan,
+    intent,
+  );
 
   const onSubmit = async () => {
-    if (!plan || isEnterprise || !price) return;
+    if (busy || !plan || isEnterprise || !price) return;
     /* 降档不下单（owner 2026-09-24）。按钮已禁用，这一行是它被绕过时的那道。 */
     if (selectedIsDowngrade) return;
     if (currentSuspended) return;
     if (underMaintenance) return;
+    if (purchaseBlocked || ctx.pendingOrder) return;
     setBusy(true);
     setError(null);
     try {
+      // Another tab may have changed the subscription since this page loaded.
+      const fresh = await fetchSubscribeContext(query);
+      const freshPlan =
+        fresh.plans.find((p) => p.planVersionId === plan.planVersionId) ?? null;
+      const freshPurchase = resolveSubscriptionPurchase(
+        fresh.current,
+        freshPlan,
+        fresh.intent,
+      );
+      if (
+        fresh.pendingOrder ||
+        !freshPlan ||
+        fresh.product?.maintenance ||
+        fresh.current?.subscriptionId !== current?.subscriptionId ||
+        fresh.current?.planVersionId !== current?.planVersionId ||
+        freshPurchase.blocked ||
+        freshPurchase.orderIntent !== orderIntent
+      ) {
+        setCtx(fresh);
+        setError(t("confirm.contextChanged"));
+        setBusy(false);
+        return;
+      }
       const result = await createSubscriptionOrder({
         productCode: product.code,
         planVersionId: plan.planVersionId,
@@ -510,7 +534,11 @@ export function SubscribePage() {
         icon="credit-card"
         title={t("confirm.title")}
         secondary={
-          <StatusBadge tone="brand">{t(`title.${intent}`)}</StatusBadge>
+          <StatusBadge tone="brand">
+            {t(
+              `title.${!purchaseBlocked && plan ? (orderIntent === "new" ? "subscribe" : orderIntent) : intent}`,
+            )}
+          </StatusBadge>
         }
         description={t(`hint.${stateKey}`)}
       />
@@ -526,6 +554,53 @@ export function SubscribePage() {
       ) : null}
 
       <OrderFlowStrip stage="ordering" />
+
+      {purchaseBlocked === "alreadySubscribed" ? (
+        <div className="flex flex-col items-start gap-sm">
+          <Banner
+            tone="info"
+            title={t("confirm.alreadySubscribed")}
+            description={t("confirm.alreadySubscribedHint")}
+          />
+          <Button
+            variant="outline"
+            onClick={() => {
+              const next = new URLSearchParams(params.toString());
+              next.set("intent", "renew");
+              router.replace(`/subscribe?${next.toString()}`);
+            }}
+          >
+            {t("confirm.chooseRenewal")}
+          </Button>
+        </div>
+      ) : purchaseBlocked === "planConflict" ? (
+        <Banner tone="warning" title={t("confirm.planConflict")} />
+      ) : purchaseBlocked === "uncomparable" ? (
+        <Banner tone="warning" title={t("confirm.uncomparable")} />
+      ) : null}
+      {ctx.pendingOrder ? (
+        <div className="flex flex-col items-start gap-sm">
+          <Banner
+            tone="warning"
+            title={t("confirm.pendingOrder")}
+            description={t("confirm.pendingOrderHint", {
+              orderNo: ctx.pendingOrder.orderNo,
+            })}
+          />
+          <Button
+            variant="outline"
+            onClick={() => {
+              const requested = new URLSearchParams({ requested_cycle: cycle });
+              if (targetTier) requested.set("requested_tier", targetTier);
+              router.push(
+                `/subscribe/pay/${ctx.pendingOrder!.orderId}?${requested.toString()}`,
+              );
+            }}
+          >
+            {t("confirm.viewOrder")}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-md lg:flex-row lg:items-start">
         {/* 左列：给谁买 / 买什么 / 买多久 */}
@@ -830,16 +905,24 @@ export function SubscribePage() {
                         busy ||
                         !price ||
                         selectedIsDowngrade ||
+                        Boolean(purchaseBlocked) ||
+                        Boolean(ctx.pendingOrder) ||
                         currentSuspended ||
                         underMaintenance
                       }
                       onClick={() => void onSubmit()}
                       className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
                     >
-                      {busy ? t("actions.processing") : t("confirm.submit")}
+                      {busy
+                        ? t("actions.processing")
+                        : purchaseBlocked === "alreadySubscribed"
+                          ? t("confirm.alreadySubscribed")
+                          : orderIntent === "renew"
+                            ? t("confirm.submitRenew")
+                            : t("confirm.submit")}
                     </Button>
                     <p className="text-body-sm text-content-tertiary">
-                      {isCurrentPlan
+                      {isCurrentPlan && !purchaseBlocked
                         ? t("confirm.renewCurrent")
                         : t("confirm.fineOffline")}
                     </p>
