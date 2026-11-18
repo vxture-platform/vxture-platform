@@ -147,7 +147,8 @@ GRANT UPDATE (tenant_id, user_id, role_id, role_scope, status, default_workspace
 REVOKE UPDATE ON tenancy.workspace_memberships FROM platform_svc;
 GRANT UPDATE (workspace_id, tenant_id, user_id, role_id, role_scope, status, updated_at) ON tenancy.workspace_memberships TO platform_svc;
 
--- tenancy.invitations  [anchor: id, created_by, created_at]
+-- tenancy.invitations  [anchor: id, created_by, created_at, recipient_user_id, last_sent_at]
+-- The invitation trigger maintains recipient binding and resend timing without direct application updates.
 REVOKE UPDATE ON tenancy.invitations FROM platform_svc;
 GRANT UPDATE (scope, tenant_id, workspace_id, target_type, target, role_id, role_scope, status, token_hash, expires_at, accepted_at, updated_at) ON tenancy.invitations TO platform_svc;
 
