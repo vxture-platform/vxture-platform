@@ -133,7 +133,8 @@
     "lint:public-routes": "node scripts/guardrails/check-public-routes.mjs",
     "lint:upstream-routes": "node scripts/guardrails/check-upstream-routes.mjs",
     "lint:webhook-paths": "node scripts/guardrails/check-webhook-paths.mjs",
-    "lint:ticket-visibility": "node scripts/guardrails/check-ticket-comment-visibility.mjs"
+    "lint:ticket-visibility": "node scripts/guardrails/check-ticket-comment-visibility.mjs",
+    "test:picomatch-security": "node --test scripts/security/picomatch-redos.test.mjs"
   },
   "devDependencies": {
     "@swc/core": "^1.15.18",
@@ -214,6 +215,11 @@
       "nodemailer": "^10.1.4",
       "glob@13": "^14.0.3",
       "minimatch@10": "^11.0.4"
+    },
+    "patchedDependencies": {
+      "picomatch@2.3.2": "patches/picomatch@2.3.2.patch",
+      "picomatch@4.0.5": "patches/picomatch@4.0.5.patch",
+      "picomatch@4.0.7": "patches/picomatch@4.0.7.patch"
     }
   }
 }

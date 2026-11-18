@@ -210,6 +210,10 @@ jobs:
             packages/core/*/dist
           retention-days: 1
           include-hidden-files: true
+      - name: Patched picomatch security regression
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm test:picomatch-security
+
       - name: Type check
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm type-check:all

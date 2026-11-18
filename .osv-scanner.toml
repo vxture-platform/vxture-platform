@@ -88,3 +88,36 @@ ecosystem = "npm"
 ignore = true
 effectiveUntil = 2026-12-02T00:00:00Z
 reason = "GHSA-g3hv-75wg-m249 false positive on legacy v3: firstPhasePreProcess/optimizationLevel and the vulnerable clone loop do not exist; exact dev-only resolution, recheck upstream range by 2026-12-02"
+
+# GHSA-fc5q-39xc-vjpf: no upstream fixed release as of 2026-11-18.
+# These exact versions carry patches/picomatch@<version>.patch via pnpm's
+# hashed patchedDependencies. The patch literalizes repeated extglobs containing
+# unbounded glob stars, including single branches and recursion-limit opt-outs.
+# Do not classify this as dev-only: @parcel/watcher is in portal dependency trees.
+# OSV scans version metadata rather than patched source. The required quality-gate
+# runs test:picomatch-security to check patch installation, lockfile edges and
+# bounded-process regressions. Both Docker builders copy patches before install.
+# Reassess upstream releases and this mitigation before the temporary expiry.
+[[PackageOverrides]]
+name = "picomatch"
+version = "2.3.2"
+ecosystem = "npm"
+ignore = true
+effectiveUntil = 2026-12-02T00:00:00Z
+reason = "GHSA-fc5q-39xc-vjpf mitigated by patches/picomatch@2.3.2.patch; pnpm hash-locked patch and required CI security regressions; no upstream fixed release; reassess by 2026-12-02"
+
+[[PackageOverrides]]
+name = "picomatch"
+version = "4.0.5"
+ecosystem = "npm"
+ignore = true
+effectiveUntil = 2026-12-02T00:00:00Z
+reason = "GHSA-fc5q-39xc-vjpf mitigated by patches/picomatch@4.0.5.patch; pnpm hash-locked patch and required CI security regressions; no upstream fixed release; reassess by 2026-12-02"
+
+[[PackageOverrides]]
+name = "picomatch"
+version = "4.0.7"
+ecosystem = "npm"
+ignore = true
+effectiveUntil = 2026-12-02T00:00:00Z
+reason = "GHSA-fc5q-39xc-vjpf mitigated by patches/picomatch@4.0.7.patch; pnpm hash-locked patch and required CI security regressions; no upstream fixed release; reassess by 2026-12-02"
