@@ -18,7 +18,6 @@ import {
 
 export const AUTH_BRAND_LABEL = "Vxture Accounts";
 export const AUTH_BRAND_LOGO = "/brand/vxture-logo-icon.svg";
-export const AUTH_COPYRIGHT_OWNER = "Vxture Studio";
 export const ACCOUNTS_AUTH_VISUAL: AuthVisualConfig = {};
 
 /** Render the shared Accounts header for every authentication scene. */

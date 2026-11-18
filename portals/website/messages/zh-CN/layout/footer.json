@@ -42,6 +42,6 @@
     "filings": "网站备案"
   },
   "copyright": {
-    "text": "© 2026 Vxture Studio, All rights reserved."
+    "text": "© {year} {owner}"
   }
 }

@@ -27,6 +27,7 @@ import { usePathname, useRouter } from "@/lib/i18n/navigation";
 import {
   SUPPORTED_LOCALES,
   LOCALE_CONFIGS,
+  PLATFORM_COPYRIGHT_OWNER,
   type Locale,
   type Theme,
 } from "@vxture-platform/shared";
@@ -80,7 +81,10 @@ export function AuthFooter() {
 
   return (
     <ShellLegalFooter
-      copyright={t("copyright.text")}
+      copyright={t("copyright.text", {
+        year: String(new Date().getFullYear()),
+        owner: PLATFORM_COPYRIGHT_OWNER,
+      })}
       links={[
         { href: "/legal/terms", label: t("legal.terms") },
         { href: "/legal/privacy", label: t("legal.privacy") },

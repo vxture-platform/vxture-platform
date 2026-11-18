@@ -18,7 +18,7 @@
 import { useState, useRef } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Button, useTheme, Icon, ShellFooter } from "@vxture/design-system";
-import { debugLog } from "@vxture-platform/shared";
+import { debugLog, PLATFORM_COPYRIGHT_OWNER } from "@vxture-platform/shared";
 import Image from "next/image";
 import { FOOTER_DATA } from "@/data/layout/footer.data";
 
@@ -227,7 +227,7 @@ export default function Footer() {
             href: `/${locale}/legal/copyright`,
             label: t("legal.copyright"),
             year: new Date().getFullYear(),
-            owner: "Vxture Studio",
+            owner: PLATFORM_COPYRIGHT_OWNER,
           },
 
           cookies: {

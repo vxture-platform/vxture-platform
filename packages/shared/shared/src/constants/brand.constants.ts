@@ -17,6 +17,9 @@
 /** 品牌名(拉丁形,中英一致)。 */
 export const BRAND_NAME = "Vxture Research";
 
+/** The two platform brands share an equal billing in public copyright lines. */
+export const PLATFORM_COPYRIGHT_OWNER = "VXTURE · RUYIN";
+
 /** 浏览器 tab / `<title>` 上的完整标题:品牌名 + 一句定位。 */
 export const BRAND_TITLE: Record<"zh-CN" | "en-US", string> = {
   "zh-CN": `${BRAND_NAME} | 释放数据潜力`,

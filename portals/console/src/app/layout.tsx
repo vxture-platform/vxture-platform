@@ -37,7 +37,7 @@ import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Workspace Console",
+  title: "Vxture Console",
   description: "Unified management console for platform and tenant operations.",
 };
 

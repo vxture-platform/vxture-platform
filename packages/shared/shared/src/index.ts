@@ -239,6 +239,7 @@ export type { QuotaResetPeriod } from "./utils/quota-period.utils";
 
 // 官网品牌名的单一权威(owner 2026-09-10:tab 标题漏改)。
 export { BRAND_NAME, BRAND_TITLE } from "./constants";
+export { PLATFORM_COPYRIGHT_OWNER } from "./constants";
 
 // 备案信息的单一权威(owner 2026-09-20)。**不进 i18n 词条**:备案号是法定标识、
 // 不随语言变化——此前挂在 messages 下被当成"待翻译文案",en-US 两处留空,

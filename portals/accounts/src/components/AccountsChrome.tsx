@@ -8,7 +8,11 @@
  */
 "use client";
 
-import { LOCALE_CONFIGS, SUPPORTED_LOCALES } from "@vxture-platform/shared";
+import {
+  LOCALE_CONFIGS,
+  PLATFORM_COPYRIGHT_OWNER,
+  SUPPORTED_LOCALES,
+} from "@vxture-platform/shared";
 import type { ReactNode } from "react";
 import { AccountsUserMenu, type AccountsMenuUser } from "./AccountsUserMenu";
 import { useLocale, useTranslations } from "next-intl";
@@ -147,7 +151,7 @@ export function AccountsFooter({
           href: `${website}/${locale}/legal/copyright`,
           label: t("copyright"),
           year: new Date().getFullYear(),
-          owner: "Vxture Studio",
+          owner: PLATFORM_COPYRIGHT_OWNER,
         },
         terms: { href: `${website}/${locale}/legal/terms`, label: t("terms") },
         privacy: {

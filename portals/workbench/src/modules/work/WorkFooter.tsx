@@ -8,7 +8,10 @@
  * @date 2026-11-12
  */
 import { ShellFooter } from "@vxture/design-system";
-import { SITE_FILINGS } from "@vxture-platform/shared";
+import {
+  PLATFORM_COPYRIGHT_OWNER,
+  SITE_FILINGS,
+} from "@vxture-platform/shared";
 import { useWorkLocale } from "../../lib/locale";
 import type { WorkRuntime } from "../../lib/contracts";
 
@@ -25,7 +28,7 @@ export function WorkFooter({ runtime }: { runtime: WorkRuntime }) {
           href: policy("copyright"),
           label: t("版权声明"),
           year: new Date().getFullYear(),
-          owner: "Vxture Studio",
+          owner: PLATFORM_COPYRIGHT_OWNER,
         },
 
         cookies: { href: policy("cookies"), label: t("Cookie 政策") },
