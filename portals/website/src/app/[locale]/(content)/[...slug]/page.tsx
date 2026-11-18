@@ -103,7 +103,14 @@ async function renderLegalDetail({ policyKey }: LegalDetailEntry) {
           <p>{policy.summary}</p>
           <small>{t("updatedAt", { date: policy.updatedAt })}</small>
         </header>
-        <aside className="vx-legal-notice">{policy.notice}</aside>
+        <aside className="vx-legal-notice">
+          {policy.notice}
+          {policyKey === "privacy" && (
+            <p>
+              <Link href="/legal/cookies">{t("policies.cookies.label")}</Link>
+            </p>
+          )}
+        </aside>
         <div className="vx-legal-sections">
           {policy.sections.map((section) => (
             <section key={section.heading} className="vx-legal-section">

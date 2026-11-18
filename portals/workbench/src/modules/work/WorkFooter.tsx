@@ -15,8 +15,14 @@ import {
 import { useWorkLocale } from "../../lib/locale";
 import type { WorkRuntime } from "../../lib/contracts";
 
-/** Keep policy order and filing information consistent across sign-in states. */
-export function WorkFooter({ runtime }: { runtime: WorkRuntime }) {
+/** Keep public notices separate from the signed-in legal links. */
+export function WorkFooter({
+  runtime,
+  isAuthenticated,
+}: {
+  runtime: WorkRuntime;
+  isAuthenticated: boolean;
+}) {
   const { locale, t } = useWorkLocale();
   const policy = (key: string) =>
     new URL(`/${locale}/legal/${key}`, runtime.websiteUrl).href;
@@ -31,12 +37,14 @@ export function WorkFooter({ runtime }: { runtime: WorkRuntime }) {
           owner: PLATFORM_COPYRIGHT_OWNER,
         },
 
-        cookies: { href: policy("cookies"), label: t("Cookie 政策") },
         terms: { href: policy("terms"), label: t("服务条款") },
         privacy: { href: policy("privacy"), label: t("隐私政策") },
         navigationLabel: t("法律信息"),
-        filingsLabel: t("网站备案"),
-        filings: SITE_FILINGS,
+        ...(!isAuthenticated && {
+          cookies: { href: policy("cookies"), label: t("Cookie 政策") },
+          filingsLabel: t("网站备案"),
+          filings: SITE_FILINGS,
+        }),
       }}
     />
   );

@@ -275,7 +275,7 @@ export function LoginPage({
           </p>
         </section>
       </main>
-      <WorkFooter runtime={runtime} />
+      <WorkFooter runtime={runtime} isAuthenticated={false} />
     </>
   );
 }

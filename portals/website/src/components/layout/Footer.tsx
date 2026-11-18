@@ -21,9 +21,11 @@ import { Button, useTheme, Icon, ShellFooter } from "@vxture/design-system";
 import { debugLog, PLATFORM_COPYRIGHT_OWNER } from "@vxture-platform/shared";
 import Image from "next/image";
 import { FOOTER_DATA } from "@/data/layout/footer.data";
+import { useAuthStore } from "@/stores/auth.store";
 
 export default function Footer() {
   const locale = useLocale();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const { theme } = useTheme();
   const isDarkMode = theme === "dark";
   const t = useTranslations("layout.footer");
@@ -230,20 +232,22 @@ export default function Footer() {
             owner: PLATFORM_COPYRIGHT_OWNER,
           },
 
-          cookies: {
-            href: `/${locale}/legal/cookies`,
-            label: t("legal.cookies"),
-          },
           terms: { href: `/${locale}/legal/terms`, label: t("legal.terms") },
           privacy: {
             href: `/${locale}/legal/privacy`,
             label: t("legal.privacy"),
           },
           navigationLabel: t("legal.label"),
-          filingsLabel: t("legal.filings"),
-          filings: [FOOTER_DATA.icp, FOOTER_DATA.publicSecurity].filter(
-            (item) => item.text,
-          ),
+          ...(!isAuthenticated && {
+            cookies: {
+              href: `/${locale}/legal/cookies`,
+              label: t("legal.cookies"),
+            },
+            filingsLabel: t("legal.filings"),
+            filings: [FOOTER_DATA.icp, FOOTER_DATA.publicSecurity].filter(
+              (item) => item.text,
+            ),
+          }),
         }}
       />
     </>
