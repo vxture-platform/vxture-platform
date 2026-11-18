@@ -115,9 +115,9 @@ describe("continuous grant policy proxy", () => {
     "x-test-session": "yes",
     "x-test-capabilities": capability,
   });
-  for (const [kind, upstreamPrefix, permission] of [
-    ["atlas", "capability", "model:model"],
-    ["runos", "commerce", "capability:runos"],
+  for (const [kind, upstreamPrefix, readPermission, managePermission] of [
+    ["atlas", "capability", "model:model.read", "model:model.manage"],
+    ["runos", "commerce", "capability:runos.read", "capability:runos.manage"],
   ] as const) {
     it(`${kind} rejects unauthenticated and read-only writes before contacting upstream`, async () => {
       expect(
@@ -128,7 +128,7 @@ describe("continuous grant policy proxy", () => {
           (
             await fetch(`${base}/api/${kind}/grant-policies/yucer${suffix}`, {
               method: "POST",
-              headers: headers(`${permission}.read`),
+              headers: headers(readPermission),
               body: '{"expectedRevision":0,"rules":[]}',
             })
           ).status,
@@ -141,7 +141,7 @@ describe("continuous grant policy proxy", () => {
         expect(
           (
             await fetch(`${base}/api/${kind}/grant-policies/yucer${suffix}`, {
-              headers: headers(`${permission}.read`),
+              headers: headers(readPermission),
             })
           ).status,
         ).toBe(200);
@@ -151,7 +151,7 @@ describe("continuous grant policy proxy", () => {
         (
           await fetch(`${base}/api/${kind}/grant-policies/yucer/preview`, {
             method: "POST",
-            headers: headers(`${permission}.manage`),
+            headers: headers(managePermission),
             body: JSON.stringify(body),
           })
         ).status,
@@ -169,7 +169,7 @@ describe("continuous grant policy proxy", () => {
       const body = { expectedRevision: 0, rules: [] };
       const init = {
         method: "POST",
-        headers: headers(`${permission}.manage`),
+        headers: headers(managePermission),
         body: JSON.stringify(body),
       };
       expect(
