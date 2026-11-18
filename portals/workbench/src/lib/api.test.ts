@@ -34,6 +34,7 @@ const product: CatalogProduct = {
 const active: Subscription = {
   code: "agent",
   status: "active",
+  access: "allowed",
   tier: "team",
   maintenance: false,
 };
@@ -113,7 +114,7 @@ describe("product availability", () => {
         { status: "ready", data: [] },
         { status: "ready", data: [entry] },
       ),
-    ).toEqual([]);
+    ).toMatchObject([{ available: false, availabilityLabel: "未订阅" }]);
     expect(
       projectApps(
         [product],
@@ -143,9 +144,11 @@ describe("product availability", () => {
         { status: "error", code: 403, message: "forbidden" },
         { status: "ready", data: [entry] },
       ),
-    ).toEqual([]);
+    ).toMatchObject([
+      { available: false, availabilityLabel: "暂无法确认权限" },
+    ]);
   });
-  it("shows only subscribed products while retaining unavailable subscribed cards", () => {
+  it("shows every catalog product while retaining unavailable subscribed cards", () => {
     const apps = projectApps(
       [
         product,
@@ -158,8 +161,12 @@ describe("product availability", () => {
       },
       { status: "ready", data: [entry, { code: "expired", href: entry.href }] },
     );
-    expect(apps.map((item) => item.code)).toEqual(["agent", "expired"]);
-    expect(apps[1]).toMatchObject({
+    expect(apps.map((item) => item.code)).toEqual([
+      "agent",
+      "unsubscribed",
+      "expired",
+    ]);
+    expect(apps[2]).toMatchObject({
       available: false,
       availabilityLabel: "已到期",
     });
@@ -178,6 +185,52 @@ describe("product availability", () => {
     )[0];
     expect(app?.available).toBe(true);
   });
+  it.each(["denied", "unknown", undefined] as const)(
+    "retains denied/unknown member cards but never enables entry: %s",
+    (access) => {
+      const [app] = projectApps(
+        [product],
+        { status: "ready", data: [{ ...active, access: access ?? "unknown" }] },
+        { status: "ready", data: [entry] },
+      );
+      expect(app).toMatchObject({
+        available: false,
+        subscribed: true,
+        availabilityLabel:
+          access === "denied" ? "联系管理员授权" : "暂无法确认权限",
+      });
+    },
+  );
+
+  it("combines continuous renewal coverage without bridging a gap", () => {
+    const now = Date.now();
+    const iso = (days: number) =>
+      new Date(now + days * 86_400_000).toISOString();
+    const project = (data: Subscription[]) =>
+      projectApps(
+        [product],
+        { status: "ready", data },
+        { status: "ready", data: [entry] },
+      )[0];
+    const near = { ...active, startsAt: iso(-30), expiresAt: iso(3) };
+    expect(project([near])?.expiresAt).toBe(iso(3));
+    expect(
+      project([
+        near,
+        { ...active, bundled: true, startsAt: iso(3), expiresAt: iso(33) },
+      ])?.expiresAt,
+    ).toBe(iso(33));
+    expect(
+      project([near, { ...active, startsAt: iso(5), expiresAt: iso(35) }])
+        ?.expiresAt,
+    ).toBe(iso(3));
+    expect(
+      project([near, { ...active, startsAt: iso(-1), expiresAt: null }])
+        ?.expiresAt,
+    ).toBeNull();
+    expect(project([{ ...near, status: "trialing" }])?.expiresAt).toBe(iso(3));
+  });
+
   it("rejects script, relative and credential-bearing destinations", () => {
     for (const value of [
       "javascript:alert(1)",
@@ -240,6 +293,7 @@ describe("HTTP adapter", () => {
             },
             {
               productCode: "agent",
+              access: "allowed",
               status: "active",
               tier: null,
               bundled: true,
@@ -247,6 +301,7 @@ describe("HTTP adapter", () => {
             },
             {
               productCode: "favorite",
+              access: "allowed",
               status: "active",
               tier: "team",
               favorite: true,
@@ -266,7 +321,7 @@ describe("HTTP adapter", () => {
     if (result.status !== "ready") return;
     expect(result.data.catalog.status).toBe("ready");
     if (result.data.catalog.status !== "ready") return;
-    expect(result.data.catalog.data).toHaveLength(2);
+    expect(result.data.catalog.data).toHaveLength(3);
     expect(result.data.catalog.data[0]).toMatchObject({
       code: "agent",
       available: true,

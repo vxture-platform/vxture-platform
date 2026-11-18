@@ -7,6 +7,7 @@
  * @date 2026-11-05
  */
 import type { Pool } from "pg";
+import type { ProductSeatService } from "@vxture/service-subscription"; // ⚠️ 跨层引用: product entry and workbench share the domain access decision.
 
 interface CatalogRow {
   productCode: string;
@@ -26,6 +27,9 @@ interface SubscriptionRow {
   tier: string | null;
   bundled: boolean;
   favorite: boolean;
+  startsAt: Date;
+  expiresAt: Date | null;
+  access?: "allowed" | "denied" | "unknown";
   maintenance: { until: string | null } | null;
 }
 
@@ -42,6 +46,8 @@ const CATALOG = `select p.product_code as "productCode", p.product_name as "prod
   where p.deleted_at is null and p.is_customer_visible and p.status in ('active', 'developing')
   order by p.sort, p.product_code`;
 const SUBSCRIPTIONS = `select distinct p.product_code as "productCode", s.status,
+  s.start_at as "startsAt",
+  case when s.status = 'trialing' then s.trial_end_at else s.end_at end as "expiresAt",
   case when pc.component_role = 'primary'
     then coalesce(o.override_tier_code, pc.tier) else null end as tier,
   (pc.component_role = 'bundled') as bundled,
@@ -65,7 +71,10 @@ const SUBSCRIPTIONS = `select distinct p.product_code as "productCode", s.status
 
 /** Read models contain no price, payment, plan-management or private registry fields. */
 export class CatalogService {
-  constructor(private readonly pool: Pick<Pool, "query">) {}
+  constructor(
+    private readonly pool: Pick<Pool, "query">,
+    private readonly seats?: Pick<ProductSeatService, "hasUserAccess">,
+  ) {}
   async catalog(): Promise<CatalogRow[]> {
     return (await this.pool.query<CatalogRow>(CATALOG)).rows;
   }
@@ -73,14 +82,54 @@ export class CatalogService {
     workspace: string,
     tenant: string,
     user: string,
+    authorize: boolean | string = true,
   ): Promise<SubscriptionRow[]> {
-    return (
+    const rows = (
       await this.pool.query<SubscriptionRow>(SUBSCRIPTIONS, [
         workspace,
         tenant,
         user,
       ])
     ).rows;
+    const access = new Map<string, "allowed" | "denied" | "unknown">();
+    const codes =
+      authorize === false
+        ? []
+        : [...new Set(rows.map((row) => row.productCode))].filter(
+            (code) => authorize === true || authorize === code,
+          );
+    // Bound concurrent reads and deduplicate subscription history per product.
+    // Never cache a member grant across requests or substitute an admin role.
+    let cursor = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(4, codes.length) }, async () => {
+        while (cursor < codes.length) {
+          const code = codes[cursor++]!;
+          try {
+            const allowed = await this.seats?.hasUserAccess({
+              subject: `usr_${user}`,
+              orgId: tenant,
+              workspaceId: workspace,
+              productCode: code,
+            });
+            access.set(
+              code,
+              allowed === undefined
+                ? "unknown"
+                : allowed
+                  ? "allowed"
+                  : "denied",
+            );
+          } catch {
+            access.set(code, "unknown");
+          }
+        }
+      }),
+    );
+    return rows.map((row) => ({
+      ...row,
+      access: access.get(row.productCode) ?? "unknown",
+    }));
   }
   async entries(): Promise<{ code: string; homeUrl: string | null }[]> {
     return (

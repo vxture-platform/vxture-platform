@@ -36,12 +36,19 @@ describe("subscribed workspace products", () => {
       },
     ];
     const query = vi.fn().mockResolvedValue({ rows });
-    const result = await new CatalogService({ query }).subscriptions(
-      "space-a",
-      "org-a",
-      "user-a",
-    );
-    expect(result).toEqual(rows);
+    const hasUserAccess = vi.fn().mockResolvedValue(true);
+    const result = await new CatalogService(
+      { query },
+      { hasUserAccess },
+    ).subscriptions("space-a", "org-a", "user-a");
+    expect(result).toEqual(rows.map((row) => ({ ...row, access: "allowed" })));
+    expect(hasUserAccess).toHaveBeenCalledExactlyOnceWith({
+      subject: "usr_user-a",
+      orgId: "org-a",
+      workspaceId: "space-a",
+      productCode: "knowledge",
+    });
+    expect(query.mock.calls[0]![0]).toContain("s.trial_end_at");
     const [sql, parameters] = query.mock.calls[0]!;
     expect(parameters).toEqual(["space-a", "org-a", "user-a"]);
     expect(sql).toContain("pc.component_role in ('primary', 'bundled')");
@@ -49,6 +56,87 @@ describe("subscribed workspace products", () => {
     expect(sql).toContain("s.tenant_id = $2");
     expect(sql).toContain("f.product_id = p.id and f.user_id = $3");
     expect(sql).not.toContain("pc.tier is not null");
+  });
+
+  it.each([false, undefined, "error"])(
+    "fails closed for a denied, missing or failed domain result: %s",
+    async (outcome) => {
+      const query = vi.fn().mockResolvedValue({
+        rows: [{ productCode: "agent", status: "active" }],
+      });
+      const hasUserAccess =
+        outcome === "error"
+          ? vi.fn().mockRejectedValue(new Error("offline"))
+          : vi.fn().mockResolvedValue(outcome);
+      const result = await new CatalogService(
+        { query },
+        { hasUserAccess },
+      ).subscriptions("w", "t", "u");
+      expect(result[0]?.access).toBe(outcome === false ? "denied" : "unknown");
+    },
+  );
+
+  it("does not reuse authorization across members or workspaces", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValue({ rows: [{ productCode: "agent" }] });
+    const hasUserAccess = vi
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    const catalog = new CatalogService({ query }, { hasUserAccess });
+    expect((await catalog.subscriptions("w", "t", "alice"))[0]?.access).toBe(
+      "allowed",
+    );
+    expect((await catalog.subscriptions("other", "t", "bob"))[0]?.access).toBe(
+      "denied",
+    );
+    expect(hasUserAccess).toHaveBeenLastCalledWith({
+      subject: "usr_bob",
+      orgId: "t",
+      workspaceId: "other",
+      productCode: "agent",
+    });
+  });
+
+  it("checks only the launch target and skips access reads for activity-only queries", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [{ productCode: "a" }, { productCode: "b" }],
+    });
+    const hasUserAccess = vi.fn().mockResolvedValue(true);
+    const catalog = new CatalogService({ query }, { hasUserAccess });
+    await catalog.subscriptions("w", "t", "u", false);
+    expect(hasUserAccess).not.toHaveBeenCalled();
+    await catalog.subscriptions("w", "t", "u", "b");
+    expect(hasUserAccess).toHaveBeenCalledExactlyOnceWith({
+      subject: "usr_u",
+      orgId: "t",
+      workspaceId: "w",
+      productCode: "b",
+    });
+  });
+
+  it("bounds concurrent product checks as the registry grows", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: Array.from({ length: 12 }, (_, i) => ({
+        productCode: String(i),
+      })),
+    });
+    let pending = 0;
+    let peak = 0;
+    const hasUserAccess = vi.fn(async () => {
+      peak = Math.max(peak, ++pending);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      pending--;
+      return true;
+    });
+    const result = await new CatalogService(
+      { query },
+      { hasUserAccess },
+    ).subscriptions("w", "t", "u");
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(result.every((row) => row.access === "allowed")).toBe(true);
+    expect(hasUserAccess).toHaveBeenCalledTimes(12);
   });
 
   it("does not replace a successfully empty workspace with public catalog products", async () => {

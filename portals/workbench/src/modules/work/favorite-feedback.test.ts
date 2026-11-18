@@ -185,3 +185,32 @@ describe("favorite feedback", () => {
     }
   });
 });
+
+// ============================================================================
+// Member-facing disabled entry preserves independent overview access
+// ============================================================================
+it("keeps denied application overview accessible and removes the launch link", async () => {
+  const onLaunch = vi.fn();
+  const onOverview = vi.fn();
+  await act(async () =>
+    root.render(
+      React.createElement(AppCard, {
+        app: { ...app, available: false, availabilityLabel: "联系管理员授权" },
+        onOverview,
+        onLaunch,
+        onFavorite: vi.fn(),
+        favoritesEnabled: true,
+      }),
+    ),
+  );
+  expect(host.textContent).toContain("联系管理员授权");
+  expect(host.querySelector("a[href]")).toBeNull();
+  const button = host.querySelector<HTMLButtonElement>(".work-action");
+  expect(button?.disabled).toBe(true);
+  await act(async () => button?.click());
+  expect(onLaunch).not.toHaveBeenCalled();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>(".work-card-target")?.click(),
+  );
+  expect(onOverview).toHaveBeenCalledOnce();
+});

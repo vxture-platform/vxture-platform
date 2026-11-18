@@ -12,6 +12,14 @@ import type { Locale } from "@vxture-platform/shared";
 // Interface messages and interpolation
 // ============================================================================
 export const EN_MESSAGES: Record<string, string> = {
+  未订阅: "Not subscribed",
+  联系管理员授权: "Ask your administrator for access",
+  暂无法确认权限: "Unable to verify access",
+  "不足 24 小时到期": "Expires in less than 24 hours",
+  "{0} 天后到期": "Expires in {0} days",
+  "{0}：{1}": "{0}: {1}",
+  数据平台: "Data platform",
+  知识平台: "Knowledge platform",
   星期日: "Sunday",
   星期一: "Monday",
   星期二: "Tuesday",

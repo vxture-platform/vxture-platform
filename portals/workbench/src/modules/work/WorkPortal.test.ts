@@ -31,8 +31,25 @@ vi.mock("next/link", () => ({
   default: ({ children }: React.PropsWithChildren) => children,
 }));
 vi.mock("@vxture/design-system", () => ({
-  Button: ({ children }: React.PropsWithChildren) => children,
-  Drawer: () => null,
+  Button: ({
+    children,
+    disabled,
+    asChild,
+  }: React.PropsWithChildren<{ disabled?: boolean; asChild?: boolean }>) =>
+    asChild ? children : React.createElement("button", { disabled }, children),
+  Drawer: ({
+    open,
+    children,
+    footer,
+  }: React.PropsWithChildren<{ open: boolean; footer: React.ReactNode }>) =>
+    open
+      ? React.createElement(
+          "section",
+          { "data-testid": "drawer" },
+          children,
+          footer,
+        )
+      : null,
   ToastProvider: ({ children }: React.PropsWithChildren) => children,
   Icon: () => null,
   SegmentedControl: () => null,
@@ -42,13 +59,24 @@ vi.mock("./WorkHeader", () => ({ WorkHeader: () => null }));
 vi.mock("./TitleRegion", () => ({ TitleRegion: () => "Verified workspace" }));
 vi.mock("./LoginPage", () => ({ LoginPage: () => "Anonymous" }));
 vi.mock("./AppCatalog", () => ({
-  AppCard: () => null,
+  AppCard: ({
+    app,
+    onOverview,
+  }: {
+    app: { name: string };
+    onOverview: (app: unknown) => void;
+  }) =>
+    React.createElement(
+      "button",
+      { "data-testid": "overview", onClick: () => onOverview(app) },
+      app.name,
+    ),
   AppCatalog: () => null,
 }));
 vi.mock("./NotificationDrawer", () => ({ NotificationDrawer: () => null }));
 vi.mock("./use-app-activity", () => ({
-  useAppActivity: () => ({
-    apps: [],
+  useAppActivity: (data: WorkData | null) => ({
+    apps: data?.catalog.status === "ready" ? data.catalog.data : [],
     view: "favorites",
     enabled: true,
     result: { status: "ready" },
@@ -256,4 +284,58 @@ describe("WorkPortal session reconciliation", () => {
     expect(host.textContent).toContain("Anonymous");
     expect(mocks.login).not.toHaveBeenCalled();
   });
+});
+
+// ============================================================================
+// Drawer authorization is derived from fresh data, never the opening snapshot
+// ============================================================================
+it("removes an open drawer's launch link when refreshed membership access is revoked", async () => {
+  if (ready.status !== "ready") throw new Error("fixture");
+  const app = {
+    code: "agent",
+    name: "Agent",
+    brand: "",
+    description: "",
+    category: "agent" as const,
+    version: "1",
+    stage: "stable",
+    tier: null,
+    icon: null,
+    href: "https://registered.example/",
+    available: true,
+    availabilityLabel: "可使用",
+  };
+  const current = {
+    ...ready.data,
+    catalog: { status: "ready" as const, data: [app] },
+  };
+  mocks.load.mockResolvedValue({ status: "ready", data: current });
+  await mount();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[data-testid="overview"]')?.click(),
+  );
+  expect(
+    host.querySelector(
+      '[data-testid="drawer"] a[href="https://registered.example/"]',
+    ),
+  ).not.toBeNull();
+  mocks.load.mockResolvedValue({
+    status: "ready",
+    data: {
+      ...current,
+      catalog: {
+        status: "ready",
+        data: [
+          { ...app, available: false, availabilityLabel: "联系管理员授权" },
+        ],
+      },
+    },
+  });
+  await foreground();
+  const drawer = host.querySelector('[data-testid="drawer"]');
+  expect(drawer?.textContent).toContain("联系管理员授权");
+  expect(
+    drawer?.querySelector('a[href="https://registered.example/"]'),
+  ).toBeNull();
+  expect(drawer?.querySelector("button[disabled]")).not.toBeNull();
 });

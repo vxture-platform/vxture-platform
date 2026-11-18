@@ -98,6 +98,7 @@ export class AppActivityRouter {
       scope.workspaceId,
       scope.tenantId,
       scope.userId,
+      launch ? code : false,
     );
     const coverage = subscriptions.filter((row) => row.productCode === code);
     if (
@@ -105,7 +106,10 @@ export class AppActivityRouter {
       (launch &&
         !coverage.some(
           (row) =>
-            ["active", "trialing", "overdue"].includes(row.status) &&
+            row.access === "allowed" &&
+            ["active", "trialing", "expiring", "overdue"].includes(
+              row.status,
+            ) &&
             !row.maintenance,
         ))
     )
@@ -161,6 +165,7 @@ export class AppActivityRouter {
         scope.workspaceId,
         scope.tenantId,
         scope.userId,
+        false,
       ),
     ]);
     return {

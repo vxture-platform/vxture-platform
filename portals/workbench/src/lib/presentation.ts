@@ -165,7 +165,10 @@ export function homeApps(
   limit = 3,
 ): WorkApp[] {
   const count = Number.isSafeInteger(limit) && limit > 0 ? limit : 3;
-  return sortApps(apps, view).slice(0, count);
+  return sortApps(
+    apps.filter((app) => app.subscribed !== false),
+    view,
+  ).slice(0, count);
 }
 
 /**
@@ -196,3 +199,36 @@ export const TIER_LABELS: Record<string, string> = {
   team: "团队版",
   enterprise: "企业版",
 };
+
+/** Return a quiet reminder only during the final seven days of effective coverage. */
+export function expiryReminder(
+  expiresAt: string | null | undefined,
+  now = Date.now(),
+): { key: string; days?: string } | null {
+  if (!expiresAt) return null;
+  const remaining = Date.parse(expiresAt) - now;
+  if (
+    !Number.isFinite(remaining) ||
+    remaining <= 0 ||
+    remaining > 7 * 86_400_000
+  )
+    return null;
+  return remaining < 86_400_000
+    ? { key: "不足 24 小时到期" }
+    : { key: "{0} 天后到期", days: String(Math.ceil(remaining / 86_400_000)) };
+}
+
+/** Reuse catalog eligibility and registry URLs for optional platform shortcuts. */
+export function platformShortcuts(
+  apps: readonly WorkApp[],
+): { app: WorkApp; label: string }[] {
+  return [
+    { code: "arda", label: "数据平台" },
+    { code: "karda", label: "知识平台" },
+  ].flatMap(({ code, label }) => {
+    const app = apps.find(
+      (item) => item.code === code && item.activeSubscription === true,
+    );
+    return app ? [{ app, label }] : [];
+  });
+}

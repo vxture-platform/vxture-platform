@@ -48,14 +48,14 @@ const products = [
     description: "梳理业务条款，辅助专业判断",
   },
   {
-    code: "knowledge",
+    code: "karda",
     name: "KnowledgeHub",
     nick: "知识空间",
     type: "general_platform",
     description: "让团队积累成为随时可用的专业知识",
   },
   {
-    code: "data",
+    code: "arda",
     name: "DataSpace",
     nick: "数据空间",
     type: "general_platform",
@@ -64,15 +64,13 @@ const products = [
 ];
 const activity = {
   view: "favorites",
-  items: products
-    .slice(0, 5)
-    .map((p, i) => ({
-      code: p.code,
-      favorite: i < 2,
-      lastUsedAt:
-        i < 3 ? new Date(Date.now() - i * 86400000).toISOString() : null,
-      launches30d: i < 3 ? (i + 1) * 2 : 0,
-    })),
+  items: products.map((p, i) => ({
+    code: p.code,
+    favorite: i < 2,
+    lastUsedAt:
+      i < 3 ? new Date(Date.now() - i * 86400000).toISOString() : null,
+    launches30d: i < 3 ? (i + 1) * 2 : 0,
+  })),
 };
 const inboxMessages = [
   {
@@ -134,14 +132,16 @@ const fixtures = {
     status: "active",
     maintenance: null,
   })),
-  "/api/subscription/subscribed-products": products
-    .slice(0, 5)
-    .map((product, index) => ({
-      productCode: product.code,
-      status: index === 3 ? "expired" : "active",
-      tier: "团队版",
-      maintenance: null,
-    })),
+  "/api/subscription/subscribed-products": products.map((product, index) => ({
+    productCode: product.code,
+    status: index === 3 ? "expired" : "active",
+    access: index === 1 || index === 5 ? "denied" : "allowed",
+    startsAt: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+    expiresAt:
+      index === 0 ? new Date(Date.now() + 6 * 86_400_000).toISOString() : null,
+    tier: "团队版",
+    maintenance: null,
+  })),
   "/api/me/apps": products.map((product) => ({
     code: product.code,
     homeUrl: `https://${product.code}.example.invalid/`,
