@@ -56,6 +56,9 @@ describe("subscribed workspace products", () => {
     expect(sql).toContain("s.tenant_id = $2");
     expect(sql).toContain("f.product_id = p.id and f.user_id = $3");
     expect(sql).not.toContain("pc.tier is not null");
+    expect(sql).toContain(
+      "s.status <> 'expired' or s.end_at >= now() - interval '1 year'",
+    );
   });
 
   it.each([false, undefined, "error"])(

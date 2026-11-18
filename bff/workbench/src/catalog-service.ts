@@ -66,6 +66,7 @@ const SUBSCRIPTIONS = `select distinct p.product_code as "productCode", s.status
     and s.tenant_id = $2
     and s.deleted_at is null and pc.component_role in ('primary', 'bundled')
     and s.status <> 'cancelled'
+    and (s.status <> 'expired' or s.end_at >= now() - interval '1 year')
     and p.deleted_at is null and p.is_customer_visible
   order by p.product_code, s.status, bundled, tier`;
 

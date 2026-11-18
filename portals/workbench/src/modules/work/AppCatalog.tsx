@@ -22,6 +22,7 @@ import {
 } from "@vxture/design-system";
 import type { WorkApp } from "../../lib/contracts";
 import {
+  appVersion,
   expiryReminder,
   filterApps,
   RELEASE_LABELS,
@@ -158,6 +159,7 @@ export function AppCard({
               ? t(reminder.key, reminder.days ?? "")
               : null}
         </span>
+        <span className="work-app-version">{appVersion(app.version)}</span>
         {app.available && app.href ? (
           <Button asChild size="sm" className="work-action">
             <a

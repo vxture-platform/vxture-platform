@@ -127,13 +127,18 @@ describe.skipIf(process.env.SUBSCRIPTION_SEAT_ITEST !== "1")(
       await pool.query(sql);
       expect(await repo.hasUserAccess(input)).toBe(false);
     });
-    it("allows a trial and rejects coverage of another component", async () => {
-      await pool.query("update metering.subscriptions set status='trialing'");
-      expect(await repo.hasUserAccess(input)).toBe(true);
-      await pool.query("update product.plan_components set product_id=$1", [
-        OTHER,
-      ]);
-      expect(await repo.hasUserAccess(input)).toBe(false);
-    });
+    it.each(["active", "trialing", "expiring", "overdue"])(
+      "allows %s coverage and rejects another component",
+      async (status) => {
+        await pool.query("update metering.subscriptions set status=$1", [
+          status,
+        ]);
+        expect(await repo.hasUserAccess(input)).toBe(true);
+        await pool.query("update product.plan_components set product_id=$1", [
+          OTHER,
+        ]);
+        expect(await repo.hasUserAccess(input)).toBe(false);
+      },
+    );
   },
 );

@@ -132,16 +132,36 @@ const fixtures = {
     status: "active",
     maintenance: null,
   })),
-  "/api/subscription/subscribed-products": products.map((product, index) => ({
-    productCode: product.code,
-    status: index === 3 ? "expired" : "active",
-    access: index === 1 || index === 5 ? "denied" : "allowed",
-    startsAt: new Date(Date.now() - 30 * 86_400_000).toISOString(),
-    expiresAt:
-      index === 0 ? new Date(Date.now() + 6 * 86_400_000).toISOString() : null,
-    tier: "团队版",
-    maintenance: null,
-  })),
+  "/api/subscription/subscribed-products": products.flatMap(
+    (product, index) => [
+      {
+        productCode: product.code,
+        status: index === 3 || index === 5 ? "expired" : "active",
+        access: index === 1 || index === 5 ? "denied" : "allowed",
+        startsAt: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+        expiresAt:
+          index === 0
+            ? new Date(Date.now() + 6 * 86_400_000).toISOString()
+            : index === 5
+              ? new Date(Date.now() - 30 * 86_400_000).toISOString()
+              : null,
+        tier: "团队版",
+        maintenance: null,
+      },
+      ...(index === 5
+        ? [
+            {
+              productCode: product.code,
+              status: "active",
+              access: "denied",
+              bundled: true,
+              tier: null,
+              maintenance: null,
+            },
+          ]
+        : []),
+    ],
+  ),
   "/api/me/apps": products.map((product) => ({
     code: product.code,
     homeUrl: `https://${product.code}.example.invalid/`,

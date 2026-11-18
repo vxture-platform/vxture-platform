@@ -227,7 +227,7 @@ export function platformShortcuts(
     { code: "karda", label: "知识平台" },
   ].flatMap(({ code, label }) => {
     const app = apps.find(
-      (item) => item.code === code && item.activeSubscription === true,
+      (item) => item.code === code && item.directActiveSubscription === true,
     );
     return app ? [{ app, label }] : [];
   });
