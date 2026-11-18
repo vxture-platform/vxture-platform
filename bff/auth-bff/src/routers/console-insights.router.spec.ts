@@ -126,6 +126,9 @@ describe("ConsoleInsightsRouter", () => {
     expect(f.pool.query.mock.calls[0]?.[0]).not.toMatch(
       /status\s*=\s*'active'/,
     );
+    expect(f.pool.query.mock.calls[0]?.[0]).toContain(
+      "order by max(r.created_at) desc, r.session_id limit 21",
+    );
     expect(JSON.stringify(result)).not.toContain("member-session");
   });
   it("reports unknown when the central batch observation fails", async () => {

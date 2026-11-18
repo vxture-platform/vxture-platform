@@ -131,8 +131,9 @@ export class ConsoleInsightsRouter {
       user_id: string;
       session_ids: string[];
     }>(
-      `select m.user_id, array(select distinct r.session_id::text from session.refresh_tokens r
-          where r.user_id = m.user_id and r.expires_at > now() limit 21) as session_ids
+      `select m.user_id, array(select r.session_id::text from session.refresh_tokens r
+          where r.user_id = m.user_id and r.expires_at > now()
+          group by r.session_id order by max(r.created_at) desc, r.session_id limit 21) as session_ids
        from tenancy.tenant_memberships m where m.tenant_id = $1 and m.user_id = any($2::uuid[]) and m.status <> 'removed'`,
       [request.tenantId, request.ids],
     );
