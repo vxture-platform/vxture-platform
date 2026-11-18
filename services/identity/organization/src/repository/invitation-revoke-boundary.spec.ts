@@ -69,6 +69,8 @@ function stub(opts: {
     if (text.includes("from account.users u")) {
       return opts.lookup ? await opts.lookup() : { rows: [INVITEE_ROW] };
     }
+    if (text.startsWith("select status from tenancy.invitations"))
+      return { rows: [] };
     throw new Error(`unexpected query: ${text.slice(0, 60)}`);
   });
   return {

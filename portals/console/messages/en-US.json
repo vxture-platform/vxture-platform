@@ -22,7 +22,13 @@
       "expired": "This invitation has expired; ask the inviter to resend it.",
       "revoked": "This invitation has been revoked.",
       "already_accepted": "This invitation was already accepted; if that was you, just switch to the tenant.",
-      "email_mismatch": "Your account email ({email}) does not match the invited email; sign in with the account that owns the invited mailbox."
+      "email_mismatch": "Your account email ({email}) does not match the invited email; sign in with the account that owns the invited mailbox.",
+      "already_member": "You are already a member of this organization.",
+      "member_suspended": "Your membership is suspended. Contact an administrator; invitations cannot restore access.",
+      "workspace_unavailable": "The invited workspace is unavailable. Contact the inviter.",
+      "user_mismatch": "Sign in with the account that received this invitation.",
+      "unknown_target": "This invitation cannot be used. Contact the inviter.",
+      "declined": "You declined this invitation."
     },
     "mismatchTitle": "Signed-in account does not match the invited email",
     "mismatchHint": "You are signed in as {current}; this invitation was sent to {invited}.",
@@ -508,7 +514,8 @@
       "pending": "Pending",
       "accepted": "Accepted",
       "expired": "Expired",
-      "revoked": "Revoked"
+      "revoked": "Revoked",
+      "declined": "Declined"
     },
     "table": {
       "title": "Invitation records",
@@ -545,10 +552,19 @@
       "self_protected": "You cannot do this to yourself.",
       "owner_role_locked": "The owner's role only changes through ownership transfer.",
       "account_not_found": "No Vxture account uses this email; send an invitation instead.",
-      "already_member": "This account is already a member of the tenant.",
-      "invitation_pending": "This email already has a pending invitation.",
-      "invalid_email": "The email address is not valid."
-    }
+      "already_member": "This user is already a member. Use member management.",
+      "invitation_pending": "This user already has a pending invitation. Review the invitation history; changing administrators or channels does not create another invitation.",
+      "invalid_email": "The email address is not valid.",
+      "invalid_phone": "Enter a valid full phone number.",
+      "invitation_channel_required": "Choose exactly one invitation channel.",
+      "invitation_identity_changed": "The recipient has changed. Look up and confirm the account again.",
+      "invitation_resend_cooldown": "Wait one minute before resending.",
+      "workspace_unavailable": "The workspace is unavailable. Select another workspace.",
+      "user_not_found": "No eligible verified account was found. Check the recipient."
+    },
+    "resentInApp": "In-app invitation delivery confirmed.",
+    "resentInAppFailed": "Invitation created, but in-app delivery was not confirmed. The recipient can check their account invitations; retry from invitation history later.",
+    "refreshAfterSendFailed": "The invitation action completed, but refreshing the list failed. Reload to check its status; do not create another invitation."
   },
   "inviteLinkDialog": {
     "title": "Invitation sent",
@@ -748,7 +764,9 @@
         "defaultRole": "Default member",
         "workspace": "Workspace",
         "workspacePlaceholder": "Select a workspace",
-        "rolePlaceholder": "Select a role"
+        "rolePlaceholder": "Select a role",
+        "phone": "Verified phone number",
+        "phoneHint": "Enter a full phone number, including country code if needed. Confirm the account before sending an in-app invitation. No SMS is sent."
       },
       "actions": {
         "cancel": "Cancel",
@@ -766,7 +784,8 @@
       },
       "channel": {
         "email": "Email",
-        "userNo": "User ID"
+        "userNo": "User ID",
+        "phone": "Phone"
       },
       "targetTenant": "Joining tenant: {tenant}",
       "lookup": {
@@ -809,7 +828,9 @@
       "revokeError": "Could not revoke the invitation. Try again later.",
       "bulkPartial": "{done} done, {failed} failed.",
       "bulkSkipped": "The owner and yourself were skipped.",
-      "lookupFailed": "Lookup failed. Please try again."
+      "lookupFailed": "Lookup failed. Please try again.",
+      "inviteInAppFailed": "Invitation created, but in-app delivery was not confirmed. The recipient can check their account invitations; retry from invitation history later.",
+      "inviteRefreshFailed": "The invitation action completed, but refreshing the list failed. Reload to check its status; do not create another invitation."
     },
     "hints": {
       "ownerProtected": "The owner cannot be disabled or unlinked; transfer ownership first",
@@ -822,14 +843,20 @@
       "self_protected": "You cannot do this to yourself.",
       "owner_role_locked": "The owner's role only changes through ownership transfer.",
       "account_not_found": "No Vxture account uses this email; send an invitation instead.",
-      "already_member": "This account is already a member of the tenant.",
-      "invitation_pending": "This email already has a pending invitation; resend or revoke it on the Invitations page.",
+      "already_member": "This user is already a member. Use member management.",
+      "invitation_pending": "This user already has a pending invitation. Review the invitation history; changing administrators or channels does not create another invitation.",
       "invalid_email": "The email address is not valid.",
       "workspace_required": "Select the workspace they will join.",
       "role_required": "Select a role.",
       "lookup_required": "Look the person up and confirm before sending the invitation.",
       "workspace_not_found": "That workspace is not available. Pick another one.",
-      "personal_tenant_no_members": "A personal tenant only has you; members cannot be invited or created."
+      "personal_tenant_no_members": "A personal tenant only has you; members cannot be invited or created.",
+      "invalid_phone": "Enter a valid full phone number.",
+      "invitation_channel_required": "Choose exactly one invitation channel.",
+      "invitation_identity_changed": "The recipient has changed. Look up and confirm the account again.",
+      "invitation_resend_cooldown": "Wait one minute before resending.",
+      "workspace_unavailable": "The workspace is unavailable. Select another workspace.",
+      "user_not_found": "No eligible verified account was found. Check the recipient."
     }
   },
   "metric": {

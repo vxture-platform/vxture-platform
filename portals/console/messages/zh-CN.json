@@ -22,7 +22,13 @@
       "expired": "邀请已过期,请联系邀请人重新发送。",
       "revoked": "这封邀请已被撤销。",
       "already_accepted": "这封邀请已经被接受过了;如果是你,直接切换到该租户即可。",
-      "email_mismatch": "当前登录账号的邮箱({email})与受邀邮箱不一致,请换用受邀邮箱对应的账号登录。"
+      "email_mismatch": "当前登录账号的邮箱({email})与受邀邮箱不一致,请换用受邀邮箱对应的账号登录。",
+      "already_member": "你已是该组织成员，无需再次接受邀请。",
+      "member_suspended": "你的组织成员资格已停用，请联系管理员。邀请不会恢复权限。",
+      "workspace_unavailable": "邀请指定的工作空间已不可用，请联系邀请人重新处理。",
+      "user_mismatch": "当前账号不是受邀人，请切换到受邀账号。",
+      "unknown_target": "该邀请无法使用，请联系邀请人。",
+      "declined": "你已拒绝此邀请。"
     },
     "mismatchTitle": "登录账号与受邀邮箱不一致",
     "mismatchHint": "你当前登录的是 {current},这封邀请发给 {invited}。",
@@ -508,7 +514,8 @@
       "pending": "待接受",
       "accepted": "已接受",
       "expired": "已过期",
-      "revoked": "已撤销"
+      "revoked": "已撤销",
+      "declined": "已拒绝"
     },
     "table": {
       "title": "邀请记录",
@@ -545,10 +552,19 @@
       "self_protected": "不能对自己执行此操作。",
       "owner_role_locked": "所有者的角色只能通过「转让所有权」变更。",
       "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
-      "already_member": "该账号已是本租户成员。",
-      "invitation_pending": "该邮箱已有待接受的邀请。",
-      "invalid_email": "邮箱格式不正确。"
-    }
+      "already_member": "该用户已是组织成员，请在成员管理中操作。",
+      "invitation_pending": "该用户已有待接受邀请，请前往邀请记录查看；不同管理员、不同邀请方式也不能重复发送。",
+      "invalid_email": "邮箱格式不正确。",
+      "invalid_phone": "请输入有效的完整手机号。",
+      "invitation_channel_required": "邮箱、用户号、手机号请选择一种填写。",
+      "invitation_identity_changed": "受邀人信息已变化，请重新查询确认。",
+      "invitation_resend_cooldown": "邀请发送未满一分钟，请稍后重发。",
+      "workspace_unavailable": "工作空间已停用或不存在，请重新选择。",
+      "user_not_found": "未找到可邀请的已验证账号，请核对信息。"
+    },
+    "resentInApp": "站内邀请已确认送达。",
+    "resentInAppFailed": "邀请已创建，站内通知未确认送达。对方可在账号信息查看邀请；请稍后在邀请记录中重发。",
+    "refreshAfterSendFailed": "邀请操作已完成，但列表刷新失败。请刷新页面查看状态，不要重新创建邀请。"
   },
   "inviteLinkDialog": {
     "title": "邀请已发出",
@@ -748,7 +764,9 @@
         "defaultRole": "默认成员",
         "workspace": "工作空间",
         "workspacePlaceholder": "请选择工作空间",
-        "rolePlaceholder": "请选择角色"
+        "rolePlaceholder": "请选择角色",
+        "phone": "已验证手机号",
+        "phoneHint": "填写完整手机号，可带国家区号。先查询确认受邀人，邀请将发送到对方站内待办，不发送短信。"
       },
       "actions": {
         "cancel": "取消",
@@ -766,7 +784,8 @@
       },
       "channel": {
         "email": "邮箱",
-        "userNo": "用户号"
+        "userNo": "用户号",
+        "phone": "手机号"
       },
       "targetTenant": "将加入租户：{tenant}",
       "lookup": {
@@ -809,7 +828,9 @@
       "revokeError": "撤销失败,请稍后重试。",
       "bulkPartial": "完成 {done} 项,失败 {failed} 项。",
       "bulkSkipped": "已跳过所有者与本人。",
-      "lookupFailed": "查询失败，请稍后重试。"
+      "lookupFailed": "查询失败，请稍后重试。",
+      "inviteInAppFailed": "邀请已创建，站内通知未确认送达。对方可在账号信息查看邀请；请稍后在邀请记录中重发。",
+      "inviteRefreshFailed": "邀请操作已完成，但列表刷新失败。请刷新页面查看状态，不要重新创建邀请。"
     },
     "hints": {
       "ownerProtected": "所有者不可停用或解除关联,请先转让所有权",
@@ -822,14 +843,20 @@
       "self_protected": "不能对自己执行此操作。",
       "owner_role_locked": "所有者的角色只能通过「转让所有权」变更。",
       "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
-      "already_member": "该账号已是本租户成员。",
-      "invitation_pending": "该邮箱已有待接受的邀请,请到邀请管理页重发或撤销。",
+      "already_member": "该用户已是组织成员，请在成员管理中操作。",
+      "invitation_pending": "该用户已有待接受邀请，请前往邀请记录查看；不同管理员、不同邀请方式也不能重复发送。",
       "invalid_email": "邮箱格式不正确。",
       "workspace_required": "请选择要加入的工作空间。",
       "role_required": "请选择角色。",
       "lookup_required": "请先查询并确认是这个人，再发送邀请。",
       "workspace_not_found": "这个工作空间不可用，请重新选择。",
-      "personal_tenant_no_members": "个人租户只有你自己，不能邀请或新建成员。"
+      "personal_tenant_no_members": "个人租户只有你自己，不能邀请或新建成员。",
+      "invalid_phone": "请输入有效的完整手机号。",
+      "invitation_channel_required": "邮箱、用户号、手机号请选择一种填写。",
+      "invitation_identity_changed": "受邀人信息已变化，请重新查询确认。",
+      "invitation_resend_cooldown": "邀请发送未满一分钟，请稍后重发。",
+      "workspace_unavailable": "工作空间已停用或不存在，请重新选择。",
+      "user_not_found": "未找到可邀请的已验证账号，请核对信息。"
     }
   },
   "metric": {

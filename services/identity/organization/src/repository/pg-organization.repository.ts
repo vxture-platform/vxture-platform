@@ -1,4 +1,10 @@
-import { ConflictException, Inject, Injectable, Logger } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+} from "@nestjs/common";
 import { createHash, randomBytes } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { ORG_PG_POOL } from "../tokens";
@@ -159,7 +165,7 @@ const DEFAULT_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
  * 而这几条语句里有两条是**持着行锁**的事务。扫表的活挪到提交之后、且只在真的需要
  * 受邀人账号时才做（撤销那一条）——见 resolveInvitee。
  */
-const INVITATION_FACTS_SELECT = `i.id as invitation_id, i.tenant_id,
+const INVITATION_FACTS_SELECT = `i.id as invitation_id, i.tenant_id, i.recipient_user_id,
               t.tenant_no::text as tenant_no, t.name as tenant_name,
               rc.role_code, i.expires_at, i.target,
               iu.id as inviter_user_id,
@@ -171,6 +177,7 @@ const INVITATION_FACTS_JOINS = `left join tenancy.tenants t on t.id = i.tenant_i
          left join account.user_profiles ip on ip.user_id = iu.id`;
 
 interface InvitationFactsRow {
+  recipient_user_id: string | null;
   invitation_id: string;
   tenant_id: string | null;
   tenant_no: string | null;
@@ -1943,33 +1950,38 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const ttl = input.ttlSeconds ?? DEFAULT_INVITE_TTL_SECONDS;
     // role code → role_id + role_scope. Invitation scope 'org' maps to role scope
     // 'tenant'; 'workspace' maps to 'workspace'. CTE resolves the code back for the view.
-    const r = await this.pool.query(
-      `with ins as (
+    try {
+      const r = await this.pool.query(
+        `with ins as (
          insert into tenancy.invitations
            (scope, tenant_id, workspace_id, target_type, target, role_id, role_scope, status,
-            token_hash, expires_at, created_by, created_at, updated_at)
-         select $1::text,$2,$3,$4,$5, r.id, r.scope, 'pending',$7, now() + ($8 || ' seconds')::interval, $9, now(), now()
+            token_hash, expires_at, created_by, created_at, updated_at, recipient_user_id)
+         select $1::text,$2,$3,$4,$5, r.id, r.scope, 'pending',$7, now() + ($8 || ' seconds')::interval, $9, now(), now(), $10
            from access.roles r
           where r.role_code = $6
             and r.scope = case when $1::text = 'org' then 'tenant' else 'workspace' end
-         returning id, scope, tenant_id, workspace_id, target_type, target, role_id, status, expires_at
+         returning id, scope, tenant_id, workspace_id, target_type, target, role_id, status, expires_at, recipient_user_id
        )
        select i.id, i.scope, i.tenant_id, i.workspace_id, i.target_type, i.target,
-              rr.role_code as role, i.status, i.expires_at
+              rr.role_code as role, i.status, i.expires_at, i.recipient_user_id
          from ins i join access.roles rr on rr.id = i.role_id`,
-      [
-        input.scope,
-        input.organizationId,
-        input.workspaceId ?? null,
-        input.targetType,
-        input.target,
-        input.role,
-        tokenHash,
-        String(ttl),
-        input.createdBy,
-      ],
-    );
-    return { invitation: mapInvitation(r.rows[0]), token };
+        [
+          input.scope,
+          input.organizationId,
+          input.workspaceId ?? null,
+          input.targetType,
+          input.target,
+          input.role,
+          tokenHash,
+          String(ttl),
+          input.createdBy,
+          input.recipientUserId ?? null,
+        ],
+      );
+      return { invitation: mapInvitation(r.rows[0]), token };
+    } catch (error) {
+      throwInvitationWriteError(error);
+    }
   }
 
   async getWorkspaceMembership(
@@ -2297,7 +2309,12 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
    * `lower($1)` 会让 `lower(target) = null` 恒为 unknown,不会误放行。
    */
   async listInvitationsForIdentity(
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
     limit = 50,
   ): Promise<IncomingInvitation[]> {
     const res = await this.pool.query<{
@@ -2321,13 +2338,20 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         where i.status = 'pending'
           and i.expires_at > now()
           and (
-            (i.target_type = 'email'   and lower(i.target) = lower($1))
-            or
-            (i.target_type = 'user_no' and i.target = $2)
+            (i.recipient_user_id IS NOT NULL AND i.recipient_user_id = $4::uuid) OR
+            (i.recipient_user_id IS NULL AND ((i.target_type = 'email' and lower(i.target) = lower($1)) OR
+            (i.target_type = 'user_no' and i.target = $2) OR
+            (i.target_type = 'phone' and i.target = $5)))
           )
         order by i.created_at desc
         limit $3`,
-      [identity.email, identity.userNo, limit],
+      [
+        identity.email,
+        identity.userNo,
+        limit,
+        identity.userId ?? null,
+        identity.phone ?? null,
+      ],
     );
     return res.rows.map((row) => ({
       id: row.id,
@@ -2347,7 +2371,12 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
    */
   async declineInvitation(
     invitationId: string,
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
   ): Promise<DeclineInvitationResult> {
     if (!ACCEPT_UUID_RE.test(invitationId)) {
       return { ok: false, reason: "not_found" };
@@ -2364,6 +2393,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         InvitationFactsRow & {
           id: string;
           status: string;
+          recipient_user_id: string | null;
           target_type: string;
         }
       >(
@@ -2379,6 +2409,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       const rejection = row
         ? rejectAcceptance(
             {
+              recipientUserId: row.recipient_user_id,
               status: row.status,
               expiresAt: row.expires_at,
               targetType: row.target_type,
@@ -2418,6 +2449,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   ): Promise<InvitationListItem[]> {
     const res = await this.pool.query<{
       id: string;
+      recipient_user_id: string | null;
       target_type: string;
       target: string;
       role_code: string | null;
@@ -2427,7 +2459,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       created_at: Date;
       inviter_name: string | null;
     }>(
-      `select i.id, i.target_type, i.target, r.role_code, i.status, i.expires_at,
+      `select i.id, i.recipient_user_id, i.target_type, i.target, r.role_code, i.status, i.expires_at,
               i.accepted_at, i.created_at,
               coalesce(up.display_name, u.account) as inviter_name
          from tenancy.invitations i
@@ -2442,6 +2474,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const now = Date.now();
     return res.rows.map((row) => ({
       id: row.id,
+      recipientUserId: row.recipient_user_id,
       targetType: row.target_type,
       target: row.target,
       /* `email` 只在邮箱通道有值。以前这里写的是 `email: row.target`——两条通道
@@ -2480,7 +2513,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
          update tenancy.invitations
             set status = 'revoked', updated_at = now()
           where id = $1 and tenant_id = $2 and status = 'pending'
-         returning id, tenant_id, target_type, target, role_id, expires_at, created_by
+         returning id, tenant_id, recipient_user_id, target_type, target, role_id, expires_at, created_by
        )
        select i.target_type,
               ${INVITATION_FACTS_SELECT}
@@ -2489,7 +2522,13 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       [invitationId, tenantId],
     );
     const row = res.rows[0];
-    if (!row) return { ok: false };
+    if (!row) {
+      const current = await this.pool.query(
+        "select status from tenancy.invitations where id = $1 and tenant_id = $2",
+        [invitationId, tenantId],
+      );
+      return { ok: current.rows[0]?.status === "revoked" };
+    }
     /*
      * ── 这一行往下是 best-effort 区（2026-09-29 补的兜底）──
      * 上面那条语句走 `this.pool.query`，**没有外层事务**：它一返回，撤销就已经提交、
@@ -2518,7 +2557,11 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       inviteeName: string | null;
     } = { inviteeUserId: null, inviteeName: null };
     try {
-      invitee = await this.resolveInvitee(row.target_type, row.target);
+      invitee = await this.resolveInvitee(
+        row.target_type,
+        row.target,
+        row.recipient_user_id,
+      );
     } catch (error) {
       this.logger.warn(
         `revokeInvitation: invitee lookup failed after commit ` +
@@ -2542,6 +2585,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   private async resolveInvitee(
     targetType: string,
     target: string,
+    recipientUserId: string | null,
   ): Promise<{ inviteeUserId: string | null; inviteeName: string | null }> {
     const raw = target.trim();
     const res = await this.pool.query<{ id: string; name: string | null }>(
@@ -2550,11 +2594,13 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
          left join account.user_profiles p on p.user_id = u.id
         where u.deleted_at is null
           and (
+            ($3::uuid IS NOT NULL AND u.id = $3) OR ($3::uuid IS NULL AND (
             ($2 = 'user_no' and u.user_no::text = $1)
-            or ($2 = 'email' and lower(coalesce(u.email, '')) = lower($1))
+            or ($2 = 'email' and u.email_verified_at IS NOT NULL and lower(coalesce(u.email, '')) = lower($1))
+            or ($2 = 'phone' and u.phone_verified_at IS NOT NULL and u.phone = $1)))
           )
         limit 1`,
-      [raw, targetType],
+      [raw, targetType, recipientUserId],
     );
     const row = res.rows[0];
     return row
@@ -2663,13 +2709,20 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   ): Promise<RotatedInvitation | null> {
     const token = randomBytes(32).toString("hex");
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    const res = await this.pool.query<{
-      expires_at: Date;
-      target_type: string;
-      target: string;
-      role_code: string | null;
-    }>(
-      `with rotated as (
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+        ["invitation:" + tenantId],
+      );
+      const res = await client.query<{
+        expires_at: Date;
+        target_type: string;
+        target: string;
+        role_code: string | null;
+      }>(
+        `with rotated as (
          update tenancy.invitations i
             set token_hash = $3,
                 expires_at = now() + ($4 || ' seconds')::interval,
@@ -2682,25 +2735,33 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
        select r.expires_at, r.target_type, r.target, rr.role_code
          from rotated r
          left join access.roles rr on rr.id = r.role_id`,
-      [invitationId, tenantId, tokenHash, String(DEFAULT_INVITE_TTL_SECONDS)],
-    );
-    const row = res.rows[0];
-    return row
-      ? {
-          token,
-          expiresAt: row.expires_at,
-          targetType: row.target_type,
-          target: row.target,
-          /* 只在邮箱通道有值:上层拿它决定重发时发不发邮件。 */
-          email: row.target_type === "email" ? row.target : "",
-          roleCode: row.role_code ?? "member",
-        }
-      : null;
+        [invitationId, tenantId, tokenHash, String(DEFAULT_INVITE_TTL_SECONDS)],
+      );
+      await client.query("commit");
+      const row = res.rows[0];
+      return row
+        ? {
+            token,
+            expiresAt: row.expires_at,
+            targetType: row.target_type,
+            target: row.target,
+            /* 只在邮箱通道有值:上层拿它决定重发时发不发邮件。 */
+            email: row.target_type === "email" ? row.target : "",
+            roleCode: row.role_code ?? "member",
+          }
+        : null;
+    } catch (error) {
+      await client.query("rollback");
+      throwInvitationWriteError(error);
+    } finally {
+      client.release();
+    }
   }
 
   async getInvitationByToken(token: string): Promise<InvitationLookup | null> {
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const res = await this.pool.query<{
+      recipient_user_id: string | null;
       id: string;
       tenant_id: string | null;
       tenant_name: string | null;
@@ -2710,7 +2771,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       expires_at: Date;
       inviter_name: string | null;
     }>(
-      `select i.id, i.tenant_id, t.name as tenant_name, i.target, rr.role_code,
+      `select i.id, i.recipient_user_id, i.tenant_id, t.name as tenant_name, i.target, rr.role_code,
               i.status, i.expires_at,
               coalesce(up.display_name, u.account) as inviter_name
          from tenancy.invitations i
@@ -2725,6 +2786,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const row = res.rows[0];
     if (!row) return null;
     return {
+      recipientUserId: row.recipient_user_id,
       id: row.id,
       tenantId: row.tenant_id,
       tenantName: row.tenant_name,
@@ -2783,7 +2845,12 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   async acceptInvitation(
     locator: { token: string } | { invitationId: string },
     userId: string,
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
   ): Promise<AcceptInvitationResult> {
     const byToken = "token" in locator;
     /* 形状不对的 ID 要当「查不到」,不能让它撞到 PG:`i.id` 是 uuid 列,
@@ -2811,6 +2878,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
           role_id: string;
           role_scope: string;
           status: string;
+          recipient_user_id: string | null;
           target_type: string;
           acceptor_name: string | null;
         }
@@ -2831,17 +2899,61 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       const rejection = row
         ? rejectAcceptance(
             {
+              recipientUserId: row.recipient_user_id,
               status: row.status,
               expiresAt: row.expires_at,
               targetType: row.target_type,
               target: row.target,
             },
-            identity,
+            { ...identity, userId },
           )
         : "not_found";
       if (!row || rejection) {
         await client.query("rollback");
         return { ok: false, reason: rejection ?? "not_found" };
+      }
+      const eligibleUser = await client.query(
+        "select id from account.users where id = $1 and deleted_at is null and status = 'active' for share",
+        [userId],
+      );
+      if (!eligibleUser.rowCount) {
+        await client.query("rollback");
+        return { ok: false, reason: "user_mismatch" };
+      }
+      if (row.tenant_id) {
+        const tenant = await client.query(
+          "select id from tenancy.tenants where id = $1 and deleted_at is null and status = 'active' for update",
+          [row.tenant_id],
+        );
+        if (!tenant.rowCount) {
+          await client.query("rollback");
+          return { ok: false, reason: "not_found" };
+        }
+        const workspace = await client.query(
+          "select id from tenancy.workspaces where tenant_id = $1 and deleted_at is null and status = 'active' and case when $2::uuid is null then is_default else id = $2::uuid end for share",
+          [row.tenant_id, row.workspace_id],
+        );
+        if (!workspace.rowCount) {
+          await client.query("rollback");
+          return { ok: false, reason: "workspace_unavailable" };
+        }
+        const existing = await client.query<{ status: string }>(
+          "select status from tenancy.tenant_memberships where tenant_id = $1 and user_id = $2 for update",
+          [row.tenant_id, userId],
+        );
+        if (
+          existing.rows[0] &&
+          (row.scope === "org" || existing.rows[0].status === "suspended")
+        ) {
+          await client.query("rollback");
+          return {
+            ok: false,
+            reason:
+              existing.rows[0].status === "suspended"
+                ? "member_suspended"
+                : "already_member",
+          };
+        }
       }
       await client.query(
         `update tenancy.invitations
@@ -2860,14 +2972,18 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
           `with upserted as (
              insert into tenancy.tenant_memberships (tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
              values ($1, $2, $3, $4, 'active', now(), now())
-             on conflict (tenant_id, user_id) do update set role_id = excluded.role_id, status = 'active', updated_at = now()
+             on conflict (tenant_id, user_id) do nothing
              returning tenant_id, user_id, role_id, status
            )
            select up.tenant_id, up.user_id, rr.role_code as role, up.status
              from upserted up join access.roles rr on rr.id = up.role_id`,
           [row.tenant_id, userId, row.role_id, row.role_scope],
         );
-        membership = mapMembership(m.rows[0]!);
+        if (!m.rows[0]) {
+          await client.query("rollback");
+          return { ok: false, reason: "already_member" };
+        }
+        membership = mapMembership(m.rows[0]);
         /* 两级一起挂。进**哪个**工作空间:邀请上指定的那个;没指定就回落默认。
            owner 2026-09-10 起邀请必选工作空间,所以正常路径走的是前者;
            回落留着是为了旧的 pending 邀请(它们那一列是 null)。 */
@@ -2886,7 +3002,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
              select w.id, w.tenant_id, $2, $3, $4, 'active', now(), now()
                from tenancy.workspaces w
               where w.id = $1
-             on conflict (workspace_id, user_id) do update set role_id = excluded.role_id, status = 'active', updated_at = now()
+             on conflict (workspace_id, user_id) do nothing
              returning tenant_id, role_id
            )
            select up.tenant_id, rr.role_code as role
@@ -2980,9 +3096,8 @@ function mapMembership(row: OrgMembershipRow): OrgMembershipView {
  * 给 null 回落到租户的默认空间——留着是为了**旧的 pending 邀请**,
  * 它们那一列是 null,不能让它们在接受时无处可去。
  *
- * 目标空间必须属于这个租户、未删、启用中:邀请可能躺了几天,期间空间被停用了。
- * 条件不满足时这条 insert 选不出行 → 一行不写,人仍进了租户(租户级那半已经提交),
- * 只是不在任何工作空间里——那是允许的状态(owner 2026-09-09 第 3 件裁定)。
+ * Acceptance locks and validates the selected workspace before either membership
+ * is written. An archived or deleted workspace aborts the entire acceptance.
  */
 async function upsertWorkspaceMembershipForInvite(
   client: PoolClient,
@@ -3011,6 +3126,7 @@ async function upsertWorkspaceMembershipForInvite(
 }
 
 function mapInvitation(row: {
+  recipient_user_id?: string | null;
   id: string;
   scope: string;
   tenant_id: string | null;
@@ -3022,6 +3138,7 @@ function mapInvitation(row: {
   expires_at: Date;
 }): InvitationView {
   return {
+    recipientUserId: row.recipient_user_id ?? null,
     id: row.id,
     scope: row.scope as InvitationView["scope"],
     organizationId: row.tenant_id,
@@ -3080,4 +3197,33 @@ function mapTenantVerification(
     reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
   };
+}
+
+/** Translate known integrity failures; unexpected storage failures remain visible. */
+function throwInvitationWriteError(error: unknown): never {
+  const message = error instanceof Error ? error.message : "";
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? error.code
+      : null;
+  if (
+    code === "23505" ||
+    [
+      "invitation_pending",
+      "already_member",
+      "invitation_resend_cooldown",
+      "invitation_identity_changed",
+    ].includes(message)
+  ) {
+    throw new ConflictException(
+      code === "23505" ? "invitation_pending" : message,
+    );
+  }
+  if (
+    ["workspace_unavailable", "user_not_found", "tenant_required"].includes(
+      message,
+    )
+  )
+    throw new BadRequestException(message);
+  throw error;
 }

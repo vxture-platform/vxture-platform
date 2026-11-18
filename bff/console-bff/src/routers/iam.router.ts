@@ -248,10 +248,14 @@ const ACCEPT_INVITATION_ERRORS: Record<
   AcceptInvitationRejection,
   (reason: string) => Error
 > = {
+  already_member: (reason) => new ConflictException(reason),
+  member_suspended: (reason) => new ConflictException(reason),
+  workspace_unavailable: (reason) => new ConflictException(reason),
   not_found: (reason) => new NotFoundException(reason),
   expired: (reason) => new BadRequestException(reason),
   revoked: (reason) => new BadRequestException(reason),
   already_accepted: (reason) => new ConflictException(reason),
+  declined: (reason) => new ConflictException(reason),
   email_mismatch: (reason) => new ForbiddenException(reason),
   /* 按用户号邀请、但接受的人不是那个号。与 email_mismatch 同档:
      403 而不是 404——「这个邀请存在,但不是给你的」，说清楚才好换个账号登录。 */
@@ -378,8 +382,12 @@ export class IamRouter {
     tenantId: string,
     tenantNo: string | null,
   ) {
-    if (outcome.targetType === "user_no") {
-      await this.notifyInviteeInApp(outcome, tenantId, tenantNo);
+    if (outcome.targetType === "user_no" || outcome.targetType === "phone") {
+      const deliveredInApp = await this.notifyInviteeInApp(
+        outcome,
+        tenantId,
+        tenantNo,
+      );
       return {
         member: outcome.member,
         invitationId: outcome.invitationId,
@@ -388,7 +396,7 @@ export class IamRouter {
         /* 不给链接:这条通道靠站内消息送达。前端据此不出「复制链接」弹窗。 */
         inviteLink: null,
         emailSent: false,
-        deliveredInApp: true,
+        deliveredInApp,
         expiresAt: outcome.expiresAt.toISOString(),
       };
     }
@@ -430,9 +438,9 @@ export class IamRouter {
     tenantId: string,
     tenantNo: string | null,
   ) {
-    if (!outcome.targetUserId) return;
+    if (!outcome.targetUserId) return false;
     try {
-      await this.notifier.notify({
+      const delivery = await this.notifier.notify({
         /* tenant_id 由调用方给,**不按租户名去查**:`tenancy.tenants.name` 没有
            唯一索引(查过 pg_index),按名字 join 可能挑错租户。 */
         tenantId,
@@ -496,10 +504,25 @@ export class IamRouter {
            不另开一页,也就不需要把邀请 ID 放进地址栏。 */
         link: "/inbox",
       });
+      if (delivery?.inboxCreated > 0) return true;
+      const existing = await this.pool.query(
+        "select 1 from support.inbox_messages where tenant_id = $1 and account_id = $2 and template_code = 'tenant.invitation' and reference_type = 'invitation' and reference_id = $3 limit 1",
+        [
+          tenantId,
+          outcome.targetUserId,
+          invitationReferenceId(
+            tenantNo ?? "unknown",
+            outcome.invitationId,
+            "pending",
+          ),
+        ],
+      );
+      return (existing.rowCount ?? 0) > 0;
     } catch (err) {
       this.logger.warn(
         `in-app invitation notice for ${outcome.invitationId} failed: ${String(err)}`,
       );
+      return false;
     }
   }
 
@@ -713,11 +736,17 @@ export class IamRouter {
    */
   @SelfScope()
   @Get("invitations/lookup")
-  async lookupInvitation(@Query("token") token?: string) {
+  async lookupInvitation(
+    @Req() req: Request & RequestContext,
+    @Query("token") token?: string,
+  ) {
     if (!token) throw new BadRequestException("token is required");
     const found = await this.sessionAggregator.lookupInvitation(token);
     if (!found) throw new NotFoundException("not_found");
     return {
+      recipientMatches: found.recipientUserId
+        ? found.recipientUserId === req.user?.id
+        : null,
       id: found.id,
       tenantName: found.tenantName,
       email: found.email,
@@ -1203,6 +1232,18 @@ export class IamRouter {
    * 认识规则就能穷举)。返回里联系方式一律遮蔽,查不到只说查不到,不区分
    * 「没这个号」与「这个号被停用了」。
    */
+  @RequireCapability("tenant.member.manage")
+  @Get("users/by-phone")
+  async lookupUserByPhone(
+    @Req() req: Request & RequestContext,
+    @Query("phone") phone?: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    if (typeof phone !== "string")
+      throw new BadRequestException("invalid_phone");
+    return this.sessionAggregator.lookupUserByPhone(accountId, tenantId, phone);
+  }
+
   @RequireCapability("tenant.member.manage")
   @Get("users/by-no/:userNo")
   async lookupUserByNo(

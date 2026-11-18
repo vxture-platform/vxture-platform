@@ -23,7 +23,7 @@
 
 import { PhoneNumber } from "@vxture/design-system";
 import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ActionMenu,
   Banner,
@@ -65,6 +65,7 @@ import {
   memberErrorCode,
   fetchSwitchableWorkspaces,
   lookupUserByNo,
+  lookupUserByPhone,
   type UserLookupResult,
   resendInvitation,
   revokeInvitation,
@@ -177,15 +178,24 @@ export function MembersPage() {
   /** 按用户号查到的人;null = 还没查。查过才允许提交,防止邀错人。 */
   const [lookup, setLookup] = useState<UserLookupResult | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
+  const lookupGeneration = useRef(0);
 
   const [memberForm, setMemberForm] = useState({
     email: "",
     userNo: "",
+    phone: "",
     /** 邀请进哪个工作空间(必选,owner 2026-09-10)。 */
     workspaceId: "",
-    channel: "email" as "email" | "user_no",
+    channel: "email" as "email" | "user_no" | "phone",
     roleId: "",
   });
+
+  useEffect(() => {
+    lookupGeneration.current += 1;
+    setLookup(null);
+    setCreateMode(null);
+    setDialogError(null);
+  }, [session.tenant?.id, session.user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -229,9 +239,12 @@ export function MembersPage() {
   }
 
   function resetMemberForm(member?: MemberRecord | null) {
+    lookupGeneration.current += 1;
+    setLookup(null);
     setMemberForm({
       email: member?.email ?? "",
       userNo: "",
+      phone: "",
       workspaceId: "",
       /* 每次开对话框都回到邮箱通道:上一次选了用户号不该粘住,
          下一个人多半是要发邮件的。 */
@@ -262,7 +275,7 @@ export function MembersPage() {
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!createMode) return;
+    if (!createMode || submitting) return;
 
     setSubmitting(true);
     resetFeedback();
@@ -294,12 +307,12 @@ export function MembersPage() {
       }
       /* 用户号通道:**查过并确认是这个人**才让提交。这一条服务端不判(它只知道号
          存不存在),但它正是 owner 要这个查询的理由——防止邀错人。 */
-      if (memberForm.channel === "user_no" && !lookup?.found) {
+      if (memberForm.channel !== "email" && !lookup?.found) {
         setDialogError(t("errors.lookup_required"));
         setSubmitting(false);
         return;
       }
-      if (memberForm.channel === "user_no" && lookup?.alreadyMember) {
+      if (memberForm.channel !== "email" && lookup?.alreadyMember) {
         setDialogError(t("errors.already_member"));
         setSubmitting(false);
         return;
@@ -311,19 +324,28 @@ export function MembersPage() {
         /* 按通道只给该给的那一项:两个都给会让后端的分叉判据(给了哪一个)变成
            「都给了怎么办」,那是个不必要的歧义。 */
         const result = await inviteMember(
-          memberForm.channel === "user_no"
+          memberForm.channel === "phone"
             ? {
-                userNo: memberForm.userNo.trim(),
+                phone: memberForm.phone,
+                expectedUserNo: lookup?.userNo ?? "",
                 roleCode,
                 workspaceId: memberForm.workspaceId,
               }
-            : {
-                email: memberForm.email,
-                roleCode,
-                workspaceId: memberForm.workspaceId,
-              },
+            : memberForm.channel === "user_no"
+              ? {
+                  userNo: memberForm.userNo.trim(),
+                  roleCode,
+                  workspaceId: memberForm.workspaceId,
+                }
+              : {
+                  email: memberForm.email,
+                  roleCode,
+                  workspaceId: memberForm.workspaceId,
+                },
         );
-        await reloadMembers(result.member.id);
+        await reloadMembers(result.member.id).catch(() =>
+          setError(t("feedback.inviteRefreshFailed")),
+        );
         setCreateMode(null);
         resetMemberForm();
         setInviteResult({ result, resent: false });
@@ -334,7 +356,11 @@ export function MembersPage() {
             ? t("feedback.inviteSentInApp")
             : result.emailSent
               ? t("feedback.inviteSuccess")
-              : t("feedback.inviteNoEmail"),
+              : t(
+                  result.inviteLink
+                    ? "feedback.inviteNoEmail"
+                    : "feedback.inviteInAppFailed",
+                ),
         );
       } else {
         /* 「加成员」只有邮箱一条路:它要求对方已是平台用户且按邮箱找得到。 */
@@ -440,12 +466,20 @@ export function MembersPage() {
     resetFeedback();
     try {
       const result = await resendInvitation(member.id);
-      await reloadMembers(member.id);
+      await reloadMembers(member.id).catch(() =>
+        setError(t("feedback.inviteRefreshFailed")),
+      );
       setInviteResult({ result, resent: true });
       setMessage(
-        result.emailSent
-          ? t("feedback.inviteResent")
-          : t("feedback.inviteNoEmail"),
+        result.deliveredInApp
+          ? t("feedback.inviteSentInApp")
+          : result.emailSent
+            ? t("feedback.inviteResent")
+            : t(
+                result.inviteLink
+                  ? "feedback.inviteNoEmail"
+                  : "feedback.inviteInAppFailed",
+              ),
       );
     } catch (caught) {
       setError(errorText(caught, "feedback.resendError"));
@@ -614,7 +648,7 @@ export function MembersPage() {
   ] as const;
 
   const countTitle = t("table.countHint", {
-    total: members.length,
+    total: members.filter((m) => m.status !== "Invited").length,
     active: statusCounts.active,
     invited: statusCounts.invited,
     suspended: statusCounts.suspended,
@@ -896,15 +930,24 @@ export function MembersPage() {
 
   /** 按用户号查人。查到什么都记下来,由界面显示,不在这里替人判断。 */
   async function runLookup() {
-    const no = memberForm.userNo.trim();
+    const no = (
+      memberForm.channel === "phone" ? memberForm.phone : memberForm.userNo
+    ).trim();
+    const generation = ++lookupGeneration.current;
     if (!no || lookingUp) return;
     setLookingUp(true);
     setDialogError(null);
     try {
-      setLookup(await lookupUserByNo(no));
+      const result =
+        memberForm.channel === "phone"
+          ? await lookupUserByPhone(no)
+          : await lookupUserByNo(no);
+      if (generation === lookupGeneration.current) setLookup(result);
     } catch (caught) {
-      setLookup(null);
-      setDialogError(errorText(caught, "feedback.lookupFailed"));
+      if (generation === lookupGeneration.current) {
+        setLookup(null);
+        setDialogError(errorText(caught, "feedback.lookupFailed"));
+      }
     } finally {
       setLookingUp(false);
     }
@@ -1312,24 +1355,31 @@ export function MembersPage() {
               <FieldLabel htmlFor="member-channel">
                 {t("dialogs.fields.channel")}
               </FieldLabel>
-              <SegmentedControl<"email" | "user_no">
+              <SegmentedControl<"email" | "user_no" | "phone">
                 ariaLabel={t("dialogs.fields.channel")}
                 value={memberForm.channel}
-                onChange={(next) =>
-                  setMemberForm((old) => ({ ...old, channel: next }))
-                }
+                onChange={(next) => {
+                  lookupGeneration.current += 1;
+                  setLookup(null);
+                  setMemberForm((old) => ({ ...old, channel: next }));
+                }}
                 items={[
                   { value: "email", label: t("dialogs.channel.email") },
                   { value: "user_no", label: t("dialogs.channel.userNo") },
+                  { value: "phone", label: t("dialogs.channel.phone") },
                 ]}
               />
             </Field>
           ) : null}
 
-          {createMode === "invite" && memberForm.channel === "user_no" ? (
+          {createMode === "invite" && memberForm.channel !== "email" ? (
             <Field>
               <FieldLabel htmlFor="member-user-no">
-                {t("dialogs.fields.userNo")}
+                {t(
+                  memberForm.channel === "phone"
+                    ? "dialogs.fields.phone"
+                    : "dialogs.fields.userNo",
+                )}
               </FieldLabel>
               {/* 输入框 + 查询按钮同一行(owner 2026-09-10 的布局)。
                   改动号码就把上一次的结果清掉——否则改了号、卡还停在旧人身上,
@@ -1345,22 +1395,33 @@ export function MembersPage() {
                     className="select-none text-body-small text-muted-foreground"
                     aria-hidden="true"
                   >
-                    {USER_NO_PREFIX}
+                    {memberForm.channel === "phone"
+                      ? t("dialogs.channel.phone")
+                      : USER_NO_PREFIX}
                   </span>
                   <Input
                     id="member-user-no"
                     inputMode="numeric"
                     autoComplete="off"
                     className="border-0 bg-transparent px-0 focus-visible:ring-0"
-                    value={memberForm.userNo}
+                    value={
+                      memberForm.channel === "phone"
+                        ? memberForm.phone
+                        : memberForm.userNo
+                    }
                     onChange={(event) => {
+                      lookupGeneration.current += 1;
                       setLookup(null);
                       setMemberForm((old) => ({
                         ...old,
-                        userNo: normalizePrincipalNoInput(
-                          event.target.value,
-                          "user",
-                        ),
+                        ...(old.channel === "phone"
+                          ? { phone: event.target.value }
+                          : {
+                              userNo: normalizePrincipalNoInput(
+                                event.target.value,
+                                "user",
+                              ),
+                            }),
                       }));
                     }}
                     required
@@ -1371,7 +1432,10 @@ export function MembersPage() {
                   variant="outline"
                   size="md"
                   disabled={
-                    !memberForm.userNo || userNoProblem !== null || lookingUp
+                    (memberForm.channel === "phone"
+                      ? !memberForm.phone
+                      : !memberForm.userNo || userNoProblem !== null) ||
+                    lookingUp
                   }
                   onClick={() => void runLookup()}
                 >
@@ -1385,7 +1449,7 @@ export function MembersPage() {
 
                   分档给文案(不是纯数字 / 位数不对 / 类别位不对)——说「请填 10 位数字」
                   对一个填了 11 位数字的人没有帮助,他要知道的是「位数不对」。 */}
-              {userNoProblem ? (
+              {memberForm.channel === "user_no" && userNoProblem ? (
                 <span className="text-body-small text-danger-text">
                   {t(`dialogs.userNoError.${userNoProblem}`)}
                 </span>
@@ -1393,7 +1457,11 @@ export function MembersPage() {
                 /* 说明放框后:这条通道与邮箱那条的行为不同(不发邮件、要对方在站内同意),
                    不说清楚的话邀请人会一直等一封不会来的邮件。 */
                 <span className="text-body-small text-muted-foreground">
-                  {t("dialogs.fields.userNoHint")}
+                  {t(
+                    memberForm.channel === "phone"
+                      ? "dialogs.fields.phoneHint"
+                      : "dialogs.fields.userNoHint",
+                  )}
                 </span>
               )}
 

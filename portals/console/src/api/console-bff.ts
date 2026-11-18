@@ -337,6 +337,12 @@ export const MEMBER_ERROR_CODES = [
   "already_member",
   "invitation_pending",
   "invalid_email",
+  "invalid_phone",
+  "invitation_channel_required",
+  "invitation_identity_changed",
+  "invitation_resend_cooldown",
+  "workspace_unavailable",
+  "user_not_found",
 ] as const;
 export type MemberErrorCode = (typeof MEMBER_ERROR_CODES)[number];
 
@@ -712,6 +718,14 @@ export interface UserLookupResult {
  * 查不到时返回 `{ found: false }` 而**不是抛错**:没查到是一次正常的查询结果,
  * 不是故障。抛错会让「号打错了」和「服务挂了」在界面上长一个样。
  */
+export async function lookupUserByPhone(
+  phone: string,
+): Promise<UserLookupResult> {
+  return readJsonStrict<UserLookupResult>(
+    `/api/iam/users/by-phone?phone=${encodeURIComponent(phone)}`,
+  );
+}
+
 export async function lookupUserByNo(
   userNo: string,
 ): Promise<UserLookupResult> {
@@ -726,6 +740,8 @@ export async function lookupUserByNo(
 export async function inviteMember(payload: {
   email?: string;
   userNo?: string;
+  phone?: string;
+  expectedUserNo?: string;
   roleCode?: string | null;
   /** 邀请进哪个工作空间。**必填**(owner 2026-09-10);服务端也判。 */
   workspaceId?: string | null;
@@ -2705,10 +2721,12 @@ export async function fetchAuditLogs(params: {
 // ============================================================================
 
 export interface ConsoleInvitation {
+  target: string;
+  targetType: string;
   id: string;
   email: string;
   roleCode: string;
-  status: "pending" | "accepted" | "expired" | "revoked";
+  status: "pending" | "accepted" | "expired" | "revoked" | "declined";
   expiresAt: string;
   acceptedAt: string | null;
   createdAt: string;
@@ -2747,11 +2765,12 @@ export async function resendInvitation(
 // ── 接受邀请(只认登录态,租户由 token 决定;不带 X-Tenant)────────────────
 
 export interface InvitationLookup {
+  recipientMatches?: boolean | null;
   id: string;
   tenantName: string | null;
   email: string;
   roleCode: string;
-  status: "pending" | "accepted" | "expired" | "revoked";
+  status: "pending" | "accepted" | "expired" | "revoked" | "declined";
   expiresAt: string;
   inviterName: string | null;
 }
@@ -2761,7 +2780,13 @@ export const ACCEPT_INVITATION_REASONS = [
   "expired",
   "revoked",
   "already_accepted",
+  "declined",
   "email_mismatch",
+  "user_mismatch",
+  "unknown_target",
+  "already_member",
+  "member_suspended",
+  "workspace_unavailable",
 ] as const;
 export type AcceptInvitationReason = (typeof ACCEPT_INVITATION_REASONS)[number];
 

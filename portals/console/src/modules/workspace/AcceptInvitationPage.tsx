@@ -103,7 +103,9 @@ export function AcceptInvitationPage() {
   const emailMismatch = useMemo(
     () =>
       invitation !== null &&
-      currentEmail !== invitation.email.trim().toLowerCase(),
+      (typeof invitation.recipientMatches === "boolean"
+        ? !invitation.recipientMatches
+        : currentEmail !== invitation.email.trim().toLowerCase()),
     [currentEmail, invitation],
   );
 

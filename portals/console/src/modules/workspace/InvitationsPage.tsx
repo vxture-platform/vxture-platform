@@ -61,6 +61,7 @@ import { useDateFormat } from "@/lib/use-date-format";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
 
 const STATUS_TONES: Record<ConsoleInvitation["status"], StatusBadgeTone> = {
+  declined: "neutral",
   pending: "info",
   accepted: "success",
   expired: "neutral",
@@ -91,7 +92,7 @@ export function InvitationsPage() {
   /* 排序在分页之前——`useListPagination` 拿到的必须是已排好的全集。 */
   const sortAccessors = useMemo(
     () => ({
-      email: (r: ConsoleInvitation) => r.email,
+      email: (r: ConsoleInvitation) => r.target || r.email,
       createdAt: (r: ConsoleInvitation) => new Date(r.createdAt).getTime(),
       expiresAt: (r: ConsoleInvitation) => new Date(r.expiresAt).getTime(),
     }),
@@ -137,7 +138,7 @@ export function InvitationsPage() {
     try {
       await revokeInvitation(inv.id);
       await reload();
-      setMessage(t("revoked", { email: inv.email }));
+      setMessage(t("revoked", { email: inv.target || inv.email }));
     } catch (caught) {
       /* 重新抛出:DS 的确认件按 Promise 是否 rejected 决定关不关框。失败的理由
          已经落在 `error` 横幅上,但框不能关——用户得看见自己按的那一下没成。 */
@@ -154,12 +155,14 @@ export function InvitationsPage() {
     setBusyId(inv.id);
     try {
       const result = await resendInvitation(inv.id);
-      await reload();
+      await reload().catch(() => setError(t("refreshAfterSendFailed")));
       setInviteResult(result);
       setMessage(
-        result.emailSent
-          ? t("resent", { email: inv.email })
-          : t("resentNoEmail", { email: inv.email }),
+        !result.inviteLink
+          ? t(result.deliveredInApp ? "resentInApp" : "resentInAppFailed")
+          : result.emailSent
+            ? t("resent", { email: inv.target || inv.email })
+            : t("resentNoEmail", { email: inv.target || inv.email }),
       );
     } catch (caught) {
       setError(errorText(caught, "resendFailed"));
@@ -189,7 +192,7 @@ export function InvitationsPage() {
       ...(inv.status !== "pending" ? { hint: t("revokeHint") } : {}),
       confirm: withLabels({
         verb: t("revokeVerb"),
-        target: inv.email,
+        target: inv.target || inv.email,
         consequence: t("revokeConsequence"),
         cancelLabel: t("revokeKeep"),
         onConfirm: () => handleRevoke(inv),
@@ -208,7 +211,7 @@ export function InvitationsPage() {
       header: t("table.colEmail"),
       cell: (r) => (
         <TableTitleCell
-          title={r.email}
+          title={r.target || r.email}
           description={t("table.invitedBy", { name: r.inviterName ?? "—" })}
         />
       ),

@@ -59,16 +59,23 @@ export function deriveInvitationStatus(
  */
 export function rejectAcceptance(
   invitation: {
+    recipientUserId?: string | null;
     status: string;
     expiresAt: Date;
     targetType: string;
     target: string;
   },
-  identity: { email: string | null; userNo: string | null },
+  identity: {
+    email: string | null;
+    userNo: string | null;
+    userId?: string;
+    phone?: string | null;
+  },
   now = Date.now(),
 ): AcceptInvitationRejection | null {
   if (invitation.status === "revoked") return "revoked";
   if (invitation.status === "accepted") return "already_accepted";
+  if (invitation.status === "declined") return "declined";
   if (
     invitation.status !== "pending" ||
     invitation.expiresAt.getTime() <= now
@@ -77,7 +84,18 @@ export function rejectAcceptance(
   }
   /* 穷举各通道的身份校验。新增通道时**必须**在这里加一分支——
      default 是拒绝,所以漏了会立刻在测试里显影,而不是静默放行。 */
+  if (!["email", "phone", "user_no"].includes(invitation.targetType))
+    return "unknown_target";
+  if (invitation.recipientUserId) {
+    return identity.userId === invitation.recipientUserId
+      ? null
+      : "user_mismatch";
+  }
   switch (invitation.targetType) {
+    case "phone":
+      return identity.phone && identity.phone === invitation.target
+        ? null
+        : "user_mismatch";
     case "email":
       /* 邮箱邀请只能由该邮箱对应的账号接受(大小写不敏感):
          链接被转发给别人不该等于把租户交出去。 */

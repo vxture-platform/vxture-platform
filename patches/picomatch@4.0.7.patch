@@ -1,0 +1,45 @@
+diff --git a/lib/parse.js b/lib/parse.js
+index 2920751..9e6956c 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -284,7 +284,40 @@ const repeatedExtglobRecursion = pattern => {
+   return depth;
+ };
+ 
++// Reject wildcard repetition before optional recursion limits: a single branch
++// can nest an unbounded glob star inside the outer extglob quantifier too.
++const hasRepeatedGlobStar = body => {
++  let escaped = false;
++  let quoted = false;
++  let bracket = false;
++
++  for (let index = 0; index < body.length; index++) {
++    const character = body[index];
++    if (escaped) {
++      escaped = false;
++      continue;
++    }
++    if (character === '\\') {
++      escaped = true;
++      continue;
++    }
++    if (character === '"' && !bracket) {
++      quoted = !quoted;
++      continue;
++    }
++    if (quoted) continue;
++    if (character === '[') bracket = true;
++    if (character === ']') bracket = false;
++    if (!bracket && character === '*' && body[index + 1] !== '(') return true;
++  }
++  return false;
++};
++
+ const analyzeRepeatedExtglob = (body, options) => {
++  if (hasRepeatedGlobStar(body)) {
++    return { risky: true };
++  }
++
+   if (options.maxExtglobRecursion === false) {
+     return { risky: false };
+   }

@@ -331,7 +331,12 @@ export class OrganizationService {
   async acceptInvitation(
     locator: InvitationLocator,
     userId: string,
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
   ): Promise<AcceptInvitationResult> {
     const result = await this.repo.acceptInvitation(locator, userId, identity);
     if (!result.ok) return result;
@@ -340,7 +345,12 @@ export class OrganizationService {
     return rest;
   }
   listInvitationsForIdentity(
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
     limit?: number,
   ): Promise<IncomingInvitation[]> {
     return this.repo.listInvitationsForIdentity(identity, limit);
@@ -348,7 +358,12 @@ export class OrganizationService {
   /** 拒绝邀请,并通知邀请人(2026-09-29)。`notify` 同样剥掉再返回。 */
   async declineInvitation(
     invitationId: string,
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
   ): Promise<DeclineInvitationResult> {
     const result = await this.repo.declineInvitation(invitationId, identity);
     if (!result.ok) return result;

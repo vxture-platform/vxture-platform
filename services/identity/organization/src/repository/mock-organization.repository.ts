@@ -111,6 +111,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       token: string;
       createdBy: string;
       createdAt: Date;
+      lastSentAt: number;
       acceptedAt: Date | null;
     }
   >();
@@ -125,6 +126,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       .slice(0, limit)
       .map((i) => ({
         id: i.view.id,
+        recipientUserId: i.view.recipientUserId ?? null,
         targetType: i.view.targetType,
         target: i.view.target,
         email: i.view.targetType === "email" ? i.view.target : "",
@@ -187,6 +189,8 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     tenantId: string,
   ): Promise<RevokeInvitationOutcome> {
     const inv = this.invitations.get(invitationId);
+    if (inv?.view.organizationId === tenantId && inv.view.status === "revoked")
+      return { ok: true };
     if (
       !inv ||
       inv.view.organizationId !== tenantId ||
@@ -227,6 +231,36 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     ) {
       return null;
     }
+    if (
+      [...this.invitations.values()].some(
+        (other) =>
+          other !== inv &&
+          other.view.organizationId === tenantId &&
+          other.view.scope === inv.view.scope &&
+          (inv.view.scope === "org" ||
+            other.view.workspaceId === inv.view.workspaceId) &&
+          other.view.status === "pending" &&
+          other.view.expiresAt.getTime() > Date.now() &&
+          ((inv.view.recipientUserId &&
+            other.view.recipientUserId === inv.view.recipientUserId) ||
+            (other.view.targetType === inv.view.targetType &&
+              other.view.target === inv.view.target)),
+      )
+    )
+      throw new ConflictException("invitation_pending");
+    if (
+      inv.view.recipientUserId &&
+      this.orgMembers.some(
+        (m) =>
+          m.organizationId === tenantId &&
+          m.userId === inv.view.recipientUserId &&
+          m.status !== "removed",
+      )
+    )
+      throw new ConflictException("already_member");
+    if (Date.now() - inv.lastSentAt < 60_000)
+      throw new ConflictException("invitation_resend_cooldown");
+    inv.lastSentAt = Date.now();
     inv.token = crypto.randomUUID();
     inv.view.expiresAt = new Date(Date.now() + MOCK_INVITE_TTL_MS);
     /* 与 pg 那份一致：重发把过期的行救回 pending（这一份里没有巡检写 expired，
@@ -681,13 +715,42 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
   async createInvitation(
     input: CreateInvitationInput,
   ): Promise<{ invitation: InvitationView; token: string }> {
+    const target =
+      input.targetType === "email"
+        ? input.target.trim().toLowerCase()
+        : input.target.trim();
+    if (
+      [...this.invitations.values()].some(
+        ({ view }) =>
+          view.organizationId === input.organizationId &&
+          view.scope === input.scope &&
+          (input.scope === "org" || view.workspaceId === input.workspaceId) &&
+          view.status === "pending" &&
+          view.expiresAt.getTime() > Date.now() &&
+          ((input.recipientUserId &&
+            view.recipientUserId === input.recipientUserId) ||
+            (view.targetType === input.targetType && view.target === target)),
+      )
+    )
+      throw new ConflictException("invitation_pending");
+    if (
+      input.recipientUserId &&
+      this.orgMembers.some(
+        (m) =>
+          m.organizationId === input.organizationId &&
+          m.userId === input.recipientUserId &&
+          m.status !== "removed",
+      )
+    )
+      throw new ConflictException("already_member");
     const invitation: InvitationView = {
+      recipientUserId: input.recipientUserId ?? null,
       id: crypto.randomUUID(),
       scope: input.scope,
       organizationId: input.organizationId,
       workspaceId: input.workspaceId ?? null,
       targetType: input.targetType,
-      target: input.target,
+      target,
       role: input.role,
       status: "pending",
       expiresAt: new Date(
@@ -701,12 +764,18 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       token,
       createdBy: input.createdBy,
       createdAt: new Date(),
+      lastSentAt: Date.now(),
       acceptedAt: null,
     });
     return { invitation, token };
   }
   async listInvitationsForIdentity(
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
     limit = 50,
   ): Promise<IncomingInvitation[]> {
     const now = Date.now();
@@ -717,6 +786,9 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
           return false;
         /* 与 pg 那份同口径:邮箱大小写不敏感,用户号精确串;
            身份缺的那一路一律不匹配(不是「放行」)。 */
+        if (v.recipientUserId) return v.recipientUserId === identity.userId;
+        if (v.targetType === "phone")
+          return Boolean(identity.phone && identity.phone === v.target);
         if (v.targetType === "email") {
           return (
             !!identity.email &&
@@ -735,6 +807,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       .slice(0, limit)
       .map((i) => ({
         id: i.view.id,
+        recipientUserId: i.view.recipientUserId ?? null,
         targetType: i.view.targetType,
         roleCode: i.view.role,
         tenantId: i.view.organizationId ?? null,
@@ -747,7 +820,12 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
 
   async declineInvitation(
     invitationId: string,
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
   ): Promise<DeclineInvitationResult> {
     const inv = [...this.invitations.values()].find(
       (i) => i.view.id === invitationId,
@@ -755,6 +833,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     if (!inv) return { ok: false, reason: "not_found" };
     const rejection = rejectAcceptance(
       {
+        recipientUserId: inv.view.recipientUserId ?? null,
         status: inv.view.status,
         expiresAt: inv.view.expiresAt,
         targetType: inv.view.targetType,
@@ -1038,7 +1117,12 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
   async acceptInvitation(
     locator: InvitationLocator,
     userId: string,
-    identity: { email: string | null; userNo: string | null },
+    identity: {
+      email: string | null;
+      userNo: string | null;
+      userId?: string;
+      phone?: string | null;
+    },
   ): Promise<AcceptInvitationResult> {
     const inv = [...this.invitations.values()].find((i) =>
       "token" in locator
@@ -1048,23 +1132,45 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     if (!inv) return { ok: false, reason: "not_found" };
     const rejection = rejectAcceptance(
       {
+        recipientUserId: inv.view.recipientUserId ?? null,
         status: inv.view.status,
         expiresAt: inv.view.expiresAt,
         targetType: inv.view.targetType,
         target: inv.view.target,
       },
-      identity,
+      { ...identity, userId },
     );
     if (rejection) return { ok: false, reason: rejection };
+    const orgId = inv.view.organizationId;
+    const existing = this.orgMembers.find(
+      (m) =>
+        m.organizationId === orgId &&
+        m.userId === userId &&
+        m.status !== "removed",
+    );
+    if (existing && inv.view.scope === "org")
+      return {
+        ok: false,
+        reason:
+          existing.status === "suspended"
+            ? "member_suspended"
+            : "already_member",
+      };
+    const selectedWorkspace = [...this.workspaces.values()].find(
+      (w) =>
+        w.organizationId === orgId &&
+        w.status === "active" &&
+        (inv.view.workspaceId ? w.id === inv.view.workspaceId : w.isDefault),
+    );
+    if (!selectedWorkspace)
+      return { ok: false, reason: "workspace_unavailable" };
     inv.view.status = "accepted";
     inv.acceptedAt = new Date();
     const role = inv.view.role as OrgRole;
     if (inv.view.scope === "org" && inv.view.organizationId) {
       const orgId = inv.view.organizationId;
       const membership = await this.addOrgMember(orgId, userId, role);
-      const ws = [...this.workspaces.values()].find(
-        (w) => w.organizationId === orgId && w.isDefault,
-      );
+      const ws = selectedWorkspace;
       if (ws) await this.addWorkspaceMember(ws.id, userId, role);
       return {
         ok: true,
