@@ -325,7 +325,7 @@ function PolicyEditor({
       }}
       title={`${noun}持续授权`}
       description="规则按当前分类和标签持续匹配，后续新增资源无需逐条授权。"
-      width="min(960px, 100vw)"
+      width="lg"
       className="max-w-full"
       footer={
         <div className="flex w-full flex-wrap items-center justify-end gap-sm">

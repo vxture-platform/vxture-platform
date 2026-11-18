@@ -173,7 +173,7 @@ export function GrantPickerDrawer({
       onClose={() => {
         void close();
       }}
-      width="min(960px, 100vw)"
+      width="lg"
       title={`授权${noun} · ${productCode}`}
       description="选择当前目录中的资源。本次授权不会自动包含未来新增资源。"
       closeLabel="关闭授权面板"
