@@ -620,7 +620,7 @@ function WorkPortalContent({
           )}
         </main>
       )}
-      {data && !checking && <WorkFooter runtime={runtime} />}
+      {data && !checking && <WorkFooter runtime={runtime} isAuthenticated />}
 
       {data && (
         <NotificationDrawer
