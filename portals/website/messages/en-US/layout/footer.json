@@ -42,6 +42,6 @@
     "filings": "Site registration"
   },
   "copyright": {
-    "text": "© 2026 Vxture Studio, All rights reserved."
+    "text": "© {year} {owner}"
   }
 }

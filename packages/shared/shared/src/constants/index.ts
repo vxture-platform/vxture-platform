@@ -110,6 +110,7 @@ export * from "./nav-preference.constants";
 export {
   BRAND_NAME,
   BRAND_TITLE,
+  PLATFORM_COPYRIGHT_OWNER,
   ICP_FILING,
   PUBLIC_SECURITY_FILING,
   SITE_FILINGS,

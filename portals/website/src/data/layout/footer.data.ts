@@ -7,6 +7,7 @@
 
 import {
   ICP_FILING,
+  PLATFORM_COPYRIGHT_OWNER,
   PUBLIC_SECURITY_FILING,
   type SiteFiling,
 } from "@vxture-platform/shared";
@@ -187,8 +188,8 @@ export const FOOTER_DATA: FooterData = {
   publicSecurity: PUBLIC_SECURITY_FILING,
   copyright: {
     startYear: 2024,
-    endYear: 2026,
-    companyName: "Vxture Studio",
+    endYear: new Date().getFullYear(),
+    companyName: PLATFORM_COPYRIGHT_OWNER,
     allRightsReserved: true,
     textKey: "copyright.text",
   },

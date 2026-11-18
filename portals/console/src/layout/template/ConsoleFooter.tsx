@@ -9,6 +9,7 @@
  * @date 2026-11-12
  */
 import { ShellFooter } from "@vxture/design-system";
+import { PLATFORM_COPYRIGHT_OWNER } from "@vxture-platform/shared";
 import { useLocale, useTranslations } from "next-intl";
 
 /** Render the user-center footer outside the content scroll region. */
@@ -23,7 +24,7 @@ export function ConsoleFooter() {
           href: `${website}/${locale}/legal/copyright`,
           label: t("copyright"),
           year: new Date().getFullYear(),
-          owner: "Vxture Studio",
+          owner: PLATFORM_COPYRIGHT_OWNER,
         },
         terms: { href: `${website}/${locale}/legal/terms`, label: t("terms") },
         privacy: {
