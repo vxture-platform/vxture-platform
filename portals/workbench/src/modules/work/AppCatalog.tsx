@@ -152,6 +152,7 @@ export function AppCard({
         </p>
       </div>
       <div className="work-app-actions">
+        <span className="work-app-version">{appVersion(app.version)}</span>
         <span className="work-app-unavailable">
           {!app.available
             ? t(app.availabilityLabel)
@@ -159,7 +160,6 @@ export function AppCard({
               ? t(reminder.key, reminder.days ?? "")
               : null}
         </span>
-        <span className="work-app-version">{appVersion(app.version)}</span>
         {app.available && app.href ? (
           <Button asChild size="sm" className="work-action">
             <a
