@@ -3250,6 +3250,7 @@
     },
     "personal": {
       "username": "账号：{name}",
+      "userNo": "用户编号：{number}",
       "description": "个人资料与安全设置在账号中心统一管理。",
       "manageAccount": "账号管理"
     },
