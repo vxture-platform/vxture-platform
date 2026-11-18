@@ -42,6 +42,7 @@ export interface WorkApp {
   availabilityLabel: string;
   subscribed?: boolean;
   activeSubscription?: boolean;
+  directActiveSubscription?: boolean;
   expiresAt?: string | null;
   favorite?: boolean;
   lastUsedAt?: string | null;

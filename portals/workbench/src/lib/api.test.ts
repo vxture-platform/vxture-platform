@@ -71,6 +71,7 @@ describe("product availability", () => {
     expect(app).toMatchObject({
       available: true,
       tier: null,
+      directActiveSubscription: false,
       availabilityLabel: "可使用",
     });
   });
@@ -114,7 +115,7 @@ describe("product availability", () => {
         { status: "ready", data: [] },
         { status: "ready", data: [entry] },
       ),
-    ).toMatchObject([{ available: false, availabilityLabel: "未订阅" }]);
+    ).toEqual([]);
     expect(
       projectApps(
         [product],
@@ -144,11 +145,9 @@ describe("product availability", () => {
         { status: "error", code: 403, message: "forbidden" },
         { status: "ready", data: [entry] },
       ),
-    ).toMatchObject([
-      { available: false, availabilityLabel: "暂无法确认权限" },
-    ]);
+    ).toEqual([]);
   });
-  it("shows every catalog product while retaining unavailable subscribed cards", () => {
+  it("excludes public-only products while retaining expired subscribed cards", () => {
     const apps = projectApps(
       [
         product,
@@ -161,12 +160,8 @@ describe("product availability", () => {
       },
       { status: "ready", data: [entry, { code: "expired", href: entry.href }] },
     );
-    expect(apps.map((item) => item.code)).toEqual([
-      "agent",
-      "unsubscribed",
-      "expired",
-    ]);
-    expect(apps[2]).toMatchObject({
+    expect(apps.map((item) => item.code)).toEqual(["agent", "expired"]);
+    expect(apps[1]).toMatchObject({
       available: false,
       availabilityLabel: "已到期",
     });
@@ -229,6 +224,28 @@ describe("product availability", () => {
         ?.expiresAt,
     ).toBeNull();
     expect(project([{ ...near, status: "trialing" }])?.expiresAt).toBe(iso(3));
+  });
+
+  it("keeps future or elapsed coverage out of platform navigation", () => {
+    const now = Date.now();
+    const iso = (offset: number) =>
+      new Date(now + offset * 86_400_000).toISOString();
+    for (const coverage of [
+      { ...active, startsAt: iso(1), expiresAt: iso(30) },
+      { ...active, startsAt: iso(-30), expiresAt: iso(-1) },
+      { ...active, status: "expired", expiresAt: iso(-1) },
+    ]) {
+      expect(
+        projectApps(
+          [product],
+          { status: "ready", data: [coverage] },
+          { status: "ready", data: [entry] },
+        )[0],
+      ).toMatchObject({
+        available: false,
+        directActiveSubscription: false,
+      });
+    }
   });
 
   it("rejects script, relative and credential-bearing destinations", () => {
@@ -321,7 +338,7 @@ describe("HTTP adapter", () => {
     if (result.status !== "ready") return;
     expect(result.data.catalog.status).toBe("ready");
     if (result.data.catalog.status !== "ready") return;
-    expect(result.data.catalog.data).toHaveLength(3);
+    expect(result.data.catalog.data).toHaveLength(2);
     expect(result.data.catalog.data[0]).toMatchObject({
       code: "agent",
       available: true,
@@ -355,35 +372,50 @@ describe("HTTP adapter", () => {
       await loadWorkData(new AbortController().signal, true),
     ).toMatchObject({ status: "error", code: 502 });
   });
-  it("keeps catalog outages and permission failures distinct from empty data", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (path: string) => {
-        const payloads: Record<string, unknown> = {
-          "/auth/session": { status: "active" },
-          "/api/me": { id: "u", name: "User" },
-          "/api/tenant-context": {
-            id: "t",
-            name: "Organization",
-            workspace: "w",
-            workspaceName: "default workspace",
-          },
-        };
-        if (path === "/api/products/catalog")
-          return new Response(null, { status: 503 });
-        if (path === "/api/subscription/subscribed-products")
-          return new Response(null, { status: 403 });
-        return Response.json(payloads[path] ?? []);
-      }),
-    );
-    const result = await loadWorkData(new AbortController().signal, true);
-    expect(result.status).toBe("ready");
-    if (result.status === "ready") {
-      expect(result.data.catalog).toMatchObject({ status: "error", code: 503 });
-      expect(result.data.availabilityIssue).toBe("当前账号没有查看权限");
-      expect(result.data.resources.status).toBe("error");
-    }
-  });
+  it.each([true, false])(
+    "keeps catalog outages and subscription failures distinct from empty data: %s",
+    async (catalogOffline) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (path: string) => {
+          const payloads: Record<string, unknown> = {
+            "/auth/session": { status: "active" },
+            "/api/me": { id: "u", name: "User" },
+            "/api/tenant-context": {
+              id: "t",
+              name: "Organization",
+              workspace: "w",
+              workspaceName: "default workspace",
+            },
+          };
+          if (path === "/api/products/catalog")
+            return catalogOffline
+              ? new Response(null, { status: 503 })
+              : Response.json([
+                  {
+                    productCode: "public",
+                    productName: "Public",
+                    productType: "industry_agent",
+                    status: "active",
+                  },
+                ]);
+          if (path === "/api/subscription/subscribed-products")
+            return new Response(null, { status: 403 });
+          return Response.json(payloads[path] ?? []);
+        }),
+      );
+      const result = await loadWorkData(new AbortController().signal, true);
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.data.catalog).toMatchObject({
+          status: "error",
+          code: catalogOffline ? 503 : 403,
+        });
+        expect(result.data.availabilityIssue).toBe("当前账号没有查看权限");
+        expect(result.data.resources.status).toBe("error");
+      }
+    },
+  );
   it("clears the authenticated result when any independent request reports session expiry", async () => {
     vi.stubGlobal(
       "fetch",

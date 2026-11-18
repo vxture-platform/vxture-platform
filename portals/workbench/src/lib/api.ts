@@ -253,15 +253,20 @@ function parseBalance(input: unknown): string {
  * @param catalog - Public product metadata.
  * @param subscriptions - Current-workspace subscriptions; errors remain unknown.
  * @param entries - Registered launch URLs, never a source of availability.
- * @returns All catalog cards; subscription and member access remain separate axes.
+ * @returns Workspace-covered cards; member denial never hides a subscribed product.
  */
 export function projectApps(
   catalog: readonly CatalogProduct[],
   subscriptions: LoadResult<Subscription[]>,
   entries: LoadResult<ProductEntry[]>,
 ): WorkApp[] {
+  if (subscriptions.status === "error") return [];
   return catalog
-    .filter((product) => /_(agent|platform)$/.test(product.type))
+    .filter(
+      (product) =>
+        /_(agent|platform)$/.test(product.type) &&
+        subscriptions.data.some((item) => item.code === product.code),
+    )
     .map((product) => {
       const coverage =
         subscriptions.status === "ready"
@@ -269,7 +274,15 @@ export function projectApps(
           : [];
       const live = (item: Subscription): boolean =>
         ["active", "trialing", "expiring", "overdue"].includes(item.status);
-      const current = coverage.filter(live);
+      const now = Date.now();
+      const current = coverage.filter(
+        (item) =>
+          live(item) &&
+          (!item.startsAt || Date.parse(item.startsAt) <= now) &&
+          (item.status === "overdue" ||
+            !item.expiresAt ||
+            Date.parse(item.expiresAt) > now),
+      );
       const subscribed =
         current.find((item) => !item.bundled) ?? current[0] ?? coverage[0];
       const active = current.some((item) => !item.maintenance);
@@ -287,29 +300,28 @@ export function projectApps(
         ? "即将上线"
         : product.maintenance
           ? "维护中"
-          : subscriptions.status === "error"
-            ? "暂无法确认权限"
-            : !subscribed
-              ? "未订阅"
-              : !current.length
-                ? ({
-                    expired: "已到期",
-                    suspended: "已暂停",
-                    cancelled: "已取消",
-                  }[subscribed.status] ?? "暂不可用")
-                : !active
-                  ? "维护中"
-                  : access === "unknown"
-                    ? "暂无法确认权限"
-                    : access !== "allowed"
-                      ? "联系管理员授权"
-                      : !href
-                        ? "入口暂不可用"
-                        : "可使用";
+          : !subscribed
+            ? "未订阅"
+            : !current.length
+              ? ({
+                  expired: "已到期",
+                  suspended: "已暂停",
+                  cancelled: "已取消",
+                }[subscribed.status] ?? "暂不可用")
+              : !active
+                ? "维护中"
+                : access === "unknown"
+                  ? "暂无法确认权限"
+                  : access !== "allowed"
+                    ? "联系管理员授权"
+                    : !href
+                      ? "入口暂不可用"
+                      : "可使用";
       // Extend only continuous coverage; a future purchase after a gap is not renewal.
       let horizon = Date.now();
       let connected = false;
-      const windows = current
+      const windows = coverage
+        .filter(live)
         .filter((item) => !item.maintenance)
         .toSorted(
           (a, b) =>
@@ -344,6 +356,7 @@ export function projectApps(
         availabilityLabel,
         subscribed: coverage.length > 0,
         activeSubscription: current.length > 0,
+        directActiveSubscription: current.some((item) => !item.bundled),
         expiresAt:
           connected && Number.isFinite(horizon)
             ? new Date(horizon).toISOString()
@@ -443,10 +456,12 @@ export async function loadWorkData(
       catalog:
         catalog.status === "error"
           ? catalog
-          : {
-              status: "ready",
-              data: projectApps(catalog.data, subscriptions, entries),
-            },
+          : subscriptions.status === "error"
+            ? subscriptions
+            : {
+                status: "ready",
+                data: projectApps(catalog.data, subscriptions, entries),
+              },
       availabilityIssue:
         subscriptions.status === "error"
           ? subscriptions.message

@@ -131,7 +131,7 @@ export class PgProductSeatRepository {
           and exists (
             select 1 from metering.subscriptions s
             join product.plan_components pc on pc.plan_version_id = s.plan_version_id and pc.product_id = p.id
-            where s.workspace_id = w.id and s.tenant_id = t.id and s.deleted_at is null and s.status in ('active','trialing')
+            where s.workspace_id = w.id and s.tenant_id = t.id and s.deleted_at is null and s.status in ('active','trialing','expiring','overdue')
           )
       ) as allowed`,
       [input.subject, input.orgId, input.workspaceId, input.productCode],

@@ -278,6 +278,7 @@ it("shows subscribed platform shortcuts while preserving the member denial", () 
     category: "platform" as const,
     subscribed: true,
     activeSubscription: true,
+    directActiveSubscription: true,
     available: false,
     availabilityLabel: "联系管理员授权",
     href: "https://registered.example/",
@@ -286,7 +287,7 @@ it("shows subscribed platform shortcuts while preserving the member denial", () 
     { app: platform, label: "数据平台" },
   ]);
   expect(
-    platformShortcuts([{ ...platform, activeSubscription: false }]),
+    platformShortcuts([{ ...platform, directActiveSubscription: false }]),
   ).toEqual([]);
   expect(platformShortcuts([{ ...platform, code: "atlas" }])).toEqual([]);
   expect(
