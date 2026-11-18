@@ -29,6 +29,10 @@ DO $$ BEGIN
     FOREIGN KEY (created_by) REFERENCES account.users(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
+  ALTER TABLE tenancy.invitations ADD CONSTRAINT invitations_recipient_user_id_fkey
+    FOREIGN KEY (recipient_user_id) REFERENCES account.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
   ALTER TABLE tenancy.tenant_contacts ADD CONSTRAINT fk_tenant_contacts_user
     FOREIGN KEY (user_id) REFERENCES account.users(id) ON DELETE SET NULL;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
