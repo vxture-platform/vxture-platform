@@ -205,6 +205,9 @@ it("keeps denied application overview accessible and removes the launch link", a
   );
   expect(host.textContent).toContain("联系管理员授权");
   expect(host.querySelector(".work-app-version")?.textContent).toBe("v1");
+  expect(
+    host.querySelector(".work-app-actions")?.firstElementChild?.className,
+  ).toBe("work-app-version");
   expect(host.querySelector("a[href]")).toBeNull();
   const button = host.querySelector<HTMLButtonElement>(".work-action");
   expect(button?.disabled).toBe(true);

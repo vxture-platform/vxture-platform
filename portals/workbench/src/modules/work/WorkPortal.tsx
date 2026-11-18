@@ -414,7 +414,6 @@ function WorkPortalContent({
                       <div className="work-section-heading work-common-heading">
                         <div>
                           <h2 id="common-apps">{t("常用应用")}</h2>
-                          <p>{t("专业能力，随时进入")}</p>
                         </div>
                         <div className="work-home-actions">
                           <fieldset

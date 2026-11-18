@@ -386,7 +386,11 @@ body {
   align-items: flex-start;
   gap: var(--space-sm);
   min-width: 0;
-  min-height: var(--space-control-xl);
+  height: calc(
+    var(--body-font-size) * 3 + var(--space-2xs) +
+      var(--body-small-line-height) + var(--space-md)
+  );
+  flex-shrink: 0;
   padding-bottom: var(--space-md);
   border-bottom: var(--border-width-thin) dashed
     color-mix(in srgb, var(--primary) 10%, transparent);
@@ -485,7 +489,8 @@ body {
   -webkit-line-clamp: 3;
   overflow: hidden;
   overflow-wrap: anywhere;
-  min-height: calc(var(--body-font-size) * 1.8 * 2);
+  height: calc(var(--body-font-size) * 1.8 * 3);
+  flex-shrink: 0;
   margin-block: var(--space-md);
   font-size: var(--body-font-size);
   line-height: 1.8;
@@ -516,8 +521,12 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .work-app-actions > .work-app-version {
-  margin-left: auto;
   flex-shrink: 0;
+}
+.work-app-actions > .work-app-unavailable {
+  margin-left: auto;
+  min-width: 0;
+  text-align: right;
 }
 .work-action {
   height: var(--space-control-xl);
@@ -1255,8 +1264,8 @@ body {
   opacity: 0.5;
 }
 .work-all-apps {
-  height: var(--space-control-md);
-  min-height: var(--space-control-md);
+  height: var(--space-control-xl);
+  min-height: var(--space-control-xl);
   gap: var(--space-xs);
 }
 /* The favorite action follows the badges on the same row, including narrow cards. */
@@ -1278,17 +1287,19 @@ body {
   color: var(--primary-text);
 }
 
-/* Both routes reserve the same control region so their first card row stays aligned. */
+/* Both routes share the same toolbar tracks, divider and first-card offset. */
 .work-common-heading,
 .work-catalog-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-md);
   box-sizing: border-box;
-  min-height: calc(var(--space-control-md) * 2 + var(--space-md));
+  min-height: calc(
+    var(--space-control-xl) + var(--space-md) + var(--border-width-thin)
+  );
   padding: 0 0 var(--space-md);
-  align-content: center;
-  border-bottom: var(--border-width-thin) solid transparent;
-}
-.work-catalog-toolbar {
-  border-bottom-color: var(--border);
+  border-bottom: var(--border-width-thin) solid var(--border);
 }
 .work-common-heading {
   margin-bottom: var(--space-lg);
@@ -1296,13 +1307,17 @@ body {
 @media (max-width: 1200px) {
   .work-common-heading,
   .work-catalog-toolbar {
-    min-height: calc(var(--space-control-md) * 3 + var(--space-sm));
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--space-control-xl) var(--space-control-xl);
+  }
+  .work-home-actions {
+    width: 100%;
   }
 }
 @media (max-width: 620px) {
   .work-common-heading,
   .work-catalog-toolbar {
-    min-height: calc(var(--space-control-md) * 4);
+    gap: var(--space-sm);
   }
   .work-common-heading {
     margin-bottom: var(--space-md);
