@@ -9,6 +9,7 @@
  * @date 2026-11-18
  */
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import {
   Badge,
@@ -85,7 +86,8 @@ export function GrantPickerDrawer({
   const [refreshError, setRefreshError] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const running = useRef(false);
-  const noun = kind === "model" ? "模型路由" : "能力";
+  const t = useTranslations("productGrants");
+  const noun = kind === "model" ? t("modelRoute") : t("capability");
   const rows = resources.map((row) => ({
     ...row,
     held: row.held || completed.has(row.id),
@@ -174,9 +176,9 @@ export function GrantPickerDrawer({
         void close();
       }}
       width="lg"
-      title={`授权${noun} · ${productCode}`}
-      description="选择当前目录中的资源。本次授权不会自动包含未来新增资源。"
-      closeLabel="关闭授权面板"
+      title={t("pickerTitle", { noun, productCode })}
+      description={t("selectResourcesFromTheCurrentCatalogThis")}
+      closeLabel={t("closeGrantPanel")}
       className="max-w-full [&>div]:min-w-0 [&>div:first-of-type]:shrink-0 [&>div:last-child]:shrink-0 [&>div:last-child]:flex-wrap [&>div:nth-last-child(2)]:flex [&>div:nth-last-child(2)]:min-h-0 [&>div:nth-last-child(2)]:flex-col [&>div:nth-last-child(2)]:overflow-hidden"
       footer={
         <>
@@ -186,8 +188,9 @@ export function GrantPickerDrawer({
             aria-live="polite"
           >
             {progress
-              ? `正在处理 ${progress.done} / ${progress.total}，请勿关闭页面`
-              : `已选 ${selected.length} 项${outside ? ` · ${outside} 项在当前筛选外` : ""}`}
+              ? t("progress", { done: progress.done, total: progress.total })
+              : t("selectedCount", { count: selected.length }) +
+                (outside ? t("outsideCount", { count: outside }) : "")}
           </span>
           <Button
             variant="secondary"
@@ -196,15 +199,15 @@ export function GrantPickerDrawer({
               void close();
             }}
           >
-            关闭
+            {t("close")}
           </Button>
           <Button
             disabled={busy || selected.length === 0}
             onClick={() => setReviewing(true)}
           >
             {result?.failed.length
-              ? `重试 ${selected.length} 项`
-              : `授权 ${selected.length} 项`}
+              ? t("retryCount", { count: selected.length })
+              : t("grantCount", { count: selected.length })}
           </Button>
         </>
       }
@@ -212,9 +215,10 @@ export function GrantPickerDrawer({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-md">
         <div className="flex shrink-0 flex-col gap-sm">
           <p className="text-body-small text-muted-foreground">
-            目录 {rows.length} 项 · 已持有{" "}
-            {rows.filter((row) => row.held).length} 项 · 匹配 {matches.length}{" "}
-            项
+            {t("catalog")}
+            {rows.length} {t("itemsAlreadyGranted")}{" "}
+            {rows.filter((row) => row.held).length} {t("itemsMatching")}
+            {matches.length} {t("items")}
           </p>
           <div className="grid min-w-0 gap-sm sm:grid-cols-2">
             <InputGroup>
@@ -222,8 +226,8 @@ export function GrantPickerDrawer({
                 <Icon name="search" size="sm" aria-hidden="true" />
               </InputGroupAddon>
               <InputGroupInput
-                aria-label={`搜索${noun}`}
-                placeholder="搜索名称、ID、分类…"
+                aria-label={t("searchNoun", { noun })}
+                placeholder={t("searchNameIdOrCategory")}
                 disabled={busy}
                 value={filter.keyword}
                 onChange={(event) =>
@@ -232,14 +236,14 @@ export function GrantPickerDrawer({
               />
             </InputGroup>
             <NativeSelect
-              aria-label="资源分类"
+              aria-label={t("resourceCategory")}
               disabled={busy}
               value={filter.category}
               onChange={(event) =>
                 updateFilter({ category: event.target.value })
               }
             >
-              <option value="">全部分类</option>
+              <option value="">{t("allCategories")}</option>
               {categories.map((category) => (
                 <option key={category} value={category}>
                   {category}
@@ -247,7 +251,7 @@ export function GrantPickerDrawer({
               ))}
             </NativeSelect>
             <NativeSelect
-              aria-label="授权状态"
+              aria-label={t("grantStatus")}
               disabled={busy}
               value={filter.availability}
               onChange={(event) =>
@@ -257,9 +261,9 @@ export function GrantPickerDrawer({
                 })
               }
             >
-              <option value="all">全部授权状态</option>
-              <option value="available">未授权</option>
-              <option value="held">已持有</option>
+              <option value="all">{t("allGrantStatuses")}</option>
+              <option value="available">{t("notGranted")}</option>
+              <option value="held">{t("alreadyGranted")}</option>
             </NativeSelect>
             <label className="flex items-center gap-sm text-body-small">
               <Checkbox
@@ -269,13 +273,13 @@ export function GrantPickerDrawer({
                   updateFilter({ selectedOnly: checked === true })
                 }
               />
-              只看已选
+              {t("selectedOnly")}
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-sm border-b border-border pb-sm">
             <label className="flex items-center gap-sm text-body-small">
               <Checkbox
-                aria-label="全选筛选结果"
+                aria-label={t("selectAllMatchingResources")}
                 disabled={busy || eligible.length === 0}
                 checked={
                   selectedMatches === 0
@@ -289,7 +293,8 @@ export function GrantPickerDrawer({
                   setReviewing(false);
                 }}
               />
-              全选筛选结果（{eligible.length}）
+              {t("selectAllMatchingResources019")}
+              {eligible.length}）
             </label>
             <Button
               variant="ghost"
@@ -299,7 +304,7 @@ export function GrantPickerDrawer({
                 setReviewing(false);
               }}
             >
-              取消选择筛选结果
+              {t("deselectMatchingResources")}
             </Button>
             <Button
               variant="ghost"
@@ -309,12 +314,14 @@ export function GrantPickerDrawer({
                 setReviewing(false);
               }}
             >
-              清空选择
+              {t("clearSelection")}
             </Button>
           </div>
           {kind === "capability" ? (
             <Field>
-              <FieldLabel htmlFor="grant-risk-scope">本批次风险上限</FieldLabel>
+              <FieldLabel htmlFor="grant-risk-scope">
+                {t("riskLimitForThisBatch")}
+              </FieldLabel>
               <NativeSelect
                 id="grant-risk-scope"
                 disabled={busy}
@@ -324,20 +331,23 @@ export function GrantPickerDrawer({
                   setReviewing(false);
                 }}
               >
-                <option value="read">read · 读取</option>
-                <option value="write">write · 写入</option>
-                <option value="critical">critical · 高风险操作</option>
+                <option value="read">{t("readReadOperations")}</option>
+                <option value="write">{t("writeWriteOperations")}</option>
+                <option value="critical">
+                  {t("criticalHighRiskOperations")}
+                </option>
               </NativeSelect>
             </Field>
           ) : null}
           {discarding ? (
             <div className="flex flex-wrap items-center gap-sm rounded-md border border-border p-sm">
               <p className="min-w-0 flex-1 text-body-small">
-                尚有 {selected.length}{" "}
-                项未提交，是否放弃选择并关闭？已成功的授权不会撤销。
+                {t("remaining")}
+                {selected.length}{" "}
+                {t("itemsAreUnsubmittedDiscardTheSelectionAnd")}
               </p>
               <Button variant="secondary" onClick={() => setDiscarding(false)}>
-                继续编辑
+                {t("continueEditing")}
               </Button>
               <Button
                 variant="secondary"
@@ -345,58 +355,64 @@ export function GrantPickerDrawer({
                   void close(true);
                 }}
               >
-                放弃选择并关闭
+                {t("discardSelectionAndClose")}
               </Button>
             </div>
           ) : null}
           {reviewing ? (
             <div className="flex flex-wrap items-center gap-sm rounded-md border border-border p-sm">
               <p className="min-w-0 flex-1 text-body-small break-words">
-                将向 {productCode} 授予 {selected.length} 项{noun}
+                {t("grantTo")}
+                {productCode} {t("grantSeparator")}
+                {selected.length} {t("items")}
+                {noun}
                 {kind === "capability"
-                  ? `，风险上限 ${riskScope}`
-                  : "，适用于该产品下的全部应用"}
-                。不包含未来新增资源。
+                  ? t("riskSummary", { risk: riskScope })
+                  : t("coveringAllApplicationsUnderThisProduct")}
+                {t("futureResourcesAreNotIncluded")}
               </p>
               <Button variant="secondary" onClick={() => setReviewing(false)}>
-                返回选择
+                {t("backToSelection")}
               </Button>
               <Button
                 onClick={() => {
                   void submit();
                 }}
               >
-                确认授权
+                {t("confirmGrants")}
               </Button>
             </div>
           ) : null}
           {result ? (
             <Banner
               tone={result.failed.length ? "warning" : "success"}
-              title={`本批次成功 ${result.succeeded.length} 项，失败 ${result.failed.length} 项`}
+              title={t("batchSummary", {
+                succeeded: result.succeeded.length,
+                failed: result.failed.length,
+              })}
               description={
                 result.failed.length
-                  ? "失败项已保留，可查看原因后重试。已成功的项目不会重复提交。"
-                  : "授权已写入；关闭面板后刷新产品授权列表。"
+                  ? t("failedItemsAreRetainedForReviewAnd")
+                  : t("grantsSavedCloseThisPanelToRefresh")
               }
             />
           ) : null}
           {refreshError ? (
             <Banner
               tone="warning"
-              title="授权已写入，但列表刷新失败"
-              description="请再次关闭以重试刷新，不要重复授权。"
+              title={t("grantsSavedButTheListCouldNot")}
+              description={t("closeAgainToRetryRefreshingDoNot")}
             />
           ) : null}
         </div>
         <div
           className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain rounded-md border border-border"
-          aria-label={`${noun}目录`}
+          aria-label={t("catalogLabel", { noun })}
           aria-busy={busy}
         >
           {visible.length === 0 ? (
             <p className="p-lg text-body-small text-muted-foreground">
-              没有匹配资源，请调整筛选条件。
+              {t("noMatchingResourcesAdjustYourFilters")}
             </p>
           ) : (
             visible.map((row) => {
@@ -407,7 +423,7 @@ export function GrantPickerDrawer({
                   className="flex min-w-0 items-start gap-sm border-b border-border p-sm last:border-b-0 hover:bg-accent"
                 >
                   <Checkbox
-                    aria-label={`选择${row.name}`}
+                    aria-label={t("selectResource", { name: row.name })}
                     checked={row.held || picked.has(row.id)}
                     disabled={busy || row.held}
                     onCheckedChange={(checked) => {
@@ -430,7 +446,7 @@ export function GrantPickerDrawer({
                     <span className="flex flex-wrap gap-xs">
                       <Badge variant="secondary">{row.category}</Badge>
                       {row.held ? (
-                        <Badge variant="outline">已持有</Badge>
+                        <Badge variant="outline">{t("alreadyGranted")}</Badge>
                       ) : row.status ? (
                         <Badge variant="outline">{row.status}</Badge>
                       ) : null}
@@ -448,8 +464,9 @@ export function GrantPickerDrawer({
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-sm text-body-small text-muted-foreground">
           <span>
-            第 {currentPage + 1} / {pages} 页 · 每页 {PAGE_SIZE} 项 ·
-            全选跨页生效
+            {t("page")}
+            {currentPage + 1} / {pages} {t("perPage")}
+            {PAGE_SIZE} {t("itemsSelectAllAppliesAcrossPages")}
           </span>
           <div className="flex gap-sm">
             <Button
@@ -457,14 +474,14 @@ export function GrantPickerDrawer({
               disabled={busy || currentPage === 0}
               onClick={() => setPage(currentPage - 1)}
             >
-              上一页
+              {t("previous")}
             </Button>
             <Button
               variant="secondary"
               disabled={busy || currentPage + 1 >= pages}
               onClick={() => setPage(currentPage + 1)}
             >
-              下一页
+              {t("next")}
             </Button>
           </div>
         </div>
