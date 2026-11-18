@@ -112,6 +112,7 @@ export function useDerivedTodos(options: { enabled?: boolean } = {}) {
     let active = true;
     setLoading(true);
     setPartialFailed(false);
+    setSources(EMPTY_SOURCES);
     const skip = <T>(value: T) => Promise.resolve(value);
     Promise.allSettled([
       canSeeCommerce ? fetchMyOrders() : skip([] as MyOrder[]),
@@ -153,6 +154,7 @@ export function useDerivedTodos(options: { enabled?: boolean } = {}) {
     };
   }, [
     enabled,
+    session.user?.id,
     session.tenant?.id,
     canManageMembers,
     canSeeCommerce,

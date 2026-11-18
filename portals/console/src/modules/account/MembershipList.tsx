@@ -8,7 +8,7 @@
  * @date 2026-11-11
  */
 import { useTranslations } from "next-intl";
-import { Button, Card, Icon, StatusBadge } from "@vxture/design-system";
+import { ActionMenu, Button, Icon, StatusBadge } from "@vxture/design-system";
 import { TenantAvatar } from "@/components/tenant-avatar";
 import { PrincipalNo } from "@/components/principal-no";
 import { RoleTag } from "@/components/role-tag";
@@ -48,24 +48,24 @@ export function MembershipList({
 }) {
   const t = useTranslations("membershipsPage");
   return (
-    <Card className="gap-0 py-0">
-      <ul className="flex flex-col px-lg [&>*+*]:border-t [&>*+*]:border-border">
+    <div>
+      <ul className="@container flex flex-col gap-md">
         {tenants.map((tenant) => (
           <li
             key={tenant.tenantId}
-            className="flex flex-wrap items-start gap-lg py-md"
+            className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-lg gap-y-sm rounded-md border border-border bg-card p-lg"
           >
             <TenantAvatar
               src={tenant.logoSrc}
               tenantType={tenant.type}
-              size="sm"
+              size="lg"
+              className="row-span-2"
             />
-            <span className="flex min-w-0 flex-1 flex-col gap-xs">
+            <span className="col-start-2 row-start-1 min-w-0 break-words text-label font-semibold text-foreground">
+              {formatTenantDisplay(tenant.name, tenant.type)}
+            </span>
+            <span className="col-span-2 col-start-2 row-start-2 flex min-w-0 flex-col gap-xs">
               <span className="flex flex-wrap items-center gap-md">
-                <span className="text-label text-foreground">
-                  {formatTenantDisplay(tenant.name, tenant.type)}
-                </span>
-
                 <StatusBadge
                   tone="neutral"
                   icon={tenant.type === "personal" ? "user" : "buildings"}
@@ -116,7 +116,39 @@ export function MembershipList({
               </span>
             </span>
 
-            <span className="flex shrink-0 items-center gap-2xs">
+            <div className="col-start-3 row-start-1 @2xl:hidden">
+              <ActionMenu
+                label={t("identity.tenantActions")}
+                items={[
+                  ...(!tenant.isCurrent
+                    ? [
+                        {
+                          id: "switch",
+                          label: t("identity.switchTenant"),
+                          disabled: settingDefaultId !== null,
+                          onSelect: () => onSwitchTenant(tenant),
+                        },
+                      ]
+                    : []),
+                  ...(!tenant.isDefault
+                    ? [
+                        {
+                          id: "default",
+                          label: t("identity.setDefault"),
+                          disabled: settingDefaultId !== null,
+                          onSelect: () => onSetDefault(tenant),
+                        },
+                      ]
+                    : []),
+                  {
+                    id: "info",
+                    label: t("identity.tenantInfo"),
+                    onSelect: () => onOpenTenant(tenant),
+                  },
+                ]}
+              />
+            </div>
+            <span className="hidden min-w-0 flex-wrap items-start justify-end gap-2xs @2xl:col-start-3 @2xl:row-start-1 @2xl:flex">
               {!tenant.isCurrent ? (
                 <Button
                   variant="outline"
@@ -162,6 +194,6 @@ export function MembershipList({
           </li>
         ) : null}
       </ul>
-    </Card>
+    </div>
   );
 }

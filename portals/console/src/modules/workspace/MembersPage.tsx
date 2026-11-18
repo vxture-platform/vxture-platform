@@ -96,6 +96,7 @@ import {
 import { useDateFormat } from "@/lib/use-date-format";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
 import { ApplicationAccessDialog } from "./components/ApplicationAccessDialog";
+import { MemberDetailDrawer } from "./components/MemberDetailDrawer";
 import { MemberWorkspacesDialog } from "./components/MemberWorkspacesDialog";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
@@ -164,6 +165,7 @@ export function MembersPage() {
   const [bulkUnlinkOpen, setBulkUnlinkOpen] = useState(false);
   /** 正在管谁的工作空间归属;null = 对话框不开。 */
   const [accessFor, setAccessFor] = useState<MemberRecord | null>(null);
+  const [detailFor, setDetailFor] = useState<MemberRecord | null>(null);
   const [workspacesFor, setWorkspacesFor] = useState<MemberRecord | null>(null);
   const [inviteResult, setInviteResult] = useState<{
     result: InviteMemberResult;
@@ -195,6 +197,7 @@ export function MembersPage() {
     setLookup(null);
     setCreateMode(null);
     setDialogError(null);
+    setDetailFor(null);
   }, [session.tenant?.id, session.user?.id]);
 
   useEffect(() => {
@@ -202,6 +205,7 @@ export function MembersPage() {
 
     setLoading(true);
     setLoadFailed(false);
+    setMembers([]);
     Promise.all([fetchMembers(), fetchTenantRoles()])
       .then(([records, roleRecords]) => {
         if (!active) return;
@@ -220,7 +224,7 @@ export function MembersPage() {
     return () => {
       active = false;
     };
-  }, [session.tenant?.id, session.tenant?.mode, reloadKey]);
+  }, [session.tenant?.id, session.tenant?.mode, session.user?.id, reloadKey]);
 
   /** 错误文案:先按 BFF 原因码,再用它带回的 message,最后才是页面兜底。 */
   function errorText(caught: unknown, fallbackKey: string): string {
@@ -680,9 +684,15 @@ export function MembersPage() {
                 `icon?: IconName`,收不了 `UserAvatar` 这样的节点,而全平台只有这一张
                 表是头像打头,不值得为一个调用点给 DS 开一个 `leading` 槽。代价是这两行
                 的字号得手工跟着件走;件改了这里要跟。 */}
-            <span className="truncate text-label font-semibold text-foreground">
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto min-w-0 truncate p-0 text-left text-label font-semibold text-foreground"
+              onClick={() => setDetailFor(member)}
+            >
               {member.name}
-            </span>
+            </Button>
             {/* 「主管理员」与角色列的「所有者」是**两件事,不要统一**(owner
                 2026-09-06 裁定):角色说的是**角色定义**(这个人被授予了哪一档治理
                 权限),这一枚标说的是**隶属与管理关系**(这个租户的主管理员是谁)。
@@ -704,15 +714,22 @@ export function MembersPage() {
 
   function memberStatusBadge(member: MemberRecord) {
     return (
-      <StatusBadge
-        tone={statusToneMap[member.status]}
-        dot
-        title={t("table.statusTitle", {
-          status: t(`status.${member.status}`),
-        })}
-      >
-        {t(`status.${member.status}`)}
-      </StatusBadge>
+      <span className="inline-flex items-center gap-xs whitespace-nowrap">
+        <StatusBadge
+          tone={statusToneMap[member.status]}
+          dot
+          title={t("table.statusTitle", {
+            status: t(`status.${member.status}`),
+          })}
+        >
+          {t(`status.${member.status}`)}
+        </StatusBadge>
+        {member.status === "Active" ? (
+          <span className="text-body-small text-muted-foreground">
+            {t(`presence.${member.presence ?? "unknown"}`)}
+          </span>
+        ) : null}
+      </span>
     );
   }
 
@@ -725,30 +742,23 @@ export function MembersPage() {
           })
         : "—";
     }
-    return fmtDate(member.joinedAt);
+    return member.lastLoginAt
+      ? t("table.lastLogin", { date: fmtDate(member.lastLoginAt) })
+      : "—";
   }
 
-  /**
-   * 表格版:日期主、时刻辅(owner 2026-09-06)。同一列里两种含义——在册成员是
-   * 加入时间,待接受的邀请是有效期至——主行各自说清是哪种,辅行只给时刻。
-   */
+  /** Last successful platform authentication; never substitute membership dates. */
   function memberTimelineCell(member: MemberRecord) {
-    const at =
-      member.status === "Invited"
-        ? member.invitationExpiresAt
-        : member.joinedAt;
-    if (!at) return <span className="text-muted-foreground">—</span>;
-    return (
+    const at = member.lastLoginAt;
+    return at ? (
       <span className="flex flex-col items-center gap-2xs">
-        <span className="tabular-nums text-foreground">
-          {member.status === "Invited"
-            ? t("table.invitedExpires", { date: fmtDate(at) })
-            : fmtDate(at)}
-        </span>
+        <span className="tabular-nums">{fmtDate(at)}</span>
         <span className="tabular-nums text-body-small text-muted-foreground">
           {fmtTime(at)}
         </span>
       </span>
+    ) : (
+      <span className="text-muted-foreground">—</span>
     );
   }
 
@@ -792,7 +802,14 @@ export function MembersPage() {
       : isSelf
         ? t("hints.selfProtected")
         : null;
-    const items: ActionMenuItem[] = [];
+    const items: ActionMenuItem[] = [
+      {
+        id: "details",
+        label: t("actions.details"),
+        icon: "user",
+        onSelect: () => setDetailFor(member),
+      },
+    ];
     if (hasCapability(session.capabilities, "workspace.member.manage")) {
       items.push({
         id: "application-access",
@@ -1179,68 +1196,53 @@ export function MembersPage() {
                     cell: (member: MemberRecord) => memberIdentity(member),
                   },
                   {
-                    id: "phone",
-                    header: t("table.columns.phone"),
+                    id: "contacts",
+                    header: t("table.columns.contacts"),
                     align: "center",
                     cell: (member: MemberRecord) => (
-                      <span className="text-muted-foreground">
-                        {member.phone ? (
-                          <PhoneNumber
-                            {...formatPhoneForDisplay(member.phone)}
-                          />
-                        ) : (
-                          t("table.emptyPhone")
-                        )}
-                      </span>
-                    ),
-                  },
-                  {
-                    id: "email",
-                    header: t("table.columns.email"),
-                    align: "center",
-                    cell: (member: MemberRecord) => (
-                      <span className="text-muted-foreground">
-                        {member.email}
+                      <span className="flex flex-col gap-2xs text-body-small text-muted-foreground">
+                        <span>
+                          {member.phone ? (
+                            <PhoneNumber
+                              {...formatPhoneForDisplay(member.phone)}
+                            />
+                          ) : (
+                            t("table.emptyPhone")
+                          )}
+                        </span>
+                        <span>{member.email}</span>
                       </span>
                     ),
                   },
                   {
                     id: "role",
-                    header: t("table.columns.role"),
+                    header: t("table.columns.roleWorkspace"),
                     align: "center",
                     cell: (member: MemberRecord) => (
-                      <RoleTag code={member.roleCode} fallback={member.role} />
+                      <span className="flex flex-col items-center gap-xs">
+                        <RoleTag
+                          code={member.roleCode}
+                          fallback={member.role}
+                        />
+                        <span className="flex flex-wrap justify-center gap-2xs">
+                          {member.workspaces.length ? (
+                            member.workspaces.map((w) => (
+                              <Badge
+                                key={w.id}
+                                variant="secondary"
+                                className="bg-muted text-muted-foreground"
+                              >
+                                {w.name}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-body-small text-muted-foreground">
+                              {t("table.noWorkspace")}
+                            </span>
+                          )}
+                        </span>
+                      </span>
                     ),
-                  },
-                  {
-                    /* owner 2026-09-09:「关于用户，有两层，tenant 级、workspace 级，
-                       目前只展示了一次」。这一列是第二层。
-
-                       在工作空间成为真轴之前，两级逐行一致（三条写路径成对写），
-                       画出来是同一批人的复印件——所以此前不画不是漏，是那时它没有
-                       信息量。现在能建多个空间，它才开始不同。 */
-                    id: "workspaces",
-                    header: t("table.columns.workspaces"),
-                    align: "center",
-                    cell: (member: MemberRecord) =>
-                      member.workspaces.length === 0 ? (
-                        /* 空是**真实状态**：租户成员可以不属于任何工作空间。
-                           写「未加入」而不是「—」——后者读起来像没查到。 */
-                        <span className="text-body-small text-muted-foreground">
-                          {t("table.noWorkspace")}
-                        </span>
-                      ) : (
-                        <span className="inline-flex flex-wrap items-center justify-center gap-2xs">
-                          {member.workspaces.map((w) => (
-                            <Badge
-                              key={w.id}
-                              variant={w.isDefault ? "default" : "outline"}
-                            >
-                              {w.name}
-                            </Badge>
-                          ))}
-                        </span>
-                      ),
                   },
                   {
                     id: "status",
@@ -1249,8 +1251,8 @@ export function MembersPage() {
                     cell: (member: MemberRecord) => memberStatusBadge(member),
                   },
                   {
-                    id: "joinedAt",
-                    header: t("table.columns.joinedAt"),
+                    id: "lastLoginAt",
+                    header: t("table.columns.lastLoginAt"),
                     align: "center",
                     cell: (member: MemberRecord) => memberTimelineCell(member),
                   },
@@ -1575,6 +1577,13 @@ export function MembersPage() {
             setAccessFor(null);
             void reloadMembers();
           }}
+        />
+      ) : null}
+      {detailFor ? (
+        <MemberDetailDrawer
+          key={detailFor.id}
+          member={members.find((m) => m.id === detailFor.id) ?? detailFor}
+          onClose={() => setDetailFor(null)}
         />
       ) : null}
       {workspacesFor ? (

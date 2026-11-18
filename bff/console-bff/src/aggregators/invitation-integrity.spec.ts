@@ -55,6 +55,7 @@ function fixture() {
   ) as SessionAggregator;
   Object.assign(aggregator, {
     org,
+    pool: { query: vi.fn(async () => ({ rows: [] })) },
     active: {
       resolveActiveContext: vi.fn(async () => ({
         activeOrg: "tenant",

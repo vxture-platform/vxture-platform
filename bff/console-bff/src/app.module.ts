@@ -19,6 +19,7 @@ import { OidcRpModule } from "./oidc/oidc-rp.module";
 import { ConsoleAuthService } from "./auth/auth.service";
 import { CapabilityGuard } from "./auth/capability";
 import { S2sExchangeService } from "./auth/s2s-exchange.service";
+import { AccountInsightsClient } from "./services/account-insights.client";
 import { SessionAggregator } from "./aggregators/session.aggregator";
 import { TenantClosureAggregator } from "./aggregators/tenant-closure.aggregator";
 import { customerNotificationsProvider } from "./services/customer-notifications.wiring";
@@ -92,6 +93,7 @@ import { VerificationRouter } from "./routers/verification.router";
   providers: [
     ConsoleAuthService,
     SessionAggregator,
+    AccountInsightsClient,
     TenantClosureAggregator,
     // P2-g：客户通知（站内 + 邮件）挂到 OrderService / SubscriptionService
     customerNotificationsProvider,

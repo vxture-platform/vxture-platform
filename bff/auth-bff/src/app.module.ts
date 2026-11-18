@@ -53,6 +53,7 @@ import { CustomerMfaService } from "./oidc/customer-mfa.service";
 import { CustomerMfaRouter } from "./routers/customer-mfa.router";
 import { IpGeolocationService } from "./oidc/ip-geolocation.service";
 import { CustomerSelfService } from "./oidc/customer-self.service";
+import { ConsoleInsightsRouter } from "./routers/console-insights.router";
 import { CustomerSelfRouter } from "./routers/customer-self.router";
 import { AccountsLoginRouter } from "./routers/accounts-login.router";
 import { OidcRouter } from "./routers/oidc.router";
@@ -105,6 +106,7 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     OperatorWebauthnRouter,
     OperatorSelfRouter,
     CustomerSelfRouter,
+    ConsoleInsightsRouter,
     CustomerMfaRouter,
     CustomerSecurityRouter,
     CustomerLifecycleRouter,

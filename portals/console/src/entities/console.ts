@@ -169,6 +169,13 @@ export interface QuickAction {
 }
 
 export interface MemberRecord {
+  /** Platform registration and tenant membership dates are independent facts. */
+  userNo?: string | null;
+  registeredAt?: string | null;
+  lastLoginAt?: string | null;
+  presence?: "online" | "offline" | "unknown";
+  accountStatus?: string | null;
+
   id: string;
   accountId: string;
   name: string;

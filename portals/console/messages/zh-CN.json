@@ -117,7 +117,8 @@
     "description": "谁在什么时候做了什么:成员管理、订阅与订单、发票与抬头等关键动作的操作轨迹",
     "actorType": {
       "operator": "平台运营",
-      "system": "系统"
+      "system": "系统",
+      "customer": "租户成员"
     },
     "result": {
       "success": "成功",
@@ -169,7 +170,16 @@
       "tenant_workspace_set_default": "设为默认工作空间",
       "tenant_workspace_update": "修改工作空间",
       "tenant_workspace_product_seat_grant": "指派产品席位",
-      "tenant_workspace_product_seat_revoke": "撤销产品席位"
+      "tenant_workspace_product_seat_revoke": "撤销产品席位",
+      "tenant_update": "更新租户资料",
+      "tenant_operator_notes_update": "更新运营备注",
+      "tenant_brand_reset": "重置租户标识",
+      "tenant_suspend": "停用租户",
+      "tenant_resume": "恢复租户",
+      "tenant_member_role_change": "调整成员角色",
+      "tenant_member_suspend": "停用成员",
+      "tenant_verification_approve": "通过租户认证",
+      "tenant_verification_reject": "驳回租户认证"
     },
     "table": {
       "title": "操作记录",
@@ -183,7 +193,7 @@
       "colAction": "动作",
       "colResource": "对象",
       "colResult": "结果",
-      "colIp": "来源 IP",
+      "colIp": "来源位置 / IP",
       "empty": "暂无操作记录;本页上线后的关键动作会陆续出现在这里",
       "filterActionLabel": "按操作类型筛选",
       "filterActionAll": "全部操作",
@@ -196,9 +206,34 @@
       "title": "口径说明",
       "description": "记录范围与留存",
       "scopeTitle": "记录范围",
-      "scopeBody": "覆盖 console 内的关键写操作(成员/订阅/订单/发票等);平台运营对本租户的操作与产品内业务操作不在本页范围",
+      "scopeBody": "记录本租户成员与平台运营的关键操作，包括成员、订阅、订单、发票及租户管理；产品内部业务操作请查看对应产品记录。",
       "retainTitle": "留存与不可篡改",
       "retainBody": "审计流水只增不改(append-only);本页展示近 90 天,更早记录由平台按合规策略留存"
+    },
+    "otherAction": "其他操作",
+    "source": {
+      "operator": "平台运营操作",
+      "customer": "成员操作",
+      "system": "系统操作"
+    },
+    "location": {
+      "private": "内网地址",
+      "unknown": "归属地未知"
+    },
+    "resource": {
+      "member": "租户成员",
+      "account_user": "用户账号",
+      "user": "用户账号",
+      "tenant": "租户",
+      "workspace": "工作空间",
+      "invitation": "成员邀请",
+      "subscription": "产品订阅",
+      "order": "订阅订单",
+      "role": "成员角色",
+      "billing_address": "发票抬头",
+      "invoice_receipt": "发票申请",
+      "addon_order": "加购订单",
+      "other": "相关对象"
     }
   },
   "billingPage": {
@@ -349,7 +384,8 @@
       "title": "发票与抬头",
       "description": "已提交的开票申请、已开出的发票，以及开票抬头。",
       "backToBilling": "返回费用中心"
-    }
+    },
+    "quotaAddons": "加购资源"
   },
   "dashboard": {
     "description": "你在这个工作空间的当前状况：需要处理什么、手里有哪些产品与资源。",
@@ -375,6 +411,7 @@
     },
     "title": "总览",
     "todos": {
+      "retry": "重试",
       "title": "需要处理",
       "description": "从订阅、订单、认证等状态推出来的事项。",
       "badge": "待办",
@@ -659,6 +696,31 @@
     "error": "操作失败，请稍后重试。"
   },
   "membersPage": {
+    "details": {
+      "title": "成员详情",
+      "close": "关闭",
+      "identity": "身份信息",
+      "userNo": "用户 ID",
+      "username": "账号",
+      "phone": "手机号",
+      "email": "邮箱",
+      "registeredAt": "平台注册时间",
+      "relationship": "租户关系",
+      "joinedAt": "加入本租户",
+      "access": "访问情况",
+      "lastLoginAt": "最后登录",
+      "applications": "应用授权",
+      "noApplications": "暂无应用授权",
+      "loadFailed": "授权信息加载失败",
+      "retry": "重试",
+      "loading": "加载中",
+      "presenceHint": "在线表示近 90 秒内存在平台前台活动；状态在重新加载成员信息时更新。"
+    },
+    "presence": {
+      "online": "在线",
+      "offline": "离线",
+      "unknown": "在线状态未知"
+    },
     "header": {
       "eyebrow": "租户管理",
       "title": "成员管理",
@@ -670,6 +732,7 @@
       "viewPermissions": "权限管理"
     },
     "table": {
+      "lastLogin": "最后登录：{date}",
       "toolbarTitle": "{count} 人",
       "countHint": "共 {total} 人，活跃 {active} 人，邀请 {invited} 人，禁用 {suspended} 人",
       "searchPlaceholder": "按姓名、邮箱或角色搜索",
@@ -683,6 +746,9 @@
       "selectPage": "选择当前页成员",
       "selectMember": "选择 {name}",
       "columns": {
+        "contacts": "联系方式",
+        "roleWorkspace": "角色 / 工作空间",
+        "lastLoginAt": "最后登录",
         "name": "姓名",
         "phone": "电话",
         "email": "邮箱",
@@ -715,6 +781,7 @@
       "resetFilters": "重置筛选"
     },
     "actions": {
+      "details": "成员详情",
       "menuLabel": "{name} 的成员操作",
       "edit": "编辑用户",
       "disableMember": "禁用用户",
@@ -1449,7 +1516,7 @@
   "quotasPage": {
     "addons": {
       "title": "加油包与扩展包",
-      "description": "存储扩展包与 AI 加油包:选卡下单,走完整订单流程——付款信息提交、运营核销后额度自动入池生效",
+      "description": "按需购买存储扩展包与 AI 加油包，付款确认后额度生效。",
       "colPack": "包",
       "colContent": "内容",
       "colValidity": "有效期",
@@ -2025,15 +2092,15 @@
       "team": "团队 · {assigned}/{seats} 席位",
       "private": "私有化 · {assigned}/{seats} 席位"
     },
-    "browseMarket": "浏览产品市场",
+    "browseMarket": "智能体广场",
     "card": {
       "productDetail": "产品详情",
-      "version": "最新版 v{version}",
+      "version": "v{version}",
       "upgrade": "升级",
       "renew": "续订",
       "moreActions": "更多操作",
       "autoRenewOff": "到期不续",
-      "autoRenewOn": "恢复自动续费",
+      "autoRenewOn": "开启续费",
       "autoRenewNa": "永久订阅不适用",
       "unsubscribe": "立即退订",
       "optedOut": "到期不续",
@@ -2041,12 +2108,12 @@
       "unsubscribeVerb": "退订",
       "unsubscribeConsequence": "订阅将在当前计费周期结束时终止，之后不再续费也不再计费。周期内仍可正常使用。要恢复需要重新订阅，价格以届时的挂牌价为准。",
       "unsubscribeKeep": "保留订阅",
-      "review": "写评价",
+      "review": "发表评价",
       "reviewed": "已评价",
       "autoRenewSuspended": "订阅暂停中，恢复后会回到暂停前的续费设置。",
       "enterProduct": "进入产品",
       "entryUnavailable": "该产品尚未登记可用入口",
-      "manageUsers": "管理使用成员"
+      "manageUsers": "成员授权"
     },
     "cycle": {
       "month": "月付",
@@ -3072,7 +3139,7 @@
     "jump": {
       "order": "就这张订单求助",
       "bill": "就这张账单求助",
-      "subscription": "就这个订阅求助"
+      "subscription": "订阅求助"
     },
     "list": {
       "title": "我的工单",
@@ -3220,6 +3287,7 @@
       "description": "管理你在本平台的租户关系，查看个人成长与权益。"
     },
     "identity": {
+      "tenantActions": "租户操作",
       "personalTenant": "个人",
       "orgTenant": "组织",
       "defaultTag": "默认",
@@ -3249,12 +3317,14 @@
       "error": "操作失败，请重试。"
     },
     "personal": {
+      "accountLabel": "账号：",
       "username": "账号：{name}",
-      "userNo": "用户编号：{number}",
+      "userNo": "ID：{number}",
       "description": "个人资料与安全设置在账号中心统一管理。",
       "manageAccount": "账号管理"
     },
     "invitations": {
+      "joinHint": "需由租户管理员发起邀请",
       "title": "加入租户",
       "description": "通过管理员发来的邀请加入组织租户；加入后可在上方切换。",
       "empty": "暂无待处理邀请。如需加入组织，请联系该租户管理员发送邀请。",
@@ -3269,7 +3339,7 @@
       "processing": "处理中…"
     },
     "growth": {
-      "title": "成长与权益",
+      "title": "成长权益",
       "description": "记录你在本平台的参与和成长。",
       "planned": "规划中",
       "level": {

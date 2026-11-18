@@ -68,3 +68,8 @@ export function buildWebsitePricingUrl(
 export function buildWebsiteDocsUrl(locale: string, section: string): string {
   return `${WEBSITE_BASE_URL}/${locale}/docs/${encodeURIComponent(section)}`;
 }
+
+/** @param locale Active UI language. @returns The public agent marketplace URL. */
+export function buildWebsiteAppCenterUrl(locale: string): string {
+  return `${WEBSITE_BASE_URL}/${locale}/appcenter`;
+}

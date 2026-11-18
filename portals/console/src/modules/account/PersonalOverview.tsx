@@ -24,7 +24,6 @@ import type { ConsoleUser } from "@/entities/console";
 import { accountCenterUrl } from "@/lib/account-center";
 import { formatPrincipalNo, validatePrincipalNo } from "@/lib/principal-no";
 import { PageSection } from "@/layout/shell";
-import { IdentityCard } from "@/components/detail/IdentityCard";
 
 // ===== Personal identity =====
 /**
@@ -42,41 +41,45 @@ export function PersonalOverview({ user }: { user: ConsoleUser | null }) {
       ? formatPrincipalNo(userNo, "user")
       : null;
   return (
-    <IdentityCard
-      avatar={
+    <Card className="@container">
+      <CardContent className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-lg gap-y-sm">
         <UserAvatar
           src={user?.picture ?? null}
           alt={name}
-          className="size-full"
+          className="row-span-2 size-media-md"
         />
-      }
-      name={name}
-      meta={
-        <span className="flex flex-wrap gap-x-md gap-y-xs">
-          {user?.username ? (
-            <span>{t("username", { name: user.username })}</span>
-          ) : null}
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-md">
+          <strong className="min-w-0 break-words text-heading-2 text-foreground">
+            {name}
+          </strong>
+          <Button asChild variant="outline" size="md">
+            <a href={accountCenterUrl(locale)} target="_blank" rel="noreferrer">
+              {t("manageAccount")}
+              <Icon name="arrow-right" size="xs" aria-hidden />
+            </a>
+          </Button>
+        </div>
+        <div className="col-start-2 flex min-w-0 flex-col gap-xs text-body-small text-muted-foreground">
           {publicNumber ? (
-            <span className="tabular-nums">
+            <span className="break-words tabular-nums">
               {t("userNo", { number: publicNumber })}
             </span>
           ) : null}
-          {user?.email ? <span className="break-all">{user.email}</span> : null}
-          {user?.phone ? (
-            <PhoneNumber {...formatPhoneForDisplay(user.phone)} />
-          ) : null}
-          <span>{t("description")}</span>
-        </span>
-      }
-      actions={
-        <Button asChild variant="outline" size="sm">
-          <a href={accountCenterUrl(locale)} target="_blank" rel="noreferrer">
-            {t("manageAccount")}
-            <Icon name="arrow-right" size="xs" aria-hidden />
-          </a>
-        </Button>
-      }
-    />
+          <div className="flex min-w-0 flex-wrap items-center gap-x-md gap-y-xs">
+            <span>{t("accountLabel")}</span>
+            {user?.username ? (
+              <span className="break-all">{user.username}</span>
+            ) : null}
+            {user?.phone ? (
+              <PhoneNumber {...formatPhoneForDisplay(user.phone)} />
+            ) : null}
+            {user?.email ? (
+              <span className="break-all">{user.email}</span>
+            ) : null}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

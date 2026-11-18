@@ -101,6 +101,13 @@ export interface ConsoleTenantPermission {
 }
 
 export interface MemberRecord {
+  /** Platform registration and tenant membership dates are independent facts. */
+  userNo?: string | null;
+  registeredAt?: string | null;
+  lastLoginAt?: string | null;
+  presence?: "online" | "offline" | "unknown";
+  accountStatus?: string | null;
+
   id: string;
   accountId: string;
   name: string;
@@ -142,6 +149,8 @@ export interface TenantContext {
 }
 
 export interface RequestContext {
+  /** Verified central session, server-side observations only. */
+  centralSessionId?: string;
   auth?: JwtAccessPayload;
   /** Workspace from verified RP access-token claims, never request parameters. */
   activeWorkspaceId?: string;

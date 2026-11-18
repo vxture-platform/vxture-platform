@@ -60,6 +60,11 @@ const DEFAULT_BFF_URL = normalizeOrigin(
 );
 const CONSOLE_API_PREFIX = resolveConsoleApiPrefix();
 
+/** @param code Public product code. @param version Catalog icon hash. @returns Public hosted asset URL. */
+export function buildProductIconUrl(code: string, version: string): string {
+  return `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/applications/${encodeURIComponent(code)}/icon?v=${encodeURIComponent(version)}`;
+}
+
 function resolveConsoleApiPrefix(): string {
   const explicitPrefix = process.env.NEXT_PUBLIC_CONSOLE_API_PREFIX;
   if (explicitPrefix !== undefined) {
@@ -1217,6 +1222,8 @@ export interface ProductMaintenance {
 }
 
 export interface SubscribedProduct {
+  iconUrl?: string | null;
+  iconVersion?: string | null;
   subscriptionId: string;
   productId: string | null;
   productCode: string | null;
@@ -2683,6 +2690,14 @@ export interface ConsoleAuditLog {
   action: string;
   resourceType: string;
   resourceId: string;
+  resourceName?: string | null;
+  resourceNo?: string | null;
+  location?: {
+    kind: "public" | "private" | "unknown";
+    country: string | null;
+    region: string | null;
+    city: string | null;
+  } | null;
   result: "success" | "failure" | "denied";
   ipAddress: string | null;
 }

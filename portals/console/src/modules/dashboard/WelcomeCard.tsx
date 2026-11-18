@@ -91,34 +91,31 @@ export function WelcomeCard() {
               ? t(`greeting.${greetingKey(new Date().getHours())}`, { name })
               : t("greetingAnonymous")}
           </span>
-          <span className="text-body-small text-muted-foreground">
-            {t("subtitle")}
-          </span>
-        </div>
 
-        {facts.length > 0 ? (
-          <div className="col-span-full flex min-w-0 flex-wrap items-center gap-x-lg gap-y-sm">
-            {facts.map((f) => (
-              <span
-                key={f.label}
-                className="flex min-w-0 max-w-full items-start gap-2xs"
-              >
-                <Icon
-                  name={f.icon}
-                  size="xs"
-                  className="shrink-0 text-muted-foreground"
-                  aria-hidden
-                />
-                <span className="shrink-0 text-body-small text-muted-foreground">
-                  {f.label}
+          {facts.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-x-md gap-y-xs">
+              {facts.map((f) => (
+                <span
+                  key={f.label}
+                  className="flex min-w-0 max-w-full items-start gap-2xs"
+                >
+                  <Icon
+                    name={f.icon}
+                    size="xs"
+                    className="shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
+                  <span className="shrink-0 text-body-small text-muted-foreground">
+                    {f.label}
+                  </span>
+                  <span className="min-w-0 break-words text-body-small font-medium text-foreground">
+                    {f.value}
+                  </span>
                 </span>
-                <span className="min-w-0 break-words text-body-small font-medium text-foreground">
-                  {f.value}
-                </span>
-              </span>
-            ))}
-          </div>
-        ) : null}
+              ))}
+            </div>
+          ) : null}
+        </div>
 
         {/* 账号处于删除保留期时要说一句：这是个有时限、可撤销的状态，
             藏起来的话人会在 30 天后突然失去账号。 */}

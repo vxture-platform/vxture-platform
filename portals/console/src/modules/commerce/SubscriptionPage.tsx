@@ -56,7 +56,7 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { PageSection } from "@/layout/shell";
-import { buildWebsiteProductsUrl } from "@/lib/website-entry";
+import { buildWebsiteAppCenterUrl } from "@/lib/website-entry";
 import { fetchReviewedSubscriptionIds } from "@/api/console-bff";
 import { SubscriptionProductCard } from "./components/hubCards";
 import { ApplicationAccessDialog } from "@/modules/workspace/components/ApplicationAccessDialog";
@@ -376,7 +376,7 @@ export function SubscriptionPage() {
   const marketAction = (
     <Button asChild variant="outline" size="md">
       <a
-        href={buildWebsiteProductsUrl(locale)}
+        href={buildWebsiteAppCenterUrl(locale)}
         target="_blank"
         rel="noreferrer"
       >

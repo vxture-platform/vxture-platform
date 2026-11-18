@@ -646,6 +646,8 @@ export interface ConsoleSubscriptionView {
 // 每行 = 当前 workspace 的一条订阅（free/trial 同为订阅），带产品与档位投影。
 
 export interface SubscribedProductView {
+  iconUrl?: string | null;
+  iconVersion?: string | null;
   subscriptionId: string;
   productId: string | null;
   productCode: string | null;
@@ -1474,6 +1476,8 @@ export class SubscriptionRouter {
       product_code: string | null;
       product_name: string | null;
       product_nick: string | null;
+      icon_url: string | null;
+      icon_version: string | null;
       home_url: string | null;
       release_version: string | null;
       released_at: Date | null;
@@ -1495,7 +1499,7 @@ export class SubscriptionRouter {
     }>(
       `select ts.id as subscription_id,
               prod.id as product_id, prod.product_code, prod.product_name,
-              prod.product_nick, pw.home_url, prod.release_version, prod.released_at,
+              prod.product_nick, prod.icon_url, pi.checksum as icon_version, pw.home_url, prod.release_version, prod.released_at,
               prod.maintenance_window_id, prod.maintenance_until,
               pl.plan_name, pc.tier, pc.quota->>'seat.max' as seats,
               (select count(*) from metering.product_seats ps
@@ -1515,6 +1519,7 @@ export class SubscriptionRouter {
          ) pc on true
          left join product.products prod on prod.id = pc.product_id
          left join product.product_webhooks pw on pw.product_id = prod.id
+         left join product.product_icons pi on pi.product_id = prod.id
          ${openSuspensionLateralSql("ts")}
         where ts.workspace_id = $1 and ts.deleted_at is null
           -- 下单只建 billing.orders（product_330 P1-b2），订阅行只在履约后存在；旧模型的
@@ -1531,6 +1536,8 @@ export class SubscriptionRouter {
       productCode: r.product_code,
       productName: r.product_name,
       productNick: r.product_nick,
+      iconUrl: r.icon_url ?? null,
+      iconVersion: r.icon_version ?? null,
       homeUrl: r.home_url ?? null,
       releaseVersion: r.release_version,
       releasedAt: r.released_at?.toISOString() ?? null,

@@ -117,7 +117,8 @@
     "description": "Who did what, when: a trail of member management, subscription/order, and invoicing actions",
     "actorType": {
       "operator": "Platform ops",
-      "system": "System"
+      "system": "System",
+      "customer": "Tenant member"
     },
     "result": {
       "success": "Success",
@@ -169,7 +170,16 @@
       "tenant_workspace_set_default": "Set default workspace",
       "tenant_workspace_update": "Update workspace",
       "tenant_workspace_product_seat_grant": "Assign product seat",
-      "tenant_workspace_product_seat_revoke": "Revoke product seat"
+      "tenant_workspace_product_seat_revoke": "Revoke product seat",
+      "tenant_update": "Update tenant profile",
+      "tenant_operator_notes_update": "Update operations notes",
+      "tenant_brand_reset": "Reset tenant branding",
+      "tenant_suspend": "Suspend tenant",
+      "tenant_resume": "Restore tenant",
+      "tenant_member_role_change": "Change member role",
+      "tenant_member_suspend": "Suspend member",
+      "tenant_verification_approve": "Approve verification",
+      "tenant_verification_reject": "Reject verification"
     },
     "table": {
       "title": "Activity",
@@ -183,7 +193,7 @@
       "colAction": "Action",
       "colResource": "Target",
       "colResult": "Result",
-      "colIp": "Source IP",
+      "colIp": "Location / IP",
       "empty": "No activity yet — key actions from now on will appear here",
       "filterActionLabel": "Filter by action",
       "filterActionAll": "All actions",
@@ -196,9 +206,34 @@
       "title": "Scope",
       "description": "Coverage and retention",
       "scopeTitle": "What's recorded",
-      "scopeBody": "Key console writes (members / subscriptions / orders / invoicing); platform-ops actions on this tenant and in-product business events are out of scope here",
+      "scopeBody": "Includes tenant member and platform operations affecting this tenant: membership, subscriptions, orders, invoices and tenant management. Product-internal activity is recorded in the relevant product.",
       "retainTitle": "Retention & immutability",
       "retainBody": "The trail is append-only; this page shows 90 days, older entries are retained per platform compliance policy"
+    },
+    "otherAction": "Other activity",
+    "source": {
+      "operator": "Platform operations",
+      "customer": "Member activity",
+      "system": "System activity"
+    },
+    "location": {
+      "private": "Private network",
+      "unknown": "Location unavailable"
+    },
+    "resource": {
+      "member": "Tenant member",
+      "account_user": "User account",
+      "user": "User account",
+      "tenant": "Tenant",
+      "workspace": "Workspace",
+      "invitation": "Member invitation",
+      "subscription": "Product subscription",
+      "order": "Subscription order",
+      "role": "Member role",
+      "billing_address": "Billing address",
+      "invoice_receipt": "Invoice application",
+      "addon_order": "Add-on order",
+      "other": "Related record"
     }
   },
   "billingPage": {
@@ -349,7 +384,8 @@
       "title": "Invoices & titles",
       "description": "Invoice requests you have submitted, invoices already issued, and your invoice titles.",
       "backToBilling": "Back to billing center"
-    }
+    },
+    "quotaAddons": "Purchase resources"
   },
   "dashboard": {
     "description": "Where this workspace stands right now: what needs you, and what you have.",
@@ -375,6 +411,7 @@
     },
     "title": "Overview",
     "todos": {
+      "retry": "Retry",
       "title": "Needs your attention",
       "description": "Derived from your subscriptions, orders and verification state.",
       "badge": "To do",
@@ -659,6 +696,31 @@
     "error": "The operation failed. Please retry."
   },
   "membersPage": {
+    "details": {
+      "title": "Member details",
+      "close": "Close",
+      "identity": "Identity",
+      "userNo": "User ID",
+      "username": "Account",
+      "phone": "Phone",
+      "email": "Email",
+      "registeredAt": "Platform registration",
+      "relationship": "Tenant membership",
+      "joinedAt": "Joined this tenant",
+      "access": "Access",
+      "lastLoginAt": "Last sign-in",
+      "applications": "Application assignments",
+      "noApplications": "No application assignments",
+      "loadFailed": "Could not load assignments",
+      "retry": "Retry",
+      "loading": "Loading",
+      "presenceHint": "Online means foreground platform activity within 90 seconds. Updated when member data is reloaded."
+    },
+    "presence": {
+      "online": "Online",
+      "offline": "Offline",
+      "unknown": "Presence unknown"
+    },
     "header": {
       "eyebrow": "Tenant management",
       "title": "Members",
@@ -670,6 +732,7 @@
       "viewPermissions": "Permissions"
     },
     "table": {
+      "lastLogin": "Last sign-in: {date}",
       "toolbarTitle": "{count} members",
       "countHint": "{total} total, {active} active, {invited} invited, {suspended} suspended",
       "searchPlaceholder": "Search by name, email, or role",
@@ -683,6 +746,9 @@
       "selectPage": "Select members on this page",
       "selectMember": "Select {name}",
       "columns": {
+        "contacts": "Contact",
+        "roleWorkspace": "Role / Workspace",
+        "lastLoginAt": "Last sign-in",
         "name": "Name",
         "phone": "Phone",
         "email": "Email",
@@ -715,6 +781,7 @@
       "resetFilters": "Reset filters"
     },
     "actions": {
+      "details": "Member details",
       "menuLabel": "Member actions for {name}",
       "edit": "Edit user",
       "disableMember": "Disable user",
@@ -1449,7 +1516,7 @@
   "quotasPage": {
     "addons": {
       "title": "Booster & Extension Packs",
-      "description": "Storage extensions and AI booster packs: pick a card to order, then follow the full order flow — submit payment details, operations confirms, and the grant lands in your pools",
+      "description": "Add storage or AI Credits as needed. Resources become available after payment confirmation.",
       "colPack": "Pack",
       "colContent": "Contents",
       "colValidity": "Validity",
@@ -2028,7 +2095,7 @@
     "browseMarket": "Browse products",
     "card": {
       "productDetail": "Product details",
-      "version": "Latest v{version}",
+      "version": "v{version}",
       "upgrade": "Upgrade",
       "renew": "Renew",
       "moreActions": "More actions",
@@ -3220,6 +3287,7 @@
       "description": "Manage your tenant relationships and view your platform achievements."
     },
     "identity": {
+      "tenantActions": "Tenant actions",
       "personalTenant": "Personal",
       "orgTenant": "Organization",
       "defaultTag": "Default",
@@ -3249,12 +3317,14 @@
       "error": "Operation failed. Please retry."
     },
     "personal": {
+      "accountLabel": "Account:",
       "username": "Account: {name}",
       "userNo": "User ID: {number}",
       "description": "Manage your profile and security in the account center.",
       "manageAccount": "Manage account"
     },
     "invitations": {
+      "joinHint": "A tenant administrator must send you an invitation.",
       "title": "Join a tenant",
       "description": "Join an organization through an administrator invitation, then switch to it above.",
       "empty": "No pending invitations. Ask the tenant administrator to invite you.",

@@ -21,6 +21,8 @@
  *    订阅动作由详情页承接。
  */
 
+import Image from "next/image";
+import { useState } from "react";
 import { productEntryUrl } from "@/lib/product-entry";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useLocale, useTranslations } from "next-intl";
@@ -44,6 +46,7 @@ import {
   buildWebsiteProductUrl,
 } from "@/lib/website-entry";
 import type { SubscribedProduct } from "@/api/console-bff";
+import { buildProductIconUrl } from "@/api/console-bff";
 import { hubCardEntries } from "./hubCards.logic";
 import { useConfirmLabels } from "@/lib/destructive";
 import {
@@ -101,20 +104,46 @@ function FavoriteStar({
   );
 }
 
-/** 产品字母牌（icon_url 未接入前的缺省底板，规格同 CyclePicker 的 icon 底板）。 */
+/** Prefer the catalog icon; retain readable initials for missing or failed assets. */
 function ProductGlyph({
   name,
   code,
+  url,
+  fallbackUrl,
 }: {
   name: string | null;
   code: string | null;
+  url?: string | null;
+  fallbackUrl?: string | null;
 }) {
+  const [failed, setFailed] = useState<readonly string[]>([]);
+  const source = [url, fallbackUrl]
+    .map((value) => value?.trim())
+    .find(
+      (value) =>
+        value &&
+        /^(https?:\/\/|\/(?!\/))/.test(value) &&
+        !failed.includes(value),
+    );
+  const showImage = Boolean(source);
   return (
     <span
       aria-hidden="true"
       className="flex size-control-md shrink-0 items-center justify-center rounded-lg bg-primary-muted-hover text-label-small font-semibold text-primary-hover"
     >
-      {productInitials(name, code)}
+      {showImage && source ? (
+        <Image
+          src={source}
+          width={32}
+          height={32}
+          unoptimized
+          alt=""
+          className="size-full rounded-lg object-contain"
+          onError={() => setFailed((previous) => [...previous, source])}
+        />
+      ) : (
+        productInitials(name, code)
+      )}
     </span>
   );
 }
@@ -311,7 +340,16 @@ export function SubscriptionProductCard({
       <CardContent className="flex flex-1 flex-col gap-md">
         {/* Keep identity indivisible when the tier/status group wraps. */}
         <div className="flex items-start gap-md">
-          <ProductGlyph name={item.productName} code={item.productCode} />
+          <ProductGlyph
+            name={item.productName}
+            code={item.productCode}
+            url={
+              item.productCode && item.iconVersion
+                ? buildProductIconUrl(item.productCode, item.iconVersion)
+                : (item.iconUrl ?? null)
+            }
+            fallbackUrl={item.iconUrl ?? null}
+          />
           <div className="flex min-w-0 flex-1 flex-wrap items-start gap-sm">
             <div className="flex min-w-32 flex-1 flex-col gap-2xs">
               <span className="break-words text-label text-foreground">
