@@ -164,6 +164,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Inject,
   Param,
   Patch,
@@ -1667,6 +1668,79 @@ export class AtlasRouter {
   //
   //    能力码复用 model:model.manage：与 endpoints 同一批人管（授权的是入口），
   //    admin.operator_permission 里也没有更细的码，不在这里新造一个零持有者的死码。
+
+  // Continuous product policies remain authoritative in the upstream service.
+  @Get("grant-policies/:productCode")
+  readGrantPolicy(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+  ): Promise<Record<string, unknown>> {
+    assertCanReadModels(req);
+    return this.request<Record<string, unknown>>(
+      req,
+      `/capability/product-grant-policies/${encodeURIComponent(productCode)}`,
+    );
+  }
+
+  @Get("grant-policies/:productCode/effective")
+  readEffectiveGrantPolicy(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+  ): Promise<Record<string, unknown>> {
+    assertCanReadModels(req);
+    return this.request<Record<string, unknown>>(
+      req,
+      `/capability/product-grant-policies/${encodeURIComponent(productCode)}/effective`,
+    );
+  }
+
+  @Get("grant-policies/:productCode/history")
+  readGrantPolicyHistory(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+  ): Promise<Record<string, unknown>[]> {
+    assertCanReadModels(req);
+    return this.request<Record<string, unknown>[]>(
+      req,
+      `/capability/product-grant-policies/${encodeURIComponent(productCode)}/history`,
+    );
+  }
+
+  @Post("grant-policies/:productCode/preview")
+  @HttpCode(200)
+  previewGrantPolicy(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+    @Body() body: JsonObject,
+  ): Promise<Record<string, unknown>> {
+    assertCanManageModels(req);
+    return this.request<Record<string, unknown>>(
+      req,
+      `/capability/product-grant-policies/${encodeURIComponent(productCode)}/preview`,
+      { method: "POST", body },
+    );
+  }
+
+  @Post("grant-policies/:productCode")
+  @HttpCode(200)
+  saveGrantPolicy(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+    @Body() body: JsonObject,
+  ): Promise<Record<string, unknown>> {
+    assertCanManageModels(req);
+    return this.writeThrough<Record<string, unknown>>(
+      req,
+      `/capability/product-grant-policies/${encodeURIComponent(productCode)}`,
+      { method: "POST", body },
+      (result) => ({
+        action: "atlas.grant_policy.update",
+        resourceType: "atlas_grant_policy",
+        resourceId: productCode,
+        after: result,
+      }),
+    );
+  }
 
   @Get("product-grants")
   listProductGrants(
