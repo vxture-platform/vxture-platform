@@ -9,6 +9,7 @@ export type Capability = GovernancePermissionCode;
 
 export interface ConsoleUser {
   id: string;
+  userNo?: string | null;
   name: string;
   displayName?: string;
   email: string;

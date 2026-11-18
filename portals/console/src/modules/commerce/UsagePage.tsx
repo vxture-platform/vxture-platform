@@ -266,6 +266,7 @@ export function UsagePage() {
             <BarChart
               key={scope}
               aria-label={t("trend.title")}
+              plotHeight="tall"
               peakLabel={t("chartPeak")}
               formatValue={fmtCount}
               data={

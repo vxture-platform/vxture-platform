@@ -167,6 +167,7 @@ export class SessionAggregator {
     }
     return {
       id: user.id,
+      userNo: user.userNo ?? null,
       name: user.name ?? user.account,
       displayName: user.name ?? null,
       email: user.email ?? `${user.account}@local.vxture`,

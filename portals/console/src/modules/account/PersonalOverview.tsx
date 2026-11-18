@@ -22,6 +22,7 @@ import {
 import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import type { ConsoleUser } from "@/entities/console";
 import { accountCenterUrl } from "@/lib/account-center";
+import { formatPrincipalNo, validatePrincipalNo } from "@/lib/principal-no";
 import { PageSection } from "@/layout/shell";
 import { IdentityCard } from "@/components/detail/IdentityCard";
 
@@ -35,6 +36,11 @@ export function PersonalOverview({ user }: { user: ConsoleUser | null }) {
   const t = useTranslations("membershipsPage.personal");
   const locale = useLocale();
   const name = user?.displayName || user?.name || user?.username || "—";
+  const userNo = user?.userNo;
+  const publicNumber =
+    userNo && !validatePrincipalNo(userNo, "user")
+      ? formatPrincipalNo(userNo, "user")
+      : null;
   return (
     <IdentityCard
       avatar={
@@ -49,6 +55,11 @@ export function PersonalOverview({ user }: { user: ConsoleUser | null }) {
         <span className="flex flex-wrap gap-x-md gap-y-xs">
           {user?.username ? (
             <span>{t("username", { name: user.username })}</span>
+          ) : null}
+          {publicNumber ? (
+            <span className="tabular-nums">
+              {t("userNo", { number: publicNumber })}
+            </span>
           ) : null}
           {user?.email ? <span className="break-all">{user.email}</span> : null}
           {user?.phone ? (

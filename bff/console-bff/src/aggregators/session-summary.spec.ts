@@ -14,6 +14,7 @@ describe("business session summaries", () => {
     const user = {
       id: "self",
       account: "customer",
+      userNo: "1799729056",
       status: "deleting",
       avatarHash: null,
       deletionRequestedAt: "2026-11-01T00:00:00.000Z",
@@ -29,6 +30,8 @@ describe("business session summaries", () => {
       {} as never,
     );
     expect(await aggregator.getCurrentUser("self")).toMatchObject({
+      id: "self",
+      userNo: "1799729056",
       accountStatus: "deleting",
       deletionRequestedAt: user.deletionRequestedAt,
     });
@@ -57,6 +60,7 @@ describe("business session summaries", () => {
         {} as never,
       );
       const result = await aggregator.getCurrentUser("self");
+      expect(result?.userNo).toBeNull();
       expect(result?.realNameVerified).toBe(status === "verified");
       expect(query).toHaveBeenCalledWith(
         "select status from kyc.user_kycs where user_id = $1",

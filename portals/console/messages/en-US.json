@@ -3250,6 +3250,7 @@
     },
     "personal": {
       "username": "Account: {name}",
+      "userNo": "User ID: {number}",
       "description": "Manage your profile and security in the account center.",
       "manageAccount": "Manage account"
     },
