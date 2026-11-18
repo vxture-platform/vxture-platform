@@ -25,7 +25,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import { useRouter } from "@/lib/i18n/navigation";
+import { Link, useRouter } from "@/lib/i18n/navigation";
 import {
   ActionMenu,
   Banner,
@@ -65,8 +65,7 @@ import { PlannedBadge } from "@/components/planned";
 import { buildTicketComposeHref } from "@/lib/ticket-compose";
 
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
-import { AddonPacksSection } from "./components/AddonPacksSection";
-import { ADDON_SECTION_ID } from "./addon-routes";
+import { ADDON_SECTION_HREF, ADDON_SECTION_ID } from "./addon-routes";
 import { useDateFormat } from "@/lib/use-date-format";
 import { InvoiceApplicationDialog } from "./components/InvoiceApplicationDialog";
 import { OrdersSection } from "./components/OrdersSection";
@@ -133,13 +132,11 @@ export function BillingPage() {
     session.capabilities,
     "tenant.invoice.manage",
   );
-  /* 加油包购买是**付款**权限,不是发票权限——板块从配额页迁来时要把它原样带过来。
-     初稿我在这里图省事复用了 canManageInvoices,那等于悄悄换掉一道权限门:
-     能开票的人未必该能下单花钱。 */
-  const canPurchaseAddons = hasCapability(
-    session.capabilities,
-    "tenant.payment.manage",
-  );
+  useEffect(() => {
+    // Preserve bookmarked purchase links without moving payment or ledger routes.
+    if (window.location.hash === `#${ADDON_SECTION_ID}`)
+      router.replace(ADDON_SECTION_HREF);
+  }, [router]);
 
   const [summary, setSummary] = useState<ConsoleBillingSummary | null>(null);
   const [bills, setBills] = useState<ConsoleBill[]>([]);
@@ -631,16 +628,9 @@ export function BillingPage() {
         />
       </PageSection>
 
-      {/* ③ 加油包与扩展包(自助购买闭环;2026-09-08 从配额页迁来)。
-          放在两张台账之后:来费用中心的人多半是来看账的,买的入口不该把账挤下去。
-          加油包真实的发现路径是**配额页发现额度告急 → 去加购**,那边留了直达锚点
-          的入口,所以这里靠后不影响找得到。 */}
-      <AddonPacksSection
-        id={ADDON_SECTION_ID}
-        onSettledRefresh={() => setReloadKey((k) => k + 1)}
-        formatMoney={money}
-        canPurchase={canPurchaseAddons}
-      />
+      <Button asChild variant="outline" size="md" className="self-start">
+        <Link href={ADDON_SECTION_HREF}>{t("quotaAddons")}</Link>
+      </Button>
 
       {/* ④ 收款与计费口径 */}
       <PageSection

@@ -16,6 +16,7 @@ import {
   Controller,
   Get,
   Inject,
+  Optional,
   Query,
   Req,
   UnauthorizedException,
@@ -24,6 +25,7 @@ import type { Request } from "express";
 import type { Pool } from "pg";
 import type { RequestContext } from "../types/console.types";
 import { RequireCapability } from "../auth/capability";
+import { AccountInsightsClient } from "../services/account-insights.client";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -63,6 +65,14 @@ export interface ConsoleAuditLogView {
   action: string;
   resourceType: string;
   resourceId: string;
+  resourceName?: string | null;
+  resourceNo?: string | null;
+  location?: {
+    kind: "public" | "private" | "unknown";
+    country: string | null;
+    region: string | null;
+    city: string | null;
+  } | null;
   result: "success" | "failure" | "denied";
   ipAddress: string | null;
 }
@@ -70,7 +80,12 @@ export interface ConsoleAuditLogView {
 @RequireCapability("tenant.audit.read")
 @Controller("api/audit")
 export class AuditRouter {
-  constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
+    @Optional()
+    @Inject(AccountInsightsClient)
+    private readonly insights?: AccountInsightsClient,
+  ) {}
 
   @Get("logs")
   async listLogs(
@@ -125,23 +140,60 @@ export class AuditRouter {
       action: string;
       resource_type: string;
       resource_id: string;
+      resource_name: string | null;
+      resource_no: string | null;
       result: string;
       ip_address: string | null;
     }>(
-      `select al.id, al.created_at, al.actor_type,
+      `with page_rows as (
+         select al.*, case when al.resource_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then al.resource_id::uuid end as resource_uuid from support.audit_logs al where ${where}
+         order by al.created_at desc, al.id desc limit $5 offset $6
+       ) select al.id, al.created_at, al.actor_type,
               coalesce(up.display_name, u.account) as actor_name,
               al.action, al.resource_type, al.resource_id, al.result,
-              al.ip_address
-         from support.audit_logs al
+              al.ip_address,
+              coalesce(target_profile.display_name, target_user.account, workspace.name,
+                tenant.name, invitation.target, prod.product_name, role.role_name) as resource_name,
+              coalesce(case when target_user.user_no is not null then 'U-' || target_user.user_no::text end,
+                case when workspace.workspace_no is not null then 'W-' || workspace.workspace_no::text end,
+                case when tenant.tenant_no is not null then 'T-' || tenant.tenant_no::text end,
+                ord.order_no) as resource_no
+         from page_rows al
          left join account.users u
            on u.id = al.actor_id and al.actor_type = 'customer'
          left join account.user_profiles up
            on up.user_id = al.actor_id and al.actor_type = 'customer'
-        where ${where}
-        order by al.created_at desc, al.id desc
-        limit $5 offset $6`,
+         left join tenancy.tenant_memberships member on member.tenant_id = $1
+           and al.resource_type in ('member', 'account_user', 'user')
+           and (member.id = al.resource_uuid or member.user_id = al.resource_uuid)
+         left join account.users target_user on target_user.id = member.user_id
+         left join account.user_profiles target_profile on target_profile.user_id = target_user.id
+         left join tenancy.workspaces workspace on workspace.tenant_id = $1
+           and al.resource_type = 'workspace' and workspace.id = al.resource_uuid
+         left join tenancy.tenants tenant on tenant.id = $1
+           and al.resource_type = 'tenant' and tenant.id = al.resource_uuid
+         left join tenancy.invitations invitation on invitation.tenant_id = $1
+           and al.resource_type in ('invitation', 'member') and invitation.id = al.resource_uuid
+         left join metering.subscriptions sub on sub.tenant_id = $1
+           and al.resource_type = 'subscription' and sub.id = al.resource_uuid
+         left join product.plan_versions pv on pv.id = sub.plan_version_id
+         left join lateral (select pc.product_id from product.plan_components pc
+           where pc.plan_version_id = pv.id and pc.component_role = 'primary' limit 1) primary_component on true
+         left join product.products prod on prod.id = primary_component.product_id
+         left join billing.orders ord on ord.tenant_id = $1
+           and ((al.resource_type = 'order' and ord.id = al.resource_uuid) or ord.id = sub.current_order_id)
+         left join access.roles role on al.resource_type = 'role' and role.id = al.resource_uuid
+        order by al.created_at desc, al.id desc`,
       [...params, pageSize, (page - 1) * pageSize],
     );
+    const observations =
+      (await this.insights?.read(
+        "audit",
+        req.tenant.id,
+        req.centralSessionId,
+        res.rows.map((r) => r.id),
+      )) ?? [];
+    const locations = new Map(observations.map((r) => [r.id, r.location]));
     return {
       items: res.rows.map((r) => ({
         id: r.id,
@@ -151,6 +203,9 @@ export class AuditRouter {
         action: r.action,
         resourceType: r.resource_type,
         resourceId: r.resource_id,
+        resourceName: r.resource_name ?? null,
+        resourceNo: r.resource_no ?? null,
+        location: locations.get(r.id) ?? null,
         result:
           r.result === "success"
             ? "success"

@@ -17,7 +17,7 @@ import {
   fetchIncomingInvitations,
   type IncomingInvitation,
 } from "@/api/console-bff";
-import { PageSection } from "@/layout/shell";
+
 import { RoleTag } from "@/components/role-tag";
 import { formatBusinessDay } from "@/lib/display-format";
 
@@ -80,8 +80,9 @@ export function PersonalInvitations({
     }
   }
 
+  if (!loading && !failed && !actionFailed && items.length === 0) return null;
   return (
-    <PageSection title={t("title")} description={t("description")} icon="users">
+    <div className="flex flex-col gap-sm" aria-label={t("title")}>
       {actionFailed ? <Banner tone="danger" title={t("actionFailed")} /> : null}
       <Card className="gap-0 px-lg py-0">
         {failed ? (
@@ -147,6 +148,6 @@ export function PersonalInvitations({
           </ul>
         )}
       </Card>
-    </PageSection>
+    </div>
   );
 }

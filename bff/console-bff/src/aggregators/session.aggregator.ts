@@ -5,9 +5,11 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { toE164 } from "@vxture/core-utils/phone";
 import { createHash } from "node:crypto";
+import { AccountInsightsClient } from "../services/account-insights.client";
 import type { Pool } from "pg";
 import { VxConfigService } from "@vxture/core-config";
 import {
@@ -82,6 +84,9 @@ export class SessionAggregator {
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
     /** 产品席位（2026-09-27 裁定①②）：上限判据在库里，这里只过作用域门。 */
     @Inject(ProductSeatService) private readonly seats: ProductSeatService,
+    @Optional()
+    @Inject(AccountInsightsClient)
+    private readonly insights?: AccountInsightsClient,
   ) {}
 
   /** Default-workspace 名称 + 可视码 per tenant——UUID 禁展示（owner 2026-08-20），
@@ -572,7 +577,10 @@ export class SessionAggregator {
   async listMembers(
     userId: string,
     orgId?: string,
-    opts: { includeContacts?: boolean } = {},
+    opts: {
+      includeContacts?: boolean;
+      centralSessionId?: string | undefined;
+    } = {},
   ): Promise<MemberRecord[]> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return [];
@@ -612,20 +620,103 @@ export class SessionAggregator {
            这个键:两种行形状不一致会让前端到处写 `?.` 兜。 */
         .map((r) => ({ ...r, workspaces: [] })),
     ];
+    const enriched = await this.enrichMemberFacts(
+      records,
+      resolved.orgId,
+      opts.centralSessionId,
+    );
     return opts.includeContacts === false
-      ? records.map(redactContacts)
-      : records;
+      ? enriched.map(redactContacts)
+      : enriched;
+  }
+
+  /** Batch only identities already proven to belong to the requested tenant. */
+  private async enrichMemberFacts<T extends MemberRecord>(
+    records: T[],
+    tenantId?: string,
+    sid?: string,
+  ): Promise<T[]> {
+    const ids = records
+      .filter((r) => r.status !== "Invited")
+      .map((r) => r.accountId);
+    if (ids.length === 0) return records;
+    const result = await this.pool.query<{
+      id: string;
+      user_no: string;
+      created_at: Date;
+      status: string;
+      avatar_hash: string | null;
+      last_login_at: Date | null;
+    }>(
+      `
+      select u.id, u.user_no::text, u.created_at, u.status, p.avatar_hash,
+        (select max(l.created_at) from session.login_attempts l
+          where l.user_id = u.id and l.result = 'success') as last_login_at
+      from account.users u
+      left join account.user_profiles p on p.user_id = u.id
+      where u.id = any($1::uuid[]) and u.deleted_at is null`,
+      [ids],
+    );
+    const observations =
+      tenantId && this.insights
+        ? await this.insights.read("members", tenantId, sid, ids)
+        : [];
+    const presence = new Map(observations.map((r) => [r.id, r.presence]));
+    const facts = new Map(result.rows.map((r) => [r.id, r]));
+    return records.map((record) => {
+      const fact = facts.get(record.accountId);
+      return fact
+        ? {
+            ...record,
+            userNo: fact.user_no,
+            registeredAt: fact.created_at.toISOString(),
+            accountStatus: fact.status,
+            lastLoginAt: fact.last_login_at?.toISOString() ?? null,
+            // Missing upstream observations never imply that the member is offline.
+            presence: presence.get(record.accountId) ?? "unknown",
+            avatarUrl: this.pictureFor({
+              id: fact.id,
+              avatarHash: fact.avatar_hash,
+            }),
+          }
+        : record;
+    });
   }
 
   async getMember(
     userId: string,
     orgId: string | undefined,
     memberUserId: string,
+    opts: {
+      includeContacts?: boolean;
+      centralSessionId?: string | undefined;
+    } = {},
   ): Promise<MemberRecord | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
-    const m = await this.org.getOrgMemberDetail(resolved.orgId, memberUserId);
-    return m ? toMemberRecord(m) : null;
+    const member = await this.org.getOrgMemberDetail(
+      resolved.orgId,
+      memberUserId,
+    );
+    if (!member) return null;
+    const byWorkspace = await this.org.listWorkspaceMembersByTenant(
+      resolved.orgId,
+    );
+    const [record] = await this.enrichMemberFacts(
+      [
+        {
+          ...toMemberRecord(member),
+          workspaces: byWorkspace.get(memberUserId) ?? [],
+        },
+      ],
+      resolved.orgId,
+      opts.centralSessionId,
+    );
+    return record
+      ? opts.includeContacts === false
+        ? redactContacts(record)
+        : record
+      : null;
   }
 
   async listTenantRoles(

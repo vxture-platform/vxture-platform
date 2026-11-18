@@ -172,17 +172,36 @@ function historicalProblems(writtenActions, historicalActions, readRouter) {
 // Inspect audit writer payloads instead of unrelated domain action arguments.
 // ============================================================================
 /** Collect literal actions and retain nonliteral writers for explicit review. */
-function scanAuditActions(file, source) {
+function scanAuditActions(file, source, resolveConditionals = false) {
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
-  const writers = new Set(["auditCustomerAction"]);
+  const writers = new Set(["auditCustomerAction", "insertOperatorAuditLog"]);
   const actions = new Set();
   const dynamic = [];
+  const metadataObject = (node) =>
+    ts.isObjectLiteralExpression(node) &&
+    node.properties.every(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+        ["before", "after"].includes(property.name.text),
+    );
+  const allowedSpread = (property) =>
+    resolveConditionals &&
+    ts.isSpreadAssignment(property) &&
+    ts.isParenthesizedExpression(property.expression) &&
+    ts.isConditionalExpression(property.expression.expression) &&
+    metadataObject(property.expression.expression.whenTrue) &&
+    metadataObject(property.expression.expression.whenFalse);
   for (const statement of tree.statements) {
     if (!ts.isImportDeclaration(statement)) continue;
     const bindings = statement.importClause?.namedBindings;
     if (!bindings || !ts.isNamedImports(bindings)) continue;
     for (const binding of bindings.elements) {
-      if ((binding.propertyName ?? binding.name).text === "auditCustomerAction")
+      if (
+        ["auditCustomerAction", "insertOperatorAuditLog"].includes(
+          (binding.propertyName ?? binding.name).text,
+        )
+      )
         writers.add(binding.name.text);
     }
   }
@@ -206,7 +225,10 @@ function scanAuditActions(file, source) {
       );
       if (
         properties.length !== 1 ||
-        payload.properties.some(ts.isSpreadAssignment)
+        payload.properties.some(
+          (property) =>
+            ts.isSpreadAssignment(property) && !allowedSpread(property),
+        )
       )
         throw new Error(
           `${file}: audit payload must have one explicit action and no spreads`,
@@ -218,7 +240,15 @@ function scanAuditActions(file, source) {
         ts.isNoSubstitutionTemplateLiteral(value)
       )
         actions.add(value.text);
-      else dynamic.push(property.getText(tree));
+      else if (
+        resolveConditionals &&
+        ts.isConditionalExpression(value) &&
+        ts.isStringLiteral(value.whenTrue) &&
+        ts.isStringLiteral(value.whenFalse)
+      ) {
+        actions.add(value.whenTrue.text);
+        actions.add(value.whenFalse.text);
+      } else dynamic.push(property.getText(tree));
     }
     ts.forEachChild(node, visit);
   }
@@ -229,6 +259,41 @@ function scanAuditActions(file, source) {
 if (process.argv.includes("--self-test")) {
   const literalActions = (source) =>
     [...scanAuditActions("fixture.ts", source).actions].sort();
+  assert.deepEqual(
+    literalActions(
+      'insertOperatorAuditLog(pool, req, { action: "tenant.operator_notes.update" });',
+    ),
+    ["tenant.operator_notes.update"],
+  );
+  assert.deepEqual(
+    [
+      ...scanAuditActions(
+        "fixture.ts",
+        'insertOperatorAuditLog(pool, req, { action: enabled ? "tenant.resume" : "tenant.suspend" });',
+        true,
+      ).actions,
+    ].sort(),
+    ["tenant.resume", "tenant.suspend"],
+  );
+  assert.deepEqual(
+    [
+      ...scanAuditActions(
+        "fixture.ts",
+        'insertOperatorAuditLog(pool, req, { action: "tenant.update", ...(previous ? { before: previous } : {}) });',
+        true,
+      ).actions,
+    ],
+    ["tenant.update"],
+  );
+  assert.throws(
+    () =>
+      scanAuditActions(
+        "fixture.ts",
+        'insertOperatorAuditLog(pool, req, { action: "tenant.update", ...(previous ? { action: previous } : {}) });',
+        true,
+      ),
+    /no spreads/,
+  );
   assert.deepEqual(
     literalActions(
       'auditCustomerAction(pool, req, { action: "tenant.update", after: { action: "withdraw" } });',
@@ -373,6 +438,20 @@ for (const d of DYNAMIC) {
   }
   for (const c of d.codes) written.add(c);
 }
+
+// Tenant audit rows also originate in the platform management plane.
+// Derive these from actual tenant writers instead of allowing a label-only bypass.
+const platformTenantFile = `${ROOT}/bff/admin-bff/src/routers/tenants.router.ts`;
+const platformTenant = scanAuditActions(
+  platformTenantFile,
+  readFileSync(platformTenantFile, "utf8"),
+  true,
+);
+for (const action of platformTenant.actions) written.add(action);
+if (platformTenant.dynamic.length)
+  problems.push(
+    `Unresolved platform tenant audit writer: ${platformTenant.dynamic.join("; ")}`,
+  );
 
 const pageSrc = readFileSync(PAGE, "utf8");
 const setBlock = pageSrc.match(

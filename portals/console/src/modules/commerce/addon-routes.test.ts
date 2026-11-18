@@ -20,11 +20,11 @@ import {
 } from "./addon-routes";
 
 describe("加油包板块的锚点", () => {
-  it("入口跨页指向费用中心，不是配额页自己", () => {
+  it("购买入口指向配额管理", () => {
     // 迁移前这里是同页 scrollIntoView，锚点不带路径。跨页之后必须带上 /billing，
     // 否则点了只会在配额页里找一个不存在的元素，什么都不发生——**静默失效**，
     // 比 404 还难发现。
-    expect(ADDON_SECTION_HREF).toBe(`/billing#${ADDON_SECTION_ID}`);
+    expect(ADDON_SECTION_HREF).toBe(`/quotas#${ADDON_SECTION_ID}`);
   });
 
   it("锚点 id 本身不带 # —— 拼接由 href 那一侧负责", () => {

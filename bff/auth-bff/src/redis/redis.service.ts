@@ -1475,6 +1475,82 @@ return 0`,
   }
 
   /**
+   * Batch central activity observations without scanning keys or extending sessions.
+   * @param candidates Tenant-authorized user ids and candidate session ids.
+   * @returns Recent activity; truncated observations remain unknown.
+   * @throws {ServiceUnavailableException} When central activity cannot be determined.
+   */
+  async customerPresence(
+    candidates: readonly { userId: string; sessionIds: string[] }[],
+  ): Promise<{ id: string; presence: "online" | "offline" | "unknown" }[]> {
+    const client = this.requireReadyClient();
+    const now = Math.floor(Date.now() / 1000);
+    const ids = [
+      ...new Set(candidates.flatMap((row) => row.sessionIds.slice(0, 20))),
+    ];
+    const observations = new Map<string, (string | null)[]>();
+    try {
+      // Pipeline bounded chunks instead of one round trip per user/session pair.
+      for (let offset = 0; offset < ids.length; offset += 128) {
+        const chunk = ids.slice(offset, offset + 128);
+        const pipeline = client.pipeline();
+        for (const sid of chunk)
+          pipeline.hmget(
+            this.sessionKey(sid),
+            "sub",
+            "realm",
+            "absExpiresAt",
+            "lastActiveAt",
+          );
+        const results = await pipeline.exec();
+        if (!results || results.length !== chunk.length)
+          throw new Error("Incomplete presence batch");
+        results.forEach(([error, value], index) => {
+          if (error || !Array.isArray(value) || value.length !== 4)
+            throw new Error("Invalid presence batch");
+          observations.set(chunk[index]!, value as (string | null)[]);
+        });
+      }
+      return candidates.map((row) => {
+        let presence: "online" | "offline" | "unknown" =
+          row.sessionIds.length > 20 ? "unknown" : "offline";
+        for (const sid of row.sessionIds.slice(0, 20)) {
+          const fields = observations.get(sid);
+          if (!fields || fields.every((field) => field === null)) continue;
+          const [sub, realm, expiryRaw, activeRaw] = fields;
+          const expiry = Number(expiryRaw),
+            active = Number(activeRaw);
+          if (
+            !sub ||
+            !realm ||
+            !Number.isSafeInteger(expiry) ||
+            !Number.isSafeInteger(active) ||
+            !expiryRaw ||
+            !activeRaw
+          ) {
+            presence = "unknown";
+            continue;
+          }
+          if (
+            realm === "customer" &&
+            sub === `usr_${row.userId}` &&
+            expiry > now &&
+            active >= now - 90 &&
+            active <= now
+          ) {
+            presence = "online";
+            break;
+          }
+        }
+        return { id: row.userId, presence };
+      });
+    } catch {
+      this.logger.warn("Central customer activity unavailable");
+      throw new ServiceUnavailableException("Customer activity unavailable");
+    }
+  }
+
+  /**
    * Atomically verify a session, its realm and the client binding.
    * `active` records observed activity but never extends the absolute TTL.
    * @throws {ServiceUnavailableException} For store errors or corrupt metadata.

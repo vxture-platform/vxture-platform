@@ -38,6 +38,7 @@ import {
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { useDateFormat } from "@/lib/use-date-format";
+import { auditBusinessNo, auditDisplayText } from "./audit-display";
 
 const RESULT_TONES: Record<ConsoleAuditLog["result"], StatusBadgeTone> = {
   success: "success",
@@ -64,6 +65,15 @@ const KNOWN_ACTIONS = new Set([
   "subscription.pause",
   "subscription.resume",
   "tenant.close",
+  "tenant.update",
+  "tenant.operator_notes.update",
+  "tenant.brand_reset",
+  "tenant.suspend",
+  "tenant.resume",
+  "tenant.member.role_change",
+  "tenant.member.suspend",
+  "tenant.verification.approve",
+  "tenant.verification.reject",
   "tenant.invitation.resend",
   "tenant.invitation.revoke",
   "tenant.member.add",
@@ -174,22 +184,22 @@ export function AuditLogsPage() {
     (action: string): string =>
       KNOWN_ACTIONS.has(action) || HISTORICAL_ACTIONS.has(action)
         ? t(`action.${action.replace(/\./g, "_")}`)
-        : action,
+        : t("otherAction"),
     [t],
   );
 
   const columns = useMemo<DataTableColumn<ConsoleAuditLog>[]>(
     () => [
       {
-        /* 首列 = **操作内容**（owner 2026-09-08）。这一行说的是「发生了什么操作」，
-           时间是元信息不是主语——原先把时间当标题列，读一屏只看见一列日期。
-           副行给原始码：中文名便于人读，原始码便于对着权限目录/工单核。 */
+        // Keep technical action codes in the data contract, outside customer-facing copy.
         id: "action",
         header: t("table.colAction"),
         cell: (r) => (
           <TableTitleCell
             title={actionLabel(r.action)}
-            description={<span className="font-mono">{r.action}</span>}
+            description={t(
+              `source.${r.actorType === "operator" ? "operator" : r.actorType === "customer" ? "customer" : "system"}`,
+            )}
           />
         ),
       },
@@ -212,7 +222,7 @@ export function AuditLogsPage() {
         header: t("table.colActor"),
         cell: (r) =>
           r.actorType === "customer" ? (
-            (r.actorName ?? "—")
+            (auditDisplayText(r.actorName) ?? t("actorType.customer"))
           ) : (
             <Badge variant="outline">
               {t(
@@ -224,11 +234,35 @@ export function AuditLogsPage() {
       {
         id: "resource",
         header: t("table.colResource"),
-        cell: (r) => (
-          <span className="font-mono text-body-small text-muted-foreground">
-            {r.resourceId}
-          </span>
-        ),
+        cell: (r) => {
+          const typeKey = [
+            "member",
+            "account_user",
+            "user",
+            "tenant",
+            "workspace",
+            "invitation",
+            "subscription",
+            "order",
+            "role",
+            "billing_address",
+            "invoice_receipt",
+            "addon_order",
+          ].includes(r.resourceType)
+            ? r.resourceType
+            : "other";
+          const number =
+            auditBusinessNo(r.resourceNo ?? "") ??
+            auditBusinessNo(r.resourceId);
+          return (
+            <TableTitleCell
+              title={
+                auditDisplayText(r.resourceName) ?? t(`resource.${typeKey}`)
+              }
+              {...(number ? { description: number } : {})}
+            />
+          );
+        },
       },
       {
         id: "result",
@@ -243,14 +277,24 @@ export function AuditLogsPage() {
       {
         id: "ip",
         header: t("table.colIp"),
-        cell: (r) =>
-          r.ipAddress ? (
-            <span className="font-mono text-body-small text-muted-foreground">
-              {r.ipAddress}
+        cell: (r) => {
+          const location = r.location;
+          const city =
+            location?.kind === "private"
+              ? t("location.private")
+              : [location?.city, location?.region, location?.country]
+                  .filter(Boolean)
+                  .filter((v, i, values) => values.indexOf(v) === i)
+                  .join(" · ") || t("location.unknown");
+          return (
+            <span className="flex flex-col gap-2xs">
+              <span>{city}</span>
+              <span className="font-mono text-body-small text-muted-foreground">
+                {r.ipAddress ?? "—"}
+              </span>
             </span>
-          ) : (
-            "—"
-          ),
+          );
+        },
       },
     ],
     [t, actionLabel, fmtDate, fmtTime],

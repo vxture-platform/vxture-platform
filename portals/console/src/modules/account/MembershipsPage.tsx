@@ -10,7 +10,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banner, ViewHeader, ViewLayout } from "@vxture/design-system";
+import { Banner, Button, ViewHeader, ViewLayout } from "@vxture/design-system";
 import type { Locale } from "@vxture-platform/shared";
 import {
   fetchMyWorkspaces,
@@ -148,7 +148,21 @@ export function MembershipsPage() {
         title={t("sections.workspaces.title")}
         description={t("sections.workspaces.description")}
         icon="buildings"
+        action={
+          <span
+            tabIndex={0}
+            title={t("invitations.joinHint")}
+            aria-label={t("invitations.joinHint")}
+          >
+            <Button size="md" variant="outline" disabled>
+              {t("invitations.title")}
+            </Button>
+          </span>
+        }
       >
+        <div id="invitations" className="scroll-mt-lg empty:hidden">
+          <PersonalInvitations userId={session.user?.id} />
+        </div>
         {!failed ? (
           <MembershipList
             tenants={tenants}
@@ -160,9 +174,6 @@ export function MembershipsPage() {
           />
         ) : null}
       </PageSection>
-      <div id="invitations" className="scroll-mt-lg">
-        <PersonalInvitations userId={session.user?.id} />
-      </div>
       <PersonalGrowth
         membershipState={
           failed

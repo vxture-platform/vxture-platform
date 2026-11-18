@@ -22,9 +22,7 @@
  *     ——`metrics[].resetPeriod` 一直返回却不显示,月度重置与一次性额度长得一样。
  *   · **超冲要能读**:剩余为负是有意义的状态(见 API 契约注释),但「剩余 -1.2 GB」
  *     是数学不是话。负值一律改说「已超出 1.2 GB」,概览卡与表尾同一个表达。
- *   · **额度告急有去处**:存储/Credits 板块头各有一个「去加购」(primary),跨页直达
- *     费用中心的加油包板块。本页**不留任何加油包/扩展包板块**(owner 2026-09-09)
- *     ——买在费用中心,这一页只答「用了多少、还剩多少」。
+ * Add-on discovery and purchases live beside resource balances; payment stays in billing.
  *   · **一致性**:三张表补 ListPagination;产品明细补 FilterBar;日期列改居中
  *     (金额/数字才右对齐);上报时间改日期主/时间辅;说明裹 SectionBody。
  *
@@ -34,7 +32,7 @@
 
 import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import { useTableSort } from "@/lib/table-sort";
 import {
@@ -70,7 +68,10 @@ import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
-import { ADDON_SECTION_HREF } from "./addon-routes";
+import { AddonPacksSection } from "./components/AddonPacksSection";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
+import { hasCapability } from "@/features/permissions/can";
+import { ADDON_SECTION_HREF, ADDON_SECTION_ID } from "./addon-routes";
 import { useDateFormat } from "@/lib/use-date-format";
 import { fmtCount, formatBytes } from "@/lib/format-metrics";
 import { useMetricLabel } from "@/lib/metric-label";
@@ -98,6 +99,11 @@ export function QuotasPage() {
   const t = useTranslations("quotasPage");
   const tableLabels = useTableLabels();
   const { session } = useConsoleSession();
+  const locale = useLocale() as Locale;
+  const canPurchaseAddons = hasCapability(
+    session.capabilities,
+    "tenant.payment.manage",
+  );
 
   const [overview, setOverview] = useState<ConsoleQuotaOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -168,10 +174,7 @@ export function QuotasPage() {
     );
   };
 
-  /* 「去加购」:额度告急时唯一能做的事,所以走 **primary**——它是这两个板块里
-     唯一的动作,压成次要档会让「额度告急」这件事没有出口。
-     加油包板块 2026-09-08 迁到费用中心,这里跨页直达锚点;用 Link 而不是
-     onClick+router.push:它是导航,中键/新标签页/复制链接都该能用。 */
+  // Navigate to the purchase catalog beside the resource balances.
   const addonsAction = (
     <Button asChild size="sm">
       <Link href={ADDON_SECTION_HREF}>
@@ -834,6 +837,14 @@ export function QuotasPage() {
           />
         </div>
       </PageSection>
+      <AddonPacksSection
+        id={ADDON_SECTION_ID}
+        onSettledRefresh={() => setReloadKey((k) => k + 1)}
+        formatMoney={(yuan, currency) =>
+          formatCurrency(Number(yuan), locale, currency)
+        }
+        canPurchase={canPurchaseAddons}
+      />
     </ViewLayout>
   );
 }

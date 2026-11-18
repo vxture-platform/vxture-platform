@@ -40,7 +40,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ViewHeader, ViewLayout } from "@vxture/design-system";
+import { ViewLayout } from "@vxture/design-system";
 import {
   fetchMyApps,
   fetchQuotaUsage,
@@ -126,11 +126,7 @@ export function DashboardPage() {
 
   return (
     <ViewLayout>
-      <ViewHeader
-        icon="home"
-        title={t("title")}
-        description={t("description")}
-      />
+      <WelcomeCard />
 
       {failed.any ? (
         <LoadFailedBanner
@@ -138,9 +134,6 @@ export function DashboardPage() {
           retrying={loading}
         />
       ) : null}
-
-      {/* ① 你是谁、在哪 —— 只显示不编辑 */}
-      <WelcomeCard />
 
       {/* ② 要你做什么 —— 待办与紧要信息 */}
       <TodoSection />

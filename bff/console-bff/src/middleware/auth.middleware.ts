@@ -103,6 +103,8 @@ export class AuthMiddleware implements NestMiddleware {
     }
     const context = req as Request & RequestContext;
     context.auth = payload;
+    if (typeof outcome.claims.sid === "string")
+      context.centralSessionId = outcome.claims.sid;
     const workspaceId = mapAccessClaims(outcome.claims).activeWorkspace;
     if (workspaceId) context.activeWorkspaceId = workspaceId;
     else delete context.activeWorkspaceId;

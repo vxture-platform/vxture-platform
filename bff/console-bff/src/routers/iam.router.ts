@@ -552,6 +552,7 @@ export class IamRouter {
     // 目录对持 member.read 的同事可见;邮箱/手机号只给能管成员的人,其余打码。
     return this.sessionAggregator.listMembers(accountId, tenantId, {
       includeContacts: holdsAnyCapability(req, ["tenant.member.manage"]),
+      centralSessionId: req.centralSessionId,
     });
   }
 
@@ -567,6 +568,10 @@ export class IamRouter {
       accountId,
       tenantId,
       memberId,
+      {
+        includeContacts: holdsAnyCapability(req, ["tenant.member.manage"]),
+        centralSessionId: req.centralSessionId,
+      },
     );
     if (!member) {
       throw new NotFoundException("Member not found");
