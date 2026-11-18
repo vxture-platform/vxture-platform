@@ -40,7 +40,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -48,18 +47,12 @@ import {
   Badge,
   Banner,
   Button,
-  Checkbox,
   DataTable,
-  DialogForm,
   EmptyState,
-  Field,
-  FieldLabel,
-  FieldTier,
   Icon,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-  NativeSelect,
   Section,
   StatusBadge,
   Tabs,
@@ -72,7 +65,11 @@ import {
   type StatusBadgeTone,
   TableTitleCell,
 } from "@vxture/design-system";
-import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
+import {
+  GrantPickerDrawer,
+  GrantPolicyPanel,
+  type GrantResource,
+} from "@/features/product-entitlements";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
@@ -154,6 +151,7 @@ type CapabilityRow =
 
 /** Atlas endpoint。`resolution` 是**读时推导的后果**，与 `state`（意图）分列。 */
 interface EndpointLite {
+  tags?: string[];
   id: string;
   code: string;
   category: string;
@@ -164,6 +162,7 @@ interface EndpointLite {
 }
 
 interface CapabilityLite {
+  tags?: string[];
   capabilityId: string;
   title: string;
   displayName?: Record<string, string>;
@@ -226,22 +225,17 @@ function ProductEntitlements() {
   /** 展开了哪些锚点。缺省全收起：先回答「这个产品被直接授了什么」。 */
   const [expandedAnchors, setExpandedAnchors] = useState<readonly string[]>([]);
 
-  /** 授权路由弹窗。 */
-  const [routePicker, setRoutePicker] = useState<{
-    picked: string[];
-    keyword: string;
-  } | null>(null);
-  /** 授权能力弹窗。 */
-  const [capPicker, setCapPicker] = useState<{
-    picked: string[];
-    riskScope: string;
-    keyword: string;
-  } | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [endpointError, setEndpointError] = useState<string | null>(null);
+  const [routePicker, setRoutePicker] = useState(false);
+  const [capPicker, setCapPicker] = useState(false);
 
   /* 一次把清单要的三份都取回：产品目录、Atlas 全量模型授权、能力目录（分类要用）。
      能力授权走 BFF 的汇总接缝——那一份依赖产品码，所以要等产品目录先回来。 */
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
+    setCatalogError(null);
+    setEndpointError(null);
     try {
       const [prods, routes, caps, eps] = await Promise.all([
         api.get<ProductLite[]>("/api/products"),
@@ -249,11 +243,17 @@ function ProductEntitlements() {
         /* 目录是游标分页，按游标读到底（见 `lib/runos-catalog.ts`）。此前按裸数组读，
            runos 切信封之后 `.map` 落在对象上，整页白屏。 */
         fetchWholeCapabilityCatalog<CapabilityLite>().catch(
-          () => [] as CapabilityLite[],
+          (error: unknown) => {
+            setCatalogError(message(error, "能力目录读取失败"));
+            return [] as CapabilityLite[];
+          },
         ),
         api
           .get<EndpointLite[]>("/api/atlas/endpoints")
-          .catch(() => [] as EndpointLite[]),
+          .catch((error: unknown) => {
+            setEndpointError(message(error, "模型路由目录读取失败"));
+            return [] as EndpointLite[];
+          }),
       ]);
       setProducts(prods);
       setRouteGrants(routes);
@@ -296,91 +296,6 @@ function ProductEntitlements() {
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  /**
-   * 授权模型路由 —— 一次多条。
-   *
-   * 逐条串行：Atlas 的唯一索引用 `NULLS NOT DISTINCT`，同一产品重复写同一条路由会
-   * 撞唯一键；串行发让失败落在具体那一条上，并发会把错误混成一团。
-   *
-   * **不带 applicationId / expiresAt**：这两项是「产品下某个应用」「限期授权」这类更
-   * 细的场景，属于逐条精调，不该出现在批量入口里——批量给的是「这个产品能走这些路由」
-   * 这个最常见的形状。要精调去域页改那一条。
-   */
-  async function submitRoutePicker(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!routePicker || routePicker.picked.length === 0 || !selectedCode)
-      return;
-    setSubmitting(true);
-    const failed: string[] = [];
-    try {
-      for (const endpointCode of routePicker.picked) {
-        try {
-          await api.post("/api/atlas/product-grants", {
-            productCode: selectedCode,
-            endpointCode,
-            applicationId: null,
-            applicationType: null,
-            reason: null,
-            expiresAt: null,
-          });
-        } catch {
-          failed.push(endpointCode);
-        }
-      }
-      const ok = routePicker.picked.length - failed.length;
-      toast({
-        tone: failed.length > 0 ? "warning" : "success",
-        title: `${ok} 条路由已授权给 ${selectedCode}`,
-        ...(failed.length > 0
-          ? { description: `${failed.length} 条失败：${failed.join("、")}` }
-          : {}),
-      });
-      setRoutePicker(null);
-      await reload();
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  /**
-   * 授权能力 —— 一次多条。
-   *
-   * 逐条串行的理由不同于路由：每条 direct 写入都会触发一次闭包重编译（ADR-005），
-   * 并发等于让编译器同时改同一主体的派生集。
-   */
-  async function submitCapPicker(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!capPicker || capPicker.picked.length === 0 || !selectedCode) return;
-    setSubmitting(true);
-    const failed: string[] = [];
-    try {
-      for (const capabilityId of capPicker.picked) {
-        try {
-          await api.post("/api/runos/grants", {
-            subjectType: "product",
-            subjectRef: selectedCode,
-            capabilityId,
-            riskScope: capPicker.riskScope,
-          });
-        } catch {
-          failed.push(capabilityId);
-        }
-      }
-      const ok = capPicker.picked.length - failed.length;
-      toast({
-        tone: failed.length > 0 ? "warning" : "success",
-        title: `${ok} 个能力已授权给 ${selectedCode}`,
-        ...(failed.length > 0
-          ? { description: `${failed.length} 个失败：${failed.join("、")}` }
-          : {}),
-      });
-      setCapPicker(null);
-      await reload();
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   /** 停用一条模型授权。Atlas 是软停用（`state="inactive"`），不是删行。 */
   async function deactivateRoute(g: RouteGrant) {
@@ -569,49 +484,42 @@ function ProductEntitlements() {
     );
   }
 
-  /** 这个产品已持有的路由 / 能力——弹窗里置灰，避免撞唯一键或发空操作。 */
+  // Only active, unexpired, product-wide routes cover the requested scope.
   const heldEndpointCodes = new Set(
-    (routesByProduct.get(selectedCode) ?? []).map((g) => g.endpointCode),
+    (routesByProduct.get(selectedCode) ?? [])
+      .filter(
+        (grant) =>
+          grant.state === "active" &&
+          !grant.applicationId &&
+          !grant.applicationType &&
+          (!grant.expiresAt || Date.parse(grant.expiresAt) > Date.now()),
+      )
+      .map((grant) => grant.endpointCode),
   );
   const heldCapabilityIds = new Set(
-    (capByProduct[selectedCode] ?? []).map((g) => g.capabilityId),
+    (capByProduct[selectedCode] ?? [])
+      .filter((grant) => grant.state === "active")
+      .map((grant) => grant.capabilityId),
   );
-
-  /** 已选置顶：勾完再搜就找不到自己勾过什么。 */
-  function endpointRows(pk: { picked: string[]; keyword: string }) {
-    const kw = pk.keyword.trim().toLowerCase();
-    const match = endpoints.filter(
-      (e) =>
-        kw === "" ||
-        e.code.toLowerCase().includes(kw) ||
-        e.primaryModelCode.toLowerCase().includes(kw) ||
-        (e.fallbackModelCode ?? "").toLowerCase().includes(kw),
-    );
-    const picked = new Set(pk.picked);
-    return [
-      ...match.filter((e) => picked.has(e.code)),
-      ...match.filter((e) => !picked.has(e.code)),
-    ];
-  }
-
-  function capabilityRows(pk: { picked: string[]; keyword: string }) {
-    const kw = pk.keyword.trim().toLowerCase();
-    const match = catalog.filter(
-      (c) =>
-        kw === "" ||
-        c.capabilityId.toLowerCase().includes(kw) ||
-        c.title.toLowerCase().includes(kw) ||
-        (c.category ?? "").toLowerCase().includes(kw) ||
-        Object.values(c.displayName ?? {}).some((v) =>
-          v.toLowerCase().includes(kw),
-        ),
-    );
-    const picked = new Set(pk.picked);
-    return [
-      ...match.filter((c) => picked.has(c.capabilityId)),
-      ...match.filter((c) => !picked.has(c.capabilityId)),
-    ];
-  }
+  const modelResources: GrantResource[] = endpoints.map((endpoint) => ({
+    id: endpoint.code,
+    name: endpoint.code,
+    description: [endpoint.primaryModelCode, endpoint.fallbackModelCode]
+      .filter(Boolean)
+      .join(" → "),
+    category: endpoint.category || "未分类",
+    tags: endpoint.tags ?? [],
+    held: heldEndpointCodes.has(endpoint.code),
+    status: endpoint.resolution === "serving" ? "可服务" : "暂不可服务",
+  }));
+  const capabilityResources: GrantResource[] = catalog.map((capability) => ({
+    id: capability.capabilityId,
+    name: capability.displayName?.["zh-CN"] || capability.title,
+    description: capability.title,
+    category: capability.category || "未分类",
+    tags: capability.tags ?? [],
+    held: heldCapabilityIds.has(capability.capabilityId),
+  }));
 
   const product = products.find((p) => p.productCode === selectedCode) ?? null;
 
@@ -734,13 +642,20 @@ function ProductEntitlements() {
               {canWriteRoutes ? (
                 <Button
                   className="shrink-0"
-                  onClick={() => setRoutePicker({ picked: [], keyword: "" })}
+                  disabled={endpointError !== null}
+                  onClick={() => setRoutePicker(true)}
                 >
                   <Icon name="plus" size="sm" aria-hidden="true" />
                   授权路由
                 </Button>
               ) : null}
             </div>
+            <GrantPolicyPanel
+              kind="model"
+              productCode={selectedCode}
+              resources={modelResources}
+              canManage={canWriteRoutes}
+            />
             <DataTable
               labels={tableLabels}
               columns={[
@@ -843,8 +758,8 @@ function ProductEntitlements() {
                 : {})}
               empty={
                 <EmptyState
-                  title="没有模型授权"
-                  description="这个产品调不到任何模型路由。"
+                  title="暂无手工模型授权"
+                  description="持续规则授予的权限请查看上方统计与当前生效权限。"
                   action={
                     <Button asChild variant="secondary">
                       <Link
@@ -871,19 +786,22 @@ function ProductEntitlements() {
               {canWriteCapabilities ? (
                 <Button
                   className="shrink-0"
-                  onClick={() =>
-                    setCapPicker({
-                      picked: [],
-                      riskScope: "read",
-                      keyword: "",
-                    })
+                  disabled={
+                    catalogError !== null || capFailed.includes(selectedCode)
                   }
+                  onClick={() => setCapPicker(true)}
                 >
                   <Icon name="plus" size="sm" aria-hidden="true" />
                   授权能力
                 </Button>
               ) : null}
             </div>
+            <GrantPolicyPanel
+              kind="capability"
+              productCode={selectedCode}
+              resources={capabilityResources}
+              canManage={canWriteCapabilities}
+            />
             <DataTable
               labels={tableLabels}
               columns={[
@@ -1049,8 +967,8 @@ function ProductEntitlements() {
                 : {})}
               empty={
                 <EmptyState
-                  title="没有能力授权"
-                  description="这个产品调不到任何能力。"
+                  title="暂无手工能力授权"
+                  description="持续规则授予的权限请查看上方统计与当前生效权限。"
                   action={
                     <Button asChild variant="secondary">
                       <Link
@@ -1066,215 +984,57 @@ function ProductEntitlements() {
           </TabsContent>
         </Tabs>
 
-        {/* ── 授权路由：从 endpoint 目录多选，带 resolution ────────────── */}
-        <DialogForm
-          open={routePicker !== null}
-          onOpenChange={(open) => {
-            if (!open) setRoutePicker(null);
-          }}
-          size="lg"
-          title={`授权模型路由 · ${selectedCode}`}
-          description="选中的路由将对这个产品下的全部应用生效。要限定到某个应用或加到期时间，去「模型管理 · 模型授权」逐条改。"
-          submitLabel={
-            routePicker ? `授权 ${routePicker.picked.length} 条` : "授权"
-          }
-          submitting={submitting}
-          submitDisabled={!routePicker || routePicker.picked.length === 0}
-          onSubmit={submitRoutePicker}
-          cancelLabel={tShared("actions.cancel")}
-        >
-          {routePicker ? (
-            <FieldTier
-              tier="identity"
-              title="选路由"
-              hint={`共 ${endpoints.length} 条，已选 ${routePicker.picked.length} 条。`}
-            >
-              <InputGroup>
-                <InputGroupAddon>
-                  <Icon name="search" size="sm" aria-hidden="true" />
-                </InputGroupAddon>
-                <InputGroupInput
-                  placeholder="搜索路由码 / 模型…"
-                  aria-label="搜索路由"
-                  value={routePicker.keyword}
-                  onChange={(e) =>
-                    setRoutePicker({ ...routePicker, keyword: e.target.value })
-                  }
-                />
-              </InputGroup>
-              <div className="flex flex-col gap-2xs rounded-md border border-border p-xs">
-                {endpointRows(routePicker).map((ep) => {
-                  const on = routePicker.picked.includes(ep.code);
-                  const held = heldEndpointCodes.has(ep.code);
-                  return (
-                    <label
-                      key={ep.id}
-                      className="flex cursor-pointer items-center gap-sm rounded-sm px-xs py-2xs hover:bg-accent"
-                    >
-                      <Checkbox
-                        checked={on}
-                        disabled={held}
-                        onCheckedChange={() =>
-                          setRoutePicker({
-                            ...routePicker,
-                            picked: on
-                              ? routePicker.picked.filter((x) => x !== ep.code)
-                              : [...routePicker.picked, ep.code],
-                          })
-                        }
-                      />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="font-mono text-code text-foreground">
-                          {ep.code}
-                        </span>
-                        <span className="truncate text-body-small text-muted-foreground">
-                          {ep.primaryModelCode}
-                          {ep.fallbackModelCode
-                            ? ` → ${ep.fallbackModelCode}`
-                            : ""}
-                        </span>
-                      </span>
-                      {held ? (
-                        <Badge variant="outline" className="ml-auto">
-                          已持有
-                        </Badge>
-                      ) : (
-                        /* 把 resolution 带进选择器——授权一条当下无法服务的路由是
-                           合法的（意图与后果分列），但发的时候要知道。 */
-                        <StatusBadge
-                          className="ml-auto"
-                          tone={
-                            ep.resolution === "serving"
-                              ? "success"
-                              : ep.resolution === "degraded"
-                                ? "warning"
-                                : "danger"
-                          }
-                          dot
-                        >
-                          {ep.resolution}
-                        </StatusBadge>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            </FieldTier>
-          ) : null}
-        </DialogForm>
-
-        {/* ── 授权能力：从能力目录多选 ─────────────────────────────────── */}
-        <DialogForm
-          open={capPicker !== null}
-          onOpenChange={(open) => {
-            if (!open) setCapPicker(null);
-          }}
-          size="lg"
-          title={`授权能力 · ${selectedCode}`}
-          description="一次可选多个。runos 不校验 capabilityId 是否存在——手打错一个字符会静默写入一条永远不生效的授权，所以这里只让选。"
-          submitLabel={
-            capPicker ? `授权 ${capPicker.picked.length} 个` : "授权"
-          }
-          submitting={submitting}
-          submitDisabled={!capPicker || capPicker.picked.length === 0}
-          onSubmit={submitCapPicker}
-          cancelLabel={tShared("actions.cancel")}
-        >
-          {capPicker ? (
-            <>
-              <FieldTier
-                tier="identity"
-                title="选能力"
-                hint={`目录共 ${catalog.length} 个，已选 ${capPicker.picked.length} 个。`}
-              >
-                <InputGroup>
-                  <InputGroupAddon>
-                    <Icon name="search" size="sm" aria-hidden="true" />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    placeholder="搜索能力名 / ID / 分类…"
-                    aria-label="搜索能力"
-                    value={capPicker.keyword}
-                    onChange={(e) =>
-                      setCapPicker({ ...capPicker, keyword: e.target.value })
-                    }
-                  />
-                </InputGroup>
-                <div className="flex flex-col gap-2xs rounded-md border border-border p-xs">
-                  {capabilityRows(capPicker).map((c) => {
-                    const on = capPicker.picked.includes(c.capabilityId);
-                    const held = heldCapabilityIds.has(c.capabilityId);
-                    return (
-                      <label
-                        key={c.capabilityId}
-                        className="flex cursor-pointer items-center gap-sm rounded-sm px-xs py-2xs hover:bg-accent"
-                      >
-                        <Checkbox
-                          checked={on}
-                          disabled={held}
-                          onCheckedChange={() =>
-                            setCapPicker({
-                              ...capPicker,
-                              picked: on
-                                ? capPicker.picked.filter(
-                                    (x) => x !== c.capabilityId,
-                                  )
-                                : [...capPicker.picked, c.capabilityId],
-                            })
-                          }
-                        />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="text-body-small text-foreground">
-                            {c.displayName?.["zh-CN"] || c.title}
-                          </span>
-                          <span className="truncate font-mono text-code text-muted-foreground">
-                            {c.capabilityId}
-                          </span>
-                        </span>
-                        {held ? (
-                          <Badge variant="outline" className="ml-auto">
-                            已持有
-                          </Badge>
-                        ) : c.category ? (
-                          <Badge variant="secondary" className="ml-auto">
-                            {c.category}
-                          </Badge>
-                        ) : null}
-                      </label>
-                    );
-                  })}
-                </div>
-              </FieldTier>
-
-              <FieldTier
-                tier="details"
-                title="这一批的授权配置"
-                hint="选中的能力共用同一套。要给某一条不同的配置，单独再发一次。"
-              >
-                <Field>
-                  <FieldLabel
-                    hint="这条授权的风险上限：能力上某个操作的 riskLevel 高过它，那次调用就 policy_denied。默认 read——不替你默认成 write。"
-                    {...FIELD_LABEL_A11Y}
-                    htmlFor="ent-risk"
-                  >
-                    Risk Scope
-                  </FieldLabel>
-                  <NativeSelect
-                    id="ent-risk"
-                    value={capPicker.riskScope}
-                    onChange={(e) =>
-                      setCapPicker({ ...capPicker, riskScope: e.target.value })
-                    }
-                  >
-                    <option value="read">read</option>
-                    <option value="write">write</option>
-                    <option value="critical">critical</option>
-                  </NativeSelect>
-                </Field>
-              </FieldTier>
-            </>
-          ) : null}
-        </DialogForm>
+        {endpointError || catalogError || capFailed.includes(selectedCode) ? (
+          <Banner
+            tone="warning"
+            title="部分授权数据未能读取"
+            description={[
+              endpointError,
+              catalogError,
+              capFailed.includes(selectedCode)
+                ? "当前产品的能力授权未能读取，请刷新后再操作。"
+                : null,
+            ]
+              .filter(Boolean)
+              .join("；")}
+          />
+        ) : null}
+        {routePicker ? (
+          <GrantPickerDrawer
+            kind="model"
+            productCode={selectedCode}
+            resources={modelResources}
+            onClose={() => setRoutePicker(false)}
+            onComplete={reload}
+            onGrant={async (endpointCode) => {
+              await api.post("/api/atlas/product-grants", {
+                productCode: selectedCode,
+                endpointCode,
+                applicationId: null,
+                applicationType: null,
+                reason: null,
+                expiresAt: null,
+              });
+            }}
+          />
+        ) : null}
+        {capPicker ? (
+          <GrantPickerDrawer
+            kind="capability"
+            productCode={selectedCode}
+            resources={capabilityResources}
+            onClose={() => setCapPicker(false)}
+            onComplete={reload}
+            onGrant={async (capabilityId, riskScope) => {
+              await api.post("/api/runos/grants", {
+                subjectType: "product",
+                subjectRef: selectedCode,
+                capabilityId,
+                riskScope,
+              });
+            }}
+          />
+        ) : null}
 
         <Banner
           tone="info"
@@ -1386,14 +1146,15 @@ function ProductEntitlements() {
 
                 <div className="flex flex-wrap items-center gap-lg">
                   <span className="text-body-small text-muted-foreground">
-                    模型路由{" "}
+                    手工模型路由{" "}
                     <span className="text-foreground">{liveRoutes} 生效</span>
                     {routes.length > liveRoutes
                       ? ` · ${routes.length - liveRoutes} 已停用`
                       : ""}
                   </span>
                   <span className="text-body-small text-muted-foreground">
-                    能力 <span className="text-foreground">{direct} 直接</span>
+                    手工能力{" "}
+                    <span className="text-foreground">{direct} 直接</span>
                     {derived > 0 ? ` · ${derived} 推导` : ""}
                   </span>
                 </div>
@@ -1413,7 +1174,7 @@ function ProductEntitlements() {
                   </div>
                 ) : (
                   <span className="text-body-small text-muted-foreground">
-                    还没有能力授权
+                    暂无手工能力授权；持续规则请进入详情查看
                   </span>
                 )}
               </Button>

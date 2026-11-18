@@ -92,6 +92,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Inject,
   Param,
   Patch,
@@ -883,6 +884,79 @@ export class RunosRouter {
    * 那个 409 是本次接入要注意的一处：以前"重发一遍换个配额"是静默无效，现在是明确
    * 报错并指向 `PATCH grants/:grantId`。**改条款走 PATCH，不要撤销重发。**
    */
+  // Continuous product policies remain authoritative in the upstream service.
+  @Get("grant-policies/:productCode")
+  readGrantPolicy(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+  ): Promise<Record<string, unknown>> {
+    assertCanRead(req);
+    return this.request<Record<string, unknown>>(
+      req,
+      `/commerce/product-grant-policies/${encodeURIComponent(productCode)}`,
+    );
+  }
+
+  @Get("grant-policies/:productCode/effective")
+  readEffectiveGrantPolicy(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+  ): Promise<Record<string, unknown>> {
+    assertCanRead(req);
+    return this.request<Record<string, unknown>>(
+      req,
+      `/commerce/product-grant-policies/${encodeURIComponent(productCode)}/effective`,
+    );
+  }
+
+  @Get("grant-policies/:productCode/history")
+  readGrantPolicyHistory(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+  ): Promise<Record<string, unknown>[]> {
+    assertCanRead(req);
+    return this.request<Record<string, unknown>[]>(
+      req,
+      `/commerce/product-grant-policies/${encodeURIComponent(productCode)}/history`,
+    );
+  }
+
+  @Post("grant-policies/:productCode/preview")
+  @HttpCode(200)
+  previewGrantPolicy(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+    @Body() body: JsonObject,
+  ): Promise<Record<string, unknown>> {
+    assertCanManage(req);
+    return this.request<Record<string, unknown>>(
+      req,
+      `/commerce/product-grant-policies/${encodeURIComponent(productCode)}/preview`,
+      { method: "POST", body },
+    );
+  }
+
+  @Post("grant-policies/:productCode")
+  @HttpCode(200)
+  saveGrantPolicy(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+    @Body() body: JsonObject,
+  ): Promise<Record<string, unknown>> {
+    assertCanManage(req);
+    return this.writeThrough<Record<string, unknown>>(
+      req,
+      `/commerce/product-grant-policies/${encodeURIComponent(productCode)}`,
+      { method: "POST", body },
+      (result) => ({
+        action: "runos.grant_policy.update",
+        resourceType: "runos_grant_policy",
+        resourceId: productCode,
+        after: result,
+      }),
+    );
+  }
+
   @Post("grants")
   createGrant(
     @Req() req: Request & RequestContext,
