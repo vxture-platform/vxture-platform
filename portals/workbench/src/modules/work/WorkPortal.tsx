@@ -86,7 +86,7 @@ function WorkPortalContent({
   const silentFailure = useRef(false);
   const browserSessionChecked = useRef(false);
   const browserSessionProbePending = useRef(false);
-  const [overview, setOverview] = useState<WorkApp | null>(null);
+  const [overviewCode, setOverviewCode] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const detailsOrigin = useRef<HTMLElement | null>(null);
@@ -98,7 +98,7 @@ function WorkPortalContent({
   };
   const showOverview = (app: WorkApp): void => {
     rememberDetailsOrigin();
-    setOverview(app);
+    setOverviewCode(app.code);
     setDetailsOpen(true);
   };
   const closeDetails = (): void => {
@@ -281,7 +281,7 @@ function WorkPortalContent({
             setResult(value);
             setDetailsOpen(false);
             setNotificationsOpen(false);
-            setOverview(null);
+            setOverviewCode(null);
           }
         })
         .catch(() => {
@@ -304,6 +304,9 @@ function WorkPortalContent({
   const checking = runtime.authConfigured && result === null;
   const catalog = data?.catalog;
   const activity = useAppActivity(data);
+  // An open drawer must follow fresh authorization rather than its opening snapshot.
+  const overview =
+    activity.apps.find((app) => app.code === overviewCode) ?? null;
   const common = homeApps(activity.apps, activity.view, copy.appLimit);
   const appActions = {
     onFavorite: activity.favorite,
@@ -331,6 +334,7 @@ function WorkPortalContent({
         {t("跳到主要内容")}
       </a>
       <WorkHeader
+        onLaunch={activity.launch}
         data={data}
         apps={appsPage}
         runtime={runtime}
@@ -338,7 +342,7 @@ function WorkPortalContent({
         onNotifications={() => setNotificationsOpen(true)}
         onHelp={() => {
           rememberDetailsOrigin();
-          setOverview(null);
+          setOverviewCode(null);
           setDetailsOpen(true);
         }}
       />
@@ -663,6 +667,11 @@ function WorkPortalContent({
                   <Icon name="external-link" size="sm" />
                 </a>
               </Button>
+              {!overview.available && (
+                <Button disabled title={t(overview.availabilityLabel)}>
+                  {t("进入")}
+                </Button>
+              )}
               {overview.available && overview.href && (
                 <Button asChild className="work-action">
                   <a

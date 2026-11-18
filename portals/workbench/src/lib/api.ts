@@ -167,6 +167,20 @@ function parseSubscriptions(input: unknown): Subscription[] {
             maintenance: row.maintenance != null,
             bundled: row.bundled === true,
             favorite: row.favorite === true,
+            access:
+              row.access === "allowed" || row.access === "denied"
+                ? row.access
+                : "unknown",
+            startsAt:
+              typeof row.startsAt === "string" &&
+              Number.isFinite(Date.parse(row.startsAt))
+                ? row.startsAt
+                : null,
+            expiresAt:
+              typeof row.expiresAt === "string" &&
+              Number.isFinite(Date.parse(row.expiresAt))
+                ? row.expiresAt
+                : null,
           },
         ]
       : [];
@@ -239,59 +253,77 @@ function parseBalance(input: unknown): string {
  * @param catalog - Public product metadata.
  * @param subscriptions - Current-workspace subscriptions; errors remain unknown.
  * @param entries - Registered launch URLs, never a source of availability.
- * @returns Only subscribed cards; launch availability is a separate selection axis.
+ * @returns All catalog cards; subscription and member access remain separate axes.
  */
 export function projectApps(
   catalog: readonly CatalogProduct[],
   subscriptions: LoadResult<Subscription[]>,
   entries: LoadResult<ProductEntry[]>,
 ): WorkApp[] {
-  if (subscriptions.status === "error") return [];
   return catalog
-    .filter(
-      (product) =>
-        /_(agent|platform)$/.test(product.type) &&
-        subscriptions.data.some((item) => item.code === product.code),
-    )
+    .filter((product) => /_(agent|platform)$/.test(product.type))
     .map((product) => {
-      const coverage = subscriptions.data.filter(
-        (item) => item.code === product.code,
-      );
+      const coverage =
+        subscriptions.status === "ready"
+          ? subscriptions.data.filter((item) => item.code === product.code)
+          : [];
       const live = (item: Subscription): boolean =>
-        ["active", "trialing", "overdue"].includes(item.status);
-      // Live bundled coverage remains usable even after a direct purchase expires.
-      // Prefer a live direct purchase for its own commercial tier when both exist.
+        ["active", "trialing", "expiring", "overdue"].includes(item.status);
+      const current = coverage.filter(live);
       const subscribed =
-        coverage.find((item) => !item.bundled && live(item)) ??
-        coverage.find(live) ??
-        coverage[0]!;
-      const active =
-        ["active", "trialing", "overdue"].includes(subscribed.status) &&
-        !subscribed.maintenance
-          ? subscribed
-          : undefined;
+        current.find((item) => !item.bundled) ?? current[0] ?? coverage[0];
+      const active = current.some((item) => !item.maintenance);
+      const access = current.some((item) => item.access === "allowed")
+        ? "allowed"
+        : current.some((item) => !item.access || item.access === "unknown")
+          ? "unknown"
+          : "denied";
       const href =
         entries.status === "ready"
           ? (entries.data.find((item) => item.code === product.code)?.href ??
             null)
           : null;
-      const available =
-        product.active && !product.maintenance && Boolean(active && href);
       const availabilityLabel = !product.active
         ? "即将上线"
         : product.maintenance
           ? "维护中"
-          : subscribed.maintenance
-            ? "维护中"
-            : !active
-              ? ({
-                  expired: "已到期",
-                  suspended: "已暂停",
-                  cancelled: "已取消",
-                }[subscribed.status] ?? "暂不可用")
-              : !href
-                ? "入口暂不可用"
-                : "可使用";
+          : subscriptions.status === "error"
+            ? "暂无法确认权限"
+            : !subscribed
+              ? "未订阅"
+              : !current.length
+                ? ({
+                    expired: "已到期",
+                    suspended: "已暂停",
+                    cancelled: "已取消",
+                  }[subscribed.status] ?? "暂不可用")
+                : !active
+                  ? "维护中"
+                  : access === "unknown"
+                    ? "暂无法确认权限"
+                    : access !== "allowed"
+                      ? "联系管理员授权"
+                      : !href
+                        ? "入口暂不可用"
+                        : "可使用";
+      // Extend only continuous coverage; a future purchase after a gap is not renewal.
+      let horizon = Date.now();
+      let connected = false;
+      const windows = current
+        .filter((item) => !item.maintenance)
+        .toSorted(
+          (a, b) =>
+            (Date.parse(a.startsAt ?? "") || 0) -
+            (Date.parse(b.startsAt ?? "") || 0),
+        );
+      for (const item of windows) {
+        const start = Date.parse(item.startsAt ?? "") || 0;
+        const end = item.expiresAt ? Date.parse(item.expiresAt) : Infinity;
+        if (start <= horizon && end > horizon) {
+          horizon = end;
+          connected = true;
+        }
+      }
       return {
         code: product.code,
         name: product.name,
@@ -300,11 +332,22 @@ export function projectApps(
         category: product.type.endsWith("_agent") ? "agent" : "platform",
         version: product.version,
         stage: product.stage,
-        tier: subscribed.tier,
+        tier: subscribed?.tier ?? null,
         icon: product.icon,
         href,
-        available,
+        available:
+          product.active &&
+          !product.maintenance &&
+          active &&
+          access === "allowed" &&
+          Boolean(href),
         availabilityLabel,
+        subscribed: coverage.length > 0,
+        activeSubscription: current.length > 0,
+        expiresAt:
+          connected && Number.isFinite(horizon)
+            ? new Date(horizon).toISOString()
+            : null,
         favorite: coverage.some((item) => item.favorite),
       };
     });
@@ -400,18 +443,19 @@ export async function loadWorkData(
       catalog:
         catalog.status === "error"
           ? catalog
-          : subscriptions.status === "error"
-            ? subscriptions
-            : {
-                status: "ready",
-                data: projectApps(catalog.data, subscriptions, entries),
-              },
+          : {
+              status: "ready",
+              data: projectApps(catalog.data, subscriptions, entries),
+            },
       availabilityIssue:
         subscriptions.status === "error"
           ? subscriptions.message
           : entries.status === "error"
             ? entries.message
-            : null,
+            : subscriptions.status === "ready" &&
+                subscriptions.data.some((item) => item.access === "unknown")
+              ? "暂无法确认权限"
+              : null,
     },
   };
 }

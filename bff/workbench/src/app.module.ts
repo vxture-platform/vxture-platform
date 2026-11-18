@@ -38,6 +38,8 @@ import { BillingService, PgBillingRepository } from "@vxture/service-billing"; /
 import {
   MeteringReadService,
   PgMeteringReadRepository,
+  ProductSeatService,
+  PgProductSeatRepository,
 } from "@vxture/service-subscription"; // ⚠️ 跨层引用: reuse canonical period-aware quota reads.
 
 @Controller("healthz")
@@ -113,7 +115,11 @@ class HealthRouter implements OnModuleInit {
     {
       provide: CatalogService,
       inject: [READ_POOL],
-      useFactory: (pool: Pool) => new CatalogService(pool),
+      useFactory: (pool: Pool) =>
+        new CatalogService(
+          pool,
+          new ProductSeatService(new PgProductSeatRepository(pool)),
+        ),
     },
     {
       provide: ResourceOverview,

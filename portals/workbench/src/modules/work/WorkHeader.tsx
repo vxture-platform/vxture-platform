@@ -24,12 +24,13 @@ import {
   ShellLocaleSwitcher,
   useTheme,
 } from "@vxture/design-system";
-import type { WorkData, WorkRuntime } from "../../lib/contracts";
+import type { WorkApp, WorkData, WorkRuntime } from "../../lib/contracts";
 import { authNavigation } from "../../lib/navigation";
 import { buildConsoleEntry } from "../../lib/console-entry";
 import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { ShellHeaderActions } from "@vxture/design-system";
 import { ScopeMenu } from "./ScopeMenu";
+import { platformShortcuts } from "../../lib/presentation";
 
 // ============================================================================
 // Presentation composition
@@ -56,6 +57,7 @@ export function WorkHeader({
   onHelp,
   onNotifications,
   pending = false,
+  onLaunch,
 }: {
   data: WorkData | null;
   apps: boolean;
@@ -63,6 +65,7 @@ export function WorkHeader({
   onHelp: () => void;
   onNotifications: () => void;
   pending?: boolean;
+  onLaunch?: (app: WorkApp) => void;
 }): React.JSX.Element {
   const { locale, t, changeLocale } = useWorkLocale();
   const theme = useTheme();
@@ -122,6 +125,34 @@ export function WorkHeader({
           <Link href="/apps" aria-current={apps ? "page" : undefined}>
             {t("应用中心")}
           </Link>
+          {data?.catalog.status === "ready" &&
+            platformShortcuts(data.catalog.data).map(({ app, label }) => {
+              const code = app.code;
+              return app.available && app.href ? (
+                <a
+                  key={code}
+                  onClick={() => onLaunch?.(app)}
+                  onAuxClick={(event) => {
+                    if (event.button === 1) onLaunch?.(app);
+                  }}
+                  href={app.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t(label)}
+                </a>
+              ) : (
+                <span
+                  key={code}
+                  role="link"
+                  aria-disabled="true"
+                  title={t(app.availabilityLabel)}
+                  tabIndex={0}
+                >
+                  {t(label)}
+                </span>
+              );
+            })}
         </nav>
       )}
       <ShellHeaderActions className="work-header-tools justify-self-end">

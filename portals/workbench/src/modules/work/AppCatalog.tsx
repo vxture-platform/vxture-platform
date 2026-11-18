@@ -22,7 +22,7 @@ import {
 } from "@vxture/design-system";
 import type { WorkApp } from "../../lib/contracts";
 import {
-  appVersion,
+  expiryReminder,
   filterApps,
   RELEASE_LABELS,
   TIER_LABELS,
@@ -72,6 +72,7 @@ export function AppCard({
   favoritesEnabled: boolean;
 }): React.JSX.Element {
   const { t } = useWorkLocale();
+  const reminder = app.available ? expiryReminder(app.expiresAt) : null;
   const tone =
     TONES[
       Array.from(app.code).reduce((sum, char) => sum + char.charCodeAt(0), 0) %
@@ -134,7 +135,7 @@ export function AppCard({
               className="work-card-favorite"
               aria-label={t(app.favorite ? "取消收藏{0}" : "收藏{0}", app.name)}
               aria-pressed={Boolean(app.favorite)}
-              disabled={!favoritesEnabled}
+              disabled={!favoritesEnabled || app.subscribed === false}
               onClick={() => onFavorite(app)}
             >
               <Icon
@@ -150,7 +151,13 @@ export function AppCard({
         </p>
       </div>
       <div className="work-app-actions">
-        <span className="work-app-version">{appVersion(app.version)}</span>
+        <span className="work-app-unavailable">
+          {!app.available
+            ? t(app.availabilityLabel)
+            : reminder
+              ? t(reminder.key, reminder.days ?? "")
+              : null}
+        </span>
         {app.available && app.href ? (
           <Button asChild size="sm" className="work-action">
             <a
@@ -167,9 +174,14 @@ export function AppCard({
             </a>
           </Button>
         ) : (
-          <span className="work-app-unavailable">
-            {t(app.availabilityLabel)}
-          </span>
+          <Button
+            size="sm"
+            className="work-action"
+            disabled
+            aria-label={t("{0}：{1}", app.name, t(app.availabilityLabel))}
+          >
+            {t("进入")}
+          </Button>
         )}
       </div>
     </article>

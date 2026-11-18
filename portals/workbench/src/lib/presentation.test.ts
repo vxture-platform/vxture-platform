@@ -9,6 +9,8 @@
 import { describe, expect, it } from "vitest";
 import {
   appVersion,
+  expiryReminder,
+  platformShortcuts,
   dailyPresentation,
   filterApps,
   parseHomeCopy,
@@ -248,4 +250,47 @@ it("takes any configured home count from the complete global order", () => {
   expect(parseHomeCopy({ appLimit: 6 }).appLimit).toBe(6);
   for (const appLimit of [0, -1, 1.5, "6", null])
     expect(parseHomeCopy({ appLimit }).appLimit).toBe(3);
+});
+
+// ============================================================================
+// Expiry reminder boundaries
+// ============================================================================
+it("shows expiry reminders only within seven days and rounds remaining days up", () => {
+  const now = Date.now();
+  const at = (days: number) => new Date(now + days * 86_400_000).toISOString();
+  expect(expiryReminder(at(7), now)).toEqual({
+    key: "{0} 天后到期",
+    days: "7",
+  });
+  expect(expiryReminder(at(1), now)).toEqual({
+    key: "{0} 天后到期",
+    days: "1",
+  });
+  expect(expiryReminder(at(0.5), now)).toEqual({ key: "不足 24 小时到期" });
+  for (const value of [null, "invalid", at(8), at(0), at(-1)])
+    expect(expiryReminder(value, now)).toBeNull();
+});
+
+it("shows subscribed platform shortcuts while preserving the member denial", () => {
+  const platform = {
+    ...app("arda", "platform", false),
+    code: "arda",
+    category: "platform" as const,
+    subscribed: true,
+    activeSubscription: true,
+    available: false,
+    availabilityLabel: "联系管理员授权",
+    href: "https://registered.example/",
+  };
+  expect(platformShortcuts([platform])).toEqual([
+    { app: platform, label: "数据平台" },
+  ]);
+  expect(
+    platformShortcuts([{ ...platform, activeSubscription: false }]),
+  ).toEqual([]);
+  expect(platformShortcuts([{ ...platform, code: "atlas" }])).toEqual([]);
+  expect(
+    platformShortcuts([{ ...platform, code: "karda", available: true }])[0]
+      ?.label,
+  ).toBe("知识平台");
 });

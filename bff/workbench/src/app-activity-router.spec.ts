@@ -63,11 +63,14 @@ beforeEach(async () => {
     ],
   });
   membership.mockReset().mockResolvedValue(undefined);
-  subscriptions
-    .mockReset()
-    .mockResolvedValue([
-      { productCode: "allowed", status: "active", maintenance: null },
-    ]);
+  subscriptions.mockReset().mockResolvedValue([
+    {
+      productCode: "allowed",
+      status: "active",
+      maintenance: null,
+      access: "allowed",
+    },
+  ]);
   @Module({
     controllers: [AppActivityRouter],
     providers: [
@@ -204,6 +207,23 @@ describe("application activity HTTP authorization", () => {
     );
     expect(write).not.toHaveBeenCalled();
   });
+  it.each(["denied", "unknown", undefined])(
+    "rejects a launch without a confirmed member grant: %s",
+    async (access) => {
+      subscriptions.mockResolvedValue([
+        { productCode: "allowed", status: "active", maintenance: null, access },
+      ]);
+      expect((await post("allowed/launch", { eventId: EVENT })).status).toBe(
+        403,
+      );
+      expect(write).not.toHaveBeenCalled();
+      // Reading an overview or retaining a favorite does not grant product entry.
+      expect((await post("allowed/favorite", { favorite: true })).status).toBe(
+        201,
+      );
+    },
+  );
+
   it("validates action bodies and persists only supported views", async () => {
     for (const [path, body] of [
       ["view", { view: "combined" }],

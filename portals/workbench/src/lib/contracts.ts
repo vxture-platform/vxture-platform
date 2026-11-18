@@ -40,6 +40,9 @@ export interface WorkApp {
   href: string | null;
   available: boolean;
   availabilityLabel: string;
+  subscribed?: boolean;
+  activeSubscription?: boolean;
+  expiresAt?: string | null;
   favorite?: boolean;
   lastUsedAt?: string | null;
   launches30d?: number;
@@ -57,6 +60,9 @@ export interface CatalogProduct {
   icon: string | null;
 }
 export interface Subscription {
+  access?: "allowed" | "denied" | "unknown";
+  startsAt?: string | null;
+  expiresAt?: string | null;
   code: string;
   status: string;
   tier: string | null;
