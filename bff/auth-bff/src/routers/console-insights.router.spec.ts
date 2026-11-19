@@ -131,6 +131,32 @@ describe("ConsoleInsightsRouter", () => {
     );
     expect(JSON.stringify(result)).not.toContain("member-session");
   });
+  it("prioritizes the verified actor session without marking other members active", async () => {
+    const f = fixture();
+    const otherUser = "00000000-0000-4000-a000-000000000101";
+    const historical = Array.from({ length: 21 }, (_, i) => `old-${i}`);
+    f.pool.query.mockResolvedValueOnce({
+      rows: [
+        { user_id: USER, session_ids: historical },
+        { user_id: otherUser, session_ids: ["other-session"] },
+      ],
+    });
+    await f.router.read({ ...body, ids: [USER, otherUser] }, AUTH);
+    expect(f.oidc.sessionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: "console" }),
+      { sid: "actor-session", active: true },
+    );
+    expect(f.redis.customerPresence).toHaveBeenCalledWith([
+      { userId: USER, sessionIds: ["actor-session", ...historical] },
+      { userId: otherUser, sessionIds: ["other-session"] },
+    ]);
+  });
+  it("does not add the actor to member results outside the selected tenant rows", async () => {
+    const f = fixture();
+    f.pool.query.mockResolvedValueOnce({ rows: [] });
+    await f.router.read(body, AUTH);
+    expect(f.redis.customerPresence).toHaveBeenCalledWith([]);
+  });
   it("reports unknown when the central batch observation fails", async () => {
     const f = fixture();
     f.redis.customerPresence.mockRejectedValueOnce(new Error("unavailable"));
@@ -144,6 +170,10 @@ describe("ConsoleInsightsRouter", () => {
       rows: [{ id: USER, ip_address: "10.0.0.1" }],
     });
     const result = await f.router.read({ ...body, kind: "audit" }, AUTH);
+    expect(f.oidc.sessionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: "console" }),
+      { sid: "actor-session", active: false },
+    );
     expect(f.governance.assertCan).toHaveBeenCalledWith(
       USER,
       { orgId: TENANT },
