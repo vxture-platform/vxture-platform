@@ -74,6 +74,7 @@ export class ActiveContextService {
       activeOrg: active.organizationId,
       activeOrgType: active.organization?.type ?? "personal",
       activeOrgName: active.organization?.name ?? null,
+      activeOrgDisplayName: active.organization?.displayName?.trim() || null,
       activeWorkspace,
       activeWorkspaceName,
       roles,

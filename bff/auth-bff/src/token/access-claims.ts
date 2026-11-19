@@ -20,8 +20,10 @@ export interface AccessClaimsInput {
   activeOrg?: string | null;
   /** Active organization type: "personal" | "organization" (personal-vs-team discriminator). */
   activeOrgType?: string | null;
-  /** Active organization display name. */
+  /** Active organization full name. */
   activeOrgName?: string | null;
+  /** Optional short name for presentation, independent of the full name. */
+  activeOrgDisplayName?: string | null;
   /** Active workspace id (default workspace). */
   activeWorkspace?: string | null;
   /** Active workspace display name. */
@@ -48,6 +50,8 @@ export function buildAccessClaims(
   if (input.activeOrg != null) claims.active_org = input.activeOrg;
   if (input.activeOrgType != null) claims.active_org_type = input.activeOrgType;
   if (input.activeOrgName != null) claims.active_org_name = input.activeOrgName;
+  const orgDisplayName = input.activeOrgDisplayName?.trim();
+  if (orgDisplayName) claims.active_org_display_name = orgDisplayName;
   if (input.activeWorkspace != null)
     claims.active_workspace = input.activeWorkspace;
   if (input.activeWorkspaceName != null)

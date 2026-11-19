@@ -207,6 +207,7 @@ export class AuthnService {
       activeOrg: context?.activeOrg ?? null,
       activeOrgType: context?.activeOrgType ?? null,
       activeOrgName: context?.activeOrgName ?? null,
+      activeOrgDisplayName: context?.activeOrgDisplayName ?? null,
       activeWorkspace: context?.activeWorkspace ?? null,
       activeWorkspaceName: context?.activeWorkspaceName ?? null,
       roles: context?.roles ?? [],

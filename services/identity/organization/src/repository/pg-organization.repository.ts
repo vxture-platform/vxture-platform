@@ -1548,7 +1548,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const r = await this.pool.query(
       `select m.tenant_id, m.user_id, rr.role_code as role, m.status, m.created_at as joined_at,
               m.is_default,
-              o.id as o_id, o.name as o_name, o.type as o_type,
+              o.id as o_id, o.name as o_name, o.display_name as o_display_name, o.type as o_type,
               o.owner_user_id as o_owner, o.status as o_status,
               tl.hash as o_logo_hash
          from tenancy.tenant_memberships m
@@ -1569,6 +1569,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       organization: {
         id: row.o_id,
         name: row.o_name,
+        displayName: row.o_display_name ?? null,
         type: row.o_type,
         ownerUserId: row.o_owner,
         status: row.o_status,

@@ -298,8 +298,10 @@ export interface ActiveOrgContext {
   activeOrg: string;
   /** "personal" | "organization" — the only reliable personal-vs-team discriminator. */
   activeOrgType: OrgType;
-  /** Active organization display name (null if the join did not carry it). */
+  /** Active organization full name (null if the join did not carry it). */
   activeOrgName: string | null;
+  /** Optional short name for presentation only; never an authorization input. */
+  activeOrgDisplayName?: string | null;
   activeWorkspace: string | null;
   /** Active (default) workspace display name (null if no workspace). */
   activeWorkspaceName: string | null;
