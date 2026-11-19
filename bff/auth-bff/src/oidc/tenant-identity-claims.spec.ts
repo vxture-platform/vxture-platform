@@ -202,6 +202,10 @@ function presentationFixture() {
         lastActiveAt: now,
         absExpiresAt: now + 300,
       })),
+      getOidcActiveContext: vi.fn(async () => ({
+        orgId: context.activeOrg,
+        workspaceId: context.activeWorkspace ?? null,
+      })),
       getOidcActiveOrg: vi.fn(async () => context.activeOrg),
       getOidcActiveWorkspace: vi.fn(async () => context.activeWorkspace),
     },
