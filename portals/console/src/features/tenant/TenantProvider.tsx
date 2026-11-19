@@ -76,7 +76,12 @@ export function TenantProvider({ children }: TenantProviderProps) {
     }
 
     if (session.tenant) {
-      tenantMap.set(session.tenant.id, session.tenant);
+      const listed = tenantMap.get(session.tenant.id);
+      tenantMap.set(session.tenant.id, {
+        ...listed,
+        ...session.tenant,
+        isDefault: listed?.isDefault ?? session.tenant.isDefault ?? false,
+      });
     }
 
     return Array.from(tenantMap.values());

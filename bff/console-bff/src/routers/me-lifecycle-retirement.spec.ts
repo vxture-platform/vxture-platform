@@ -81,10 +81,17 @@ describe("console personal management retirement", () => {
       {} as never,
       {} as never,
     );
-    const req = { user: { id: "self" }, tenant: { id: "active" } } as never;
+    const req = {
+      user: { id: "self" },
+      tenant: { id: "active", workspace: "selected" },
+    } as never;
     await router.getMyWorkspaces(req);
     await router.setDefaultTenant(req, "target");
-    expect(session.getMyWorkspaces).toHaveBeenCalledWith("self", "active");
+    expect(session.getMyWorkspaces).toHaveBeenCalledWith(
+      "self",
+      "active",
+      "selected",
+    );
     expect(session.setDefaultTenant).toHaveBeenCalledWith("self", "target");
     await expect(router.getMyWorkspaces({} as never)).rejects.toBeInstanceOf(
       UnauthorizedException,

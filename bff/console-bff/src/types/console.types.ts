@@ -161,6 +161,8 @@ export interface RequestContext {
 
 /** A tenant/workspace the user belongs to (my-workspaces, §1.6/§4.1). */
 export interface ConsoleWorkspaceItem {
+  /** Whether the displayed workspace is the tenant's default workspace. */
+  workspaceIsDefault?: boolean;
   tenantNo?: string | null;
   tenantId: string;
   tenantName: string;

@@ -136,14 +136,17 @@ IdP 发 `POST {back_channel_logout_uri}`，`application/x-www-form-urlencoded`�
 前端 ─顶层 GET /auth/switch-tenant?tenantId&returnTo──▶ app-bff
   预检：app-bff 服务端回查该 user 的成员关系（tenantId 须在其可访问 org 内,否则原样回到 returnTo;tenants[] 已不进 token,见 §2.11 ⚠️）
   302 IdP /oidc/authorize?prompt=none&tenant_hint={tenantId}
-  IdP 更新 (sid, client_id)→tenantId → 静默发码 → /auth/callback → 新会话(新 active_org;浏览器手里的旧 RP 会话顺手销毁)
+  IdP 验证并更新 sid→当前租户/工作空间 → 静默发码 → /auth/callback → 新 RP 会话
   302 returnTo,页面整体重载
 ```
 
 - **必须是顶层导航不是 fetch**：IdP 要收到中央会话 cookie（`vx_sid`）才能静默发码，XHR 到 app-bff 再 302 出去浏览器跟不过跨站重定向。所以入口是 GET（与 `/auth/login` 同形），前端 `location.assign`；原稿的 `POST {tenantId}` 按此修正（console 2026-09-05 落地：`bff/console-bff/src/routers/tenant-switch.router.ts`。此前前端 POST 到一个早已退役的 `/api/auth/tenant/switch`，切换从未生效）。
-- **作用域按应用**：IdP 只改 `(sid, client_id)` 的 active_org，不波及其它 app（如 console 切租户不影响 ruyin / website）。
+- **当前选择按中央会话共享（2026-11-19 本地修复，尚未发布）**：同一 customer `sid` 内，显式且已验证的当前租户/工作空间优先于各 client 的历史选择与登录默认值；新授权与 refresh 重新校验当前成对上下文。不同 sid、设备及 workforce 会话保持隔离，每个 RP 仍持有自己的 Cookie、token 与 audience。实现依据：`bff/auth-bff/src/redis/redis.service.ts` 的 `active_context` 原子存储与 `bff/auth-bff/src/oidc/oidc.service.ts` 的授权、续期签发路径；写入不延长中央会话 TTL，也不复活已退出会话。
+- **工作空间切换**：RP 服务端以当前租户预检工作空间成员关系，并在顶层重授权同时传 `tenant_hint` 与 `workspace_hint`。hint 只用于选择，不构成授权；IdP 签发前仍验证组织与工作空间成员关系。实现依据：`bff/console-bff/src/routers/tenant-switch.router.ts`。
+- **已有产品会话不会自动改写**：旧 access token 是已签名快照，产品须经重新授权或受控 refresh 更新 `active_org` / `active_workspace`，再清理旧作用域权益、角色与界面缓存，并按新 workspace 重新查 C2 / 产品准入。仅修正默认角色不能替代上下文同步。`POST /oidc/session/status` 仍仅提供 `valid` / `next_check_at`，不提供上下文变更信息，不据此检测切换，也不新增高频后台轮询。refresh 错误不能单独证明中央登录结束。
 - **RP 侧不再自存「上次选的租户」**：活跃租户只有 RP 会话一个真相。console 此前在 localStorage / cookie 里镜像一份、恢复会话时替用户切回去，它会抢在「登录后默认进入的租户」前面，已撤。
-- **登录后默认进入的租户**：`tenancy.tenant_memberships.is_default`（console 账号信息页「设为默认」，每用户至多一条）。IdP `ActiveContextService` 解析 active_org 时无 hint → 先取默认成员关系 → 再回落个人租户；新登录（新 sid、无 per-client 记录）因此进默认租户。
+- **登录后默认进入的租户**：`tenancy.tenant_memberships.is_default`（console 账号信息页「设为默认」，每用户至多一条）。无显式新目标、无当前选择时，IdP 才取默认成员关系、再回落个人租户；默认设置不得覆盖仍有效的当前选择。未指定当前空间时由服务端解析并验证默认空间。
+- **交付状态**：上述共享上下文行为在 `codex/fix-active-tenant-sync-release` 本地修复并通过测试，提交状态以关联 PR 为准，尚未发布或生产验收；CoSpace、Yucer 的已有 RP 会话同步仍待产品侧修复验收，不声称 vxtpl 或任一产品已实现。外部《产品接入通则》C1 与《产品接入范本》对应条款成对维护，文档发布不等于代码部署。
 - website 无切租户（恒个人或单一上下文）；xuanzhen 有（组织租户）；ruyin 恒个人无切。
 
 ### 2.9 静默续期与降级
@@ -298,7 +301,7 @@ ruyin.ai 是**首个跨域应用**（模式 B）：`client_id=ruyin`、`realm=te
 - [ ] 浏览器**零 OIDC token**，仅 `__Host-vx_rp_session`（DevTools 核验）。
 - [ ] access 过期 → 静默 refresh；refresh 过期 → `prompt=none` 重授权；IdP 无会话 → 全量登录。
 - [ ] refresh 轮换：旧 refresh 重放被拒（family 吊销）。
-- [x] 切租户（console 2026-09-05 落地，xuanzhen 待接）：顶层 `GET /auth/switch-tenant` → `prompt=none` + `tenant_hint` 静默换发新 `active_org`，**不影响**其它 app。
+- [x] 切租户入口（console 2026-09-05 落地，xuanzhen 待接）：顶层 `GET /auth/switch-tenant` → `prompt=none` + `tenant_hint` 静默换发新 `active_org`。同 sid 当前上下文共享的 2026-11-19 修复尚未发布，产品已有会话须重新授权或续期后接收新上下文（§2.8）。
 - [ ] 全局登出 → app 经 **back-channel** 会话被杀，下次请求重登；非顶级（iframe）静默授权**不被依赖**。
 
 **验收（business-app provisioning，起步期按需）**：

@@ -101,6 +101,9 @@ export function ConsoleHeader({
     ConsoleWorkspaceItem[]
   >([]);
   const activeWorkspaceId = session.tenant?.workspace ?? null;
+  const defaultTenantId = session.tenantOptions?.find(
+    (tenant) => tenant.isDefault,
+  )?.id;
   useEffect(() => {
     let active = true;
     setWorkspaceOptions([]);
@@ -120,7 +123,7 @@ export function ConsoleHeader({
     return () => {
       active = false;
     };
-  }, [session.tenant?.id, activeWorkspaceId]);
+  }, [session.tenant?.id, activeWorkspaceId, defaultTenantId]);
 
   const user = session.user;
   const displayName = (
@@ -250,7 +253,7 @@ export function ConsoleHeader({
                             name:
                               defaultSpace.workspaceName ||
                               t("defaultWorkspace"),
-                            isDefault: true,
+                            isDefault: defaultSpace.workspaceIsDefault === true,
                             isCurrent:
                               item.isCurrent &&
                               defaultSpace.workspaceId === activeWorkspaceId,

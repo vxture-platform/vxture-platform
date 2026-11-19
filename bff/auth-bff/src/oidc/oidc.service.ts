@@ -993,8 +993,8 @@ export class OidcService {
       client.realm,
       req.tenantHint,
     );
-    /* 工作空间的选择记在 (sid, clientId) 上,与 active_org 同处。发码时不把它
-       塞进授权码——铸令牌那一刻直接从 Redis 读,刷新令牌那条路才拿得到同一个值。 */
+    // Persist the validated pair before redirecting so subsequent RPs and refreshes
+    // inherit the current selection instead of their historical personal tenant.
     await this.rememberActiveWorkspace(
       sid as string,
       client.clientId,
@@ -1023,17 +1023,7 @@ export class OidcService {
     };
   }
 
-  /**
-   * 解析并记住这个 (sid, client) 的活跃工作空间。
-   *
-   * 与 `resolveActiveOrg` 同形,但有一处**故意不同**:这里不返回值,只负责「记住」。
-   * 铸令牌时会自己从 Redis 读——工作空间不进授权码,于是刷新令牌那条路(没有授权码)
-   * 与首次发码走的是同一个读法,两条路不会各拿到一个值。
-   *
-   * 提示站不站得住由 organization 那边的 SQL 判(属于本租户、启用中、我是成员);
-   * 这里只把**判完的结果**存下来——存一个进不去的 id 等于让下一次登录静默退回默认,
-   * 看起来像「切换没生效」。
-   */
+  /** Revalidate and persist the current tenant/workspace pair for this session. */
   private async rememberActiveWorkspace(
     sid: string,
     clientId: string,
@@ -1048,7 +1038,6 @@ export class OidcService {
     if (realm !== "customer" || !activeOrg) return;
     const stored = await this.redis.getOidcActiveWorkspace(sid, clientId);
     const hint = workspaceHint ?? stored ?? undefined;
-    if (!hint) return;
     const ctx = await this.activeContext.resolveActiveContext(
       userId,
       activeOrg,
@@ -1058,11 +1047,17 @@ export class OidcService {
     if (chosen && chosen !== stored) {
       await this.redis.setOidcActiveWorkspace(sid, clientId, chosen);
     }
+    if (ctx?.activeOrg) {
+      await this.redis.setOidcActiveContext(sid, {
+        orgId: ctx.activeOrg,
+        workspaceId: chosen,
+      });
+    }
   }
 
   /**
-   * Resolve the active_org for (sid, client). Honors an org hint / stored value
-   * (else the user's personal org), via ActiveContextService. Persists the choice.
+   * Resolve explicit choice, current session choice, then the user's login default.
+   * Every choice is revalidated by ActiveContextService before token issuance.
    */
   private async resolveActiveOrg(
     sid: string,
@@ -1532,6 +1527,15 @@ export class OidcService {
       session.sub,
       client.realm,
       challenge.orgHint,
+    );
+
+    await this.rememberActiveWorkspace(
+      sid,
+      client.clientId,
+      stripSubPrefix(session.sub),
+      client.realm,
+      activeOrg,
+      challenge.workspaceHint,
     );
 
     const code = await this.issueAuthCode({
@@ -3230,16 +3234,16 @@ export class OidcService {
         },
       });
     } else {
-      /* 活跃工作空间**不进授权码**,铸令牌这一刻直接从 Redis 读 (sid, clientId)。
-         这样首次发码与刷新令牌(那条路没有授权码)读的是同一个值——两条路各存一份
-         就一定会有一处先漂,而漂出来的症状是「刷新之后又跳回默认工作空间」。 */
-      const workspaceHint = await this.redis.getOidcActiveWorkspace(
-        sid,
-        client.clientId,
-      );
+      // An authorization code may predate a context switch in another tab. Read
+      // the current tenant as well as workspace when minting either grant type.
+      const current = await this.redis.getOidcActiveContext(sid);
+      const currentOrg = current?.orgId ?? input.activeOrg;
+      const workspaceHint = current
+        ? current.workspaceId
+        : await this.redis.getOidcActiveWorkspace(sid, client.clientId);
       const ctx = await this.activeContext.resolveActiveContext(
         userId,
-        input.activeOrg ?? undefined,
+        currentOrg ?? input.activeOrg ?? undefined,
         workspaceHint,
       );
       // Cross-domain RPs (e.g. umbra) read identity from the access_token — they

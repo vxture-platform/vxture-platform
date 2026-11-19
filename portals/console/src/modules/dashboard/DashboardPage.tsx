@@ -102,7 +102,7 @@ export function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [session.tenant?.id, canSeeQuota, reloadKey]);
+  }, [session.tenant?.id, session.tenant?.workspace, canSeeQuota, reloadKey]);
 
   /* 概览只画**需要注意**的额度行（用过 80%）。没有任何一项到线时整块不画——
      一堆 5% 的进度条不需要人做任何事，画出来只是噪音。全量在配额管理。 */

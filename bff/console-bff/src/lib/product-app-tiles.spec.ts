@@ -84,18 +84,19 @@ describe("collapseProductTiles", () => {
 });
 
 describe("listHeldProductTiles", () => {
-  it("queries the tenant's default workspace with the held-status set and collapses rows", async () => {
+  it("queries the verified current workspace with the held-status set and collapses rows", async () => {
     const query = vi
       .fn()
       .mockResolvedValue({ rows: [row(), row({ status: "trialing" })] });
     const pool = { query } as unknown as PoolLike;
 
-    const tiles = await listHeldProductTiles(pool, "tenant-1");
+    const tiles = await listHeldProductTiles(pool, "tenant-1", "workspace-2");
 
     expect(query).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledWith(HELD_PRODUCT_TILES_SQL, [
       "tenant-1",
       [...HELD_SUBSCRIPTION_STATUSES],
+      "workspace-2",
     ]);
     expect(tiles).toEqual([
       expect.objectContaining({ code: "arda", status: "active" }),
@@ -105,14 +106,32 @@ describe("listHeldProductTiles", () => {
   it("returns an empty list when the workspace holds nothing", async () => {
     const query = vi.fn().mockResolvedValue({ rows: [] });
     const pool = { query } as unknown as PoolLike;
-    await expect(listHeldProductTiles(pool, "tenant-1")).resolves.toEqual([]);
+    await expect(
+      listHeldProductTiles(pool, "tenant-1", "workspace-2"),
+    ).resolves.toEqual([]);
   });
+
+  it.each([undefined, null, "default", "PLATFORM"])(
+    "does not query an unresolved workspace %s",
+    async (workspace) => {
+      const query = vi.fn();
+      await expect(
+        listHeldProductTiles(
+          { query } as unknown as PoolLike,
+          "tenant-1",
+          workspace,
+        ),
+      ).resolves.toEqual([]);
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("HELD_PRODUCT_TILES_SQL", () => {
   it("keeps the filters that separate 'held now' from 'ever subscribed'", () => {
     for (const clause of [
-      "w.is_default",
+      "w.tenant_id = $1",
+      "w.id = $3::uuid",
       "w.deleted_at is null",
       "ts.deleted_at is null",
       "ts.status = any($2::text[])",
@@ -121,5 +140,6 @@ describe("HELD_PRODUCT_TILES_SQL", () => {
     ]) {
       expect(HELD_PRODUCT_TILES_SQL).toContain(clause);
     }
+    expect(HELD_PRODUCT_TILES_SQL).not.toContain("w.is_default");
   });
 });

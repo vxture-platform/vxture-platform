@@ -1360,7 +1360,7 @@ return 0`,
     }
   }
 
-  // ─── OIDC: central session (sid) + per-client active_org ──────────────────
+  // ─── OIDC: central session and active customer context ──────────────────
 
   private sessionKey(sid: string): string {
     return `${this.prefix}sess:${sid}`;
@@ -1370,13 +1370,7 @@ return 0`,
     return `${this.prefix}sess:${sid}:org`;
   }
 
-  /**
-   * 活跃工作空间的 (sid → clientId → workspaceId) 映射键。
-   *
-   * 与 org 那把**分开两个键**,不是合成一个 hash:两级各自按应用切换
-   * (在 console 切工作空间,不该动 website 那边的任何东西),分开存让每一级的
-   * 生命周期与失效各归各的。
-   */
+  /** Legacy per-client workspace selections, used before a shared selection exists. */
   private sessionActiveWorkspaceKey(sid: string): string {
     return `${this.prefix}sess:${sid}:ws`;
   }
@@ -1614,7 +1608,73 @@ return 0`,
     }
   }
 
-  /** Set the active_org for a (sid, clientId); aligns the org map TTL to the session. */
+  /**
+   * Persist the validated tenant/workspace pair atomically in the central session.
+   * @param sid - Central customer session.
+   * @param context - Context revalidated against current memberships.
+   * @returns Nothing; the existing session TTL is preserved.
+   * @throws ServiceUnavailableException When the session ended or Redis failed.
+   */
+  async setOidcActiveContext(
+    sid: string,
+    context: { orgId: string; workspaceId: string | null },
+  ): Promise<void> {
+    const client = this.requireReadyClient();
+    try {
+      const saved = await client.eval(
+        `if redis.call('HGET', KEYS[1], 'realm') ~= 'customer' then return 0 end
+         if redis.call('TTL', KEYS[1]) <= 0 then return 0 end
+         redis.call('HSET', KEYS[1], 'active_context', ARGV[1])
+         return 1`,
+        1,
+        this.sessionKey(sid),
+        JSON.stringify(context),
+      );
+      if (saved !== 1) throw new Error("session_unavailable");
+    } catch {
+      this.logger.error("OIDC active context persistence failed");
+      throw new ServiceUnavailableException(
+        "OIDC active context persistence failed",
+      );
+    }
+  }
+
+  /**
+   * Read one coherent shared context snapshot; never combine concurrent switches.
+   * @param sid - Central customer session.
+   * @returns The current pair, or null for a session predating shared context.
+   * @throws ServiceUnavailableException When stored context cannot be trusted.
+   */
+  async getOidcActiveContext(
+    sid: string,
+  ): Promise<{ orgId: string; workspaceId: string | null } | null> {
+    try {
+      const raw = await this.requireReadyClient().hget(
+        this.sessionKey(sid),
+        "active_context",
+      );
+      if (!raw) return null;
+      const value: unknown = JSON.parse(raw);
+      if (
+        typeof value !== "object" ||
+        value === null ||
+        !("orgId" in value) ||
+        typeof value.orgId !== "string" ||
+        !value.orgId ||
+        !("workspaceId" in value) ||
+        (value.workspaceId !== null && typeof value.workspaceId !== "string")
+      )
+        throw new Error("invalid_active_context");
+      return { orgId: value.orgId, workspaceId: value.workspaceId };
+    } catch {
+      this.logger.error("OIDC active context lookup failed");
+      throw new ServiceUnavailableException(
+        "OIDC active context lookup failed",
+      );
+    }
+  }
+
+  /** Store a legacy per-client org choice; shared context takes precedence on reads. */
   async setOidcActiveOrg(
     sid: string,
     clientId: string,
@@ -1656,30 +1716,36 @@ return 0`,
     }
   }
 
-  /** 读这个 (sid, clientId) 选中的工作空间;没有 / 读不到都给 null(退回默认)。 */
+  /** Read the current shared workspace, falling back only for legacy sessions. */
   async getOidcActiveWorkspace(
     sid: string,
     clientId: string,
   ): Promise<string | null> {
     const client = this.requireReadyClient();
     try {
+      const current = await this.getOidcActiveContext(sid);
+      if (current) return current.workspaceId;
       return (
         (await client.hget(this.sessionActiveWorkspaceKey(sid), clientId)) ??
         null
       );
-    } catch (err) {
-      this.logger.error(`getOidcActiveWorkspace failed: ${String(err)}`);
-      return null;
+    } catch {
+      this.logger.error("OIDC active workspace lookup failed");
+      throw new ServiceUnavailableException(
+        "OIDC active workspace lookup failed",
+      );
     }
   }
 
-  /** Get the active_org for a (sid, clientId); null if none. */
+  /** Read the current shared tenant before legacy per-client choices. */
   async getOidcActiveOrg(
     sid: string,
     clientId: string,
   ): Promise<string | null> {
     const client = this.requireReadyClient();
     try {
+      const current = await this.getOidcActiveContext(sid);
+      if (current) return current.orgId;
       return (
         (await client.hget(this.sessionActiveOrgKey(sid), clientId)) ?? null
       );

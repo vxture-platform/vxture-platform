@@ -135,19 +135,10 @@ export class TenantSwitchRouter {
   }
 
   /**
-   * 切工作空间(owner 2026-09-09)。与切租户**同一条链路**,只换提示参数:
-   *
-   *     浏览器 ─顶层 GET /auth/switch-workspace?workspaceId&returnTo─▶ console-bff
-   *       预检:目标须是我能进的工作空间(回查成员关系,不信任前端给的 id)
-   *       302 IdP /oidc/authorize?prompt=none&workspace_hint={workspaceId}
-   *     IdP 改 (sid, client_id) 的 active_workspace → 静默发码 → /auth/callback
-   *       → 回到 returnTo,页面整体重载到新工作空间
-   *
-   * 为什么也必须是顶层导航而不是 fetch:同切租户——IdP 要收到中央会话 cookie
-   * (vx_sid)才能静默发码。
-   *
-   * 为什么**不复用切租户那条路**加个参数:两级的预检不同(那边查租户成员关系、
-   * 这边查工作空间成员关系),而且同时切两级是个没人要求过的语义。
+   * Switch workspace within the verified current organization. Top-level
+   * authorization carries both hints so the IdP receives its central cookie
+   * and revalidates the pair before recording the session's current context.
+   * The callback replaces the RP session and reloads the destination page.
    */
   @Get("switch-workspace")
   async switchWorkspace(
@@ -177,7 +168,7 @@ export class TenantSwitchRouter {
        回查用的是**我的视角**那份清单(只含我是活跃成员、且启用中的),不是租户下
        的全部:前端给的 id 不可信,而 IdP 那边的 hint 站不住只会静默退回默认——
        那看起来像「切换按钮没反应」,所以这里先挡住并原样返回。 */
-    if (!UUID_RE.test(target)) {
+    if (!UUID_RE.test(target) || !user.activeOrg) {
       res.redirect(dest);
       return;
     }
@@ -187,6 +178,7 @@ export class TenantSwitchRouter {
     }
     const mine = await this.sessionAggregator.listWorkspacesForSwitch(
       user.userId,
+      user.activeOrg,
     );
     if (!mine?.some((w) => w.id === target)) {
       res.redirect(dest);
@@ -213,6 +205,7 @@ export class TenantSwitchRouter {
         nonce,
         codeChallenge: challenge,
         prompt: "none",
+        tenantHint: user.activeOrg,
         workspaceHint: target,
       }),
     );

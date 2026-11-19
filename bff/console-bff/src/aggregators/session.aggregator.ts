@@ -190,13 +190,38 @@ export class SessionAggregator {
   async getMyWorkspaces(
     userId: string,
     activeOrgId?: string,
+    activeWorkspaceId?: string,
   ): Promise<ConsoleWorkspaceItem[]> {
     const memberships = await this.org.listOrgMembershipsForUser(userId);
     const items: ConsoleWorkspaceItem[] = [];
     for (const m of memberships) {
       const org = m.organization;
       if (!org) continue;
-      const ws = await this.org.getDefaultWorkspace(org.id);
+      const current = org.id === activeOrgId && Boolean(activeWorkspaceId);
+      const selected = current
+        ? await this.resolveOrg(userId, org.id, activeWorkspaceId)
+        : null;
+      // An explicit current workspace must never be replaced by a default label.
+      let ws: { id: string; name: string; isDefault: boolean } | null;
+      if (current) {
+        const result = selected?.workspace
+          ? await this.pool.query<{
+              id: string;
+              name: string;
+              is_default: boolean;
+            }>(
+              `select id, name, is_default from tenancy.workspaces
+                where tenant_id = $1 and id = $2 and deleted_at is null`,
+              [org.id, selected.workspace],
+            )
+          : null;
+        const row = result?.rows[0];
+        ws = row
+          ? { id: row.id, name: row.name, isDefault: row.is_default }
+          : null;
+      } else {
+        ws = await this.org.getDefaultWorkspace(org.id);
+      }
       items.push({
         tenantId: org.id,
         tenantName: org.name,
@@ -205,6 +230,7 @@ export class SessionAggregator {
         role: m.role,
         workspaceId: ws?.id ?? null,
         workspaceName: ws?.name ?? null,
+        workspaceIsDefault: ws?.isDefault ?? false,
         isCurrent: org.id === activeOrgId,
         isDefault: m.isDefault === true,
         logoHash: org.logoHash ?? null,

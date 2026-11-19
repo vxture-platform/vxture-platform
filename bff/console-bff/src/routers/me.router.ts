@@ -108,13 +108,17 @@ export class MeRouter {
   ): Promise<ProductAppTile[]> {
     if (!req.user) throw new UnauthorizedException("No active session");
     if (!req.tenant) return [];
-    return listHeldProductTiles(this.pool, req.tenant.id);
+    return listHeldProductTiles(this.pool, req.tenant.id, req.tenant.workspace);
   }
 
   @Get("workspaces")
   async getMyWorkspaces(@Req() req: Request & RequestContext) {
     if (!req.user) throw new UnauthorizedException("No active session");
-    return this.sessionAggregator.getMyWorkspaces(req.user.id, req.tenant?.id);
+    return this.sessionAggregator.getMyWorkspaces(
+      req.user.id,
+      req.tenant?.id,
+      req.tenant?.workspace,
+    );
   }
 
   /**
