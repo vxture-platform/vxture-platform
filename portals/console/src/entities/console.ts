@@ -27,6 +27,8 @@ export interface ConsoleUser {
 }
 
 export interface ConsoleWorkspaceItem {
+  /** Whether the displayed workspace is the tenant's default workspace. */
+  workspaceIsDefault?: boolean;
   tenantNo?: string | null;
   tenantId: string;
   tenantName: string;

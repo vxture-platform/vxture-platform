@@ -47,6 +47,18 @@ function setup() {
     repo as unknown as OrganizationReadRepository,
   );
   const org = {
+    listOrgMembershipsForUser: vi.fn(async () => [
+      {
+        organization: { id: TENANT, name: "Team", type: "organization" },
+        role: "member",
+        isDefault: true,
+      },
+    ]),
+    getDefaultWorkspace: vi.fn(async () => ({
+      id: FIRST,
+      name: "First",
+      isDefault: true,
+    })),
     getOrgById: vi.fn(async () => ({
       id: TENANT,
       name: "Team",
@@ -68,7 +80,14 @@ function setup() {
   const query = vi.fn(async (_sql: string, params: unknown[]) => ({
     rows:
       params[1] === SECOND
-        ? [{ name: "Second", workspace_no: "100000000000002" }]
+        ? [
+            {
+              id: SECOND,
+              name: "Second",
+              is_default: false,
+              workspace_no: "100000000000002",
+            },
+          ]
         : [],
   }));
   const none = undefined as never;
@@ -89,6 +108,36 @@ function setup() {
 // ============================================================================
 
 describe("active workspace context", () => {
+  it("shows the actual current workspace in account memberships", async () => {
+    const { aggregator, org } = setup();
+    expect(await aggregator.getMyWorkspaces("user", TENANT, SECOND)).toEqual([
+      expect.objectContaining({
+        workspaceId: SECOND,
+        workspaceName: "Second",
+        workspaceIsDefault: false,
+        isCurrent: true,
+        isDefault: true,
+      }),
+    ]);
+    expect(org.getDefaultWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("does not label a revoked workspace with the default workspace name", async () => {
+    const { aggregator, repo, org } = setup();
+    repo.resolveWorkspaceForSession.mockResolvedValue({
+      workspace: { id: FIRST, name: "First" },
+      membershipRole: null,
+    });
+    expect(await aggregator.getMyWorkspaces("user", TENANT, SECOND)).toEqual([
+      expect.objectContaining({
+        workspaceId: null,
+        workspaceName: null,
+        workspaceIsDefault: false,
+      }),
+    ]);
+    expect(org.getDefaultWorkspace).not.toHaveBeenCalled();
+  });
+
   it("passes the verified workspace to the domain and displays that workspace", async () => {
     const { aggregator, repo, query } = setup();
     const tenant = await aggregator.getTenantContext("user", TENANT, SECOND);

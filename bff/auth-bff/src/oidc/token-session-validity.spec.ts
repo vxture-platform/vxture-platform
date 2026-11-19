@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServiceUnavailableException } from "@nestjs/common";
 import type { OperatorView } from "@vxture/service-iam";
 import type { UserView } from "@vxture/service-account";
+import type { ActiveOrgContext } from "@vxture/service-organization";
 import type { SessionRecord } from "../authn/session.service";
 import type { OidcCentralSession } from "../redis/redis.service";
 import { OidcService } from "./oidc.service";
@@ -67,8 +68,12 @@ function build(realm: Realm, grant: Grant) {
     getOidcSession: vi.fn(
       async (): Promise<OidcCentralSession | null> => session,
     ),
-    getOidcActiveOrg: vi.fn(async () => null),
-    getOidcActiveWorkspace: vi.fn(async () => null),
+    getOidcActiveOrg: vi.fn(async (): Promise<string | null> => null),
+    getOidcActiveContext: vi.fn(
+      async (): Promise<{ orgId: string; workspaceId: string | null } | null> =>
+        null,
+    ),
+    getOidcActiveWorkspace: vi.fn(async (): Promise<string | null> => null),
     deleteOidcSession: vi.fn(),
   };
   const durableSession = {
@@ -111,6 +116,11 @@ function build(realm: Realm, grant: Grant) {
     revokeSession: vi.fn(),
   };
   const keys = { isReady: () => true, sign: vi.fn(() => "id-token") };
+  const activeContext = {
+    resolveActiveContext: vi.fn(
+      async (): Promise<ActiveOrgContext | null> => null,
+    ),
+  };
   const service = Object.create(OidcService.prototype) as OidcService;
   Object.assign(service, {
     keys,
@@ -121,7 +131,8 @@ function build(realm: Realm, grant: Grant) {
     operators,
     customerMfa,
     token,
-    activeContext: { resolveActiveContext: vi.fn(async () => null) },
+    activeContext,
+    appScope: { resolveClaims: vi.fn(async () => ({})) },
     config: { auth: { OIDC_ISSUER: "https://accounts.example" } },
   });
   const exchange = () =>
@@ -155,6 +166,7 @@ function build(realm: Realm, grant: Grant) {
     operators,
     customerMfa,
     token,
+    activeContext,
   };
 }
 
@@ -168,6 +180,38 @@ afterEach(() => vi.restoreAllMocks());
 describe.each(["authorization_code", "refresh_token"] as const)(
   "%s session validity",
   (grant) => {
+    it("issues the current shared organization and workspace even for an older grant", async () => {
+      const f = build("customer", grant);
+      Object.assign(f.payload, { activeOrg: "personal" });
+      f.redis.getOidcActiveOrg.mockResolvedValue("organization");
+      f.redis.getOidcActiveWorkspace.mockResolvedValue("selected-space");
+      f.redis.getOidcActiveContext.mockResolvedValue({
+        orgId: "organization",
+        workspaceId: "selected-space",
+      });
+      f.activeContext.resolveActiveContext.mockResolvedValue({
+        activeOrg: "organization",
+        activeOrgType: "organization",
+        activeOrgName: "Team",
+        activeWorkspace: "selected-space",
+        activeWorkspaceName: "Selected",
+        roles: ["org:member", "workspace:member"],
+      });
+      await f.exchange();
+      expect(f.activeContext.resolveActiveContext).toHaveBeenCalledWith(
+        "identity-1",
+        "organization",
+        "selected-space",
+      );
+      expect(f.token.issueAccessToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          activeOrg: "organization",
+          activeWorkspace: "selected-space",
+          roles: ["org:member", "workspace:member"],
+        }),
+      );
+    });
+
     describe.each(["customer", "workforce"] as const)("%s", (realm) => {
       it("issues tokens for a live identity using only its own account authority", async () => {
         const f = build(realm, grant);

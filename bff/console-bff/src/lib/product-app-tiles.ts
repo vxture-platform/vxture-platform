@@ -68,12 +68,9 @@ export interface HeldProductRow {
 // ============================================================================
 
 /**
- * 默认工作空间一步 join 进来（而不是先查 workspace id 再查订阅）：没有默认
- * 工作空间的租户拿到的是空列表，不是 400——启动台是壳层的一个视图，数据问题
- * 该在订阅页报，不该让壳层的一角 4xx。
- *
- * component_role 不过滤：套餐捆绑进来的产品（bundled）同样是这个工作空间持有
- * 的。subscribed-products 只取 primary 是因为那页按订阅开卡，这里按产品开卡。
+ * Restrict subscriptions to the verified current tenant/workspace pair.
+ * Bundled products remain visible because these tiles represent held products,
+ * whereas the subscription list groups purchases by their primary component.
  */
 export const HELD_PRODUCT_TILES_SQL = `
   select prod.product_code, prod.product_name, prod.product_nick, prod.icon_url,
@@ -89,7 +86,7 @@ export const HELD_PRODUCT_TILES_SQL = `
     -- 平台托管的图标。只取版本号(内容哈希)不取字节:磁贴列表要的是「有没有、是哪一版」，
     -- 字节由 /api/applications/:code/icon 单独发，那条路能被浏览器长期缓存。
     left join product.product_icons pi on pi.product_id = prod.id
-   where w.tenant_id = $1 and w.is_default and w.deleted_at is null
+   where w.tenant_id = $1 and w.id = $3::uuid and w.deleted_at is null
      and ts.deleted_at is null and ts.status = any($2::text[])
      and prod.deleted_at is null and prod.status = 'active'
      and prod.is_customer_visible = true
@@ -153,19 +150,24 @@ export function collapseProductTiles(
 }
 
 /**
- * 读出租户默认工作空间持有的产品磁贴。
+ * Read held products in the verified current workspace.
  *
- * @param pool - 商务库连接池（COMMERCE_PG_POOL）
- * @param tenantId - 当前租户 id
- * @returns 磁贴列表；无默认工作空间或无有效订阅时为空数组
+ * @param pool - Commerce database pool (COMMERCE_PG_POOL).
+ * @param tenantId - Verified current tenant ID.
+ * @param workspaceId - Verified active workspace; absent scope returns no tiles.
+ * @returns Held product tiles, or an empty list without a resolved workspace.
  */
 export async function listHeldProductTiles(
   pool: Pick<Pool, "query">,
   tenantId: string,
+  workspaceId?: string | null,
 ): Promise<ProductAppTile[]> {
+  if (!workspaceId || workspaceId === "default" || workspaceId === "PLATFORM")
+    return [];
   const res = await pool.query<HeldProductRow>(HELD_PRODUCT_TILES_SQL, [
     tenantId,
     [...HELD_SUBSCRIPTION_STATUSES],
+    workspaceId,
   ]);
   return collapseProductTiles(res.rows);
 }

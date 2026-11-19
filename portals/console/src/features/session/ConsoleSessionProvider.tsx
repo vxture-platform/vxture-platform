@@ -29,6 +29,7 @@ type SessionStatus = "idle" | "loading" | "ready";
 const SESSION_SYNC_INTERVAL_MS = 300_000;
 const SESSION_SYNC_THROTTLE_MS = 1500;
 const SESSION_PROBE_INTERVAL_MS = 15_000;
+const SESSION_CONTEXT_CHANNEL = "vx:console:context-changed";
 const ANONYMOUS_SESSION: SessionSnapshot = {
   isAuthenticated: false,
   user: null,
@@ -78,11 +79,18 @@ function getSessionIdentity(snapshot: SessionSnapshot) {
   });
 }
 
+function getSessionScope(snapshot: SessionSnapshot) {
+  return JSON.stringify([
+    snapshot.user?.id ?? null,
+    snapshot.tenant?.id ?? null,
+    snapshot.tenant?.workspace ?? null,
+  ]);
+}
+
 /*
- * 活跃租户只有一个真相:服务端的 RP 会话(access token 里的 active_org)。
- * 此前这里还在 localStorage / cookie 里存一份「上次选的租户」,恢复会话时替用户切回去——
- * 它会抢在「登录后默认进入的租户」(我的账号页「设为默认」)前面,而且它依赖的那条切换
- * 从未生效(POST 到一个退役路由)。2026-09-05 整体撤掉。
+ * Render the server's RP session snapshot. The IdP revalidates the central
+ * session's current context when issuing or refreshing tokens; the browser
+ * never restores a historical tenant from local storage over that selection.
  */
 export function ConsoleSessionProvider({
   children,
@@ -109,10 +117,45 @@ export function ConsoleSessionProvider({
   const lastSyncAtRef = useRef(0);
   const syncInFlightRef = useRef(false);
   const sessionEpochRef = useRef(0);
+  const refreshVersionRef = useRef(0);
+  const contextChannelRef = useRef<BroadcastChannel | null>(null);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(SESSION_CONTEXT_CHANNEL);
+    contextChannelRef.current = channel;
+    channel.onmessage = (event: MessageEvent<unknown>) => {
+      // The message is an invalidation signal. Only the server restores context.
+      if (
+        typeof event.data === "string" &&
+        event.data !== getSessionScope(sessionRef.current)
+      ) {
+        window.location.reload();
+      }
+    };
+    return () => {
+      contextChannelRef.current = null;
+      channel.close();
+    };
+  }, []);
 
   const commitSession = useCallback((snapshot: SessionSnapshot) => {
     const previous = sessionRef.current;
     sessionRef.current = snapshot;
+
+    if (snapshot.isAuthenticated) {
+      contextChannelRef.current?.postMessage(getSessionScope(snapshot));
+    }
+    if (
+      previous.isAuthenticated &&
+      snapshot.isAuthenticated &&
+      getSessionScope(previous) !== getSessionScope(snapshot)
+    ) {
+      // Reload every panel from the new server session, including panels whose
+      // local caches do not subscribe to the session context.
+      window.location.reload();
+      return;
+    }
 
     if (getSessionIdentity(previous) !== getSessionIdentity(snapshot)) {
       setSession(snapshot);
@@ -122,19 +165,28 @@ export function ConsoleSessionProvider({
   const refreshSession = useCallback(
     async (options: RefreshSessionOptions = {}) => {
       const epoch = sessionEpochRef.current;
+      const version = ++refreshVersionRef.current;
       if (!options.silent) {
         setStatus("loading");
       }
 
       try {
         const snapshot = await restoreSession();
-        if (epoch !== sessionEpochRef.current) return sessionRef.current;
+        if (
+          epoch !== sessionEpochRef.current ||
+          version !== refreshVersionRef.current
+        )
+          return sessionRef.current;
         commitSession(snapshot);
         setStatus("ready");
 
         return snapshot;
       } catch (error) {
-        if (epoch !== sessionEpochRef.current) return sessionRef.current;
+        if (
+          epoch !== sessionEpochRef.current ||
+          version !== refreshVersionRef.current
+        )
+          return sessionRef.current;
         if (!options.silent) {
           commitSession(ANONYMOUS_SESSION);
         }

@@ -59,7 +59,7 @@ export function MembershipsPage() {
     return () => {
       active = false;
     };
-  }, [session.user?.id, reload]);
+  }, [session.user?.id, session.tenant?.id, session.tenant?.workspace, reload]);
 
   const tenants: TenantRow[] = items
     .map((ws) => ({
@@ -72,11 +72,16 @@ export function MembershipsPage() {
       type: ws.tenantType,
       role: ws.role,
       joinedAt: formatBusinessDay(ws.joinedAt, locale, "—"),
-      isCurrent: ws.isCurrent,
+      isCurrent: ws.tenantId === session.tenant?.id,
       isDefault: ws.isDefault === true,
       logoSrc: ws.logoHash ? tenantLogoUrl(ws.tenantId, ws.logoHash) : null,
       workspaces: ws.workspaceName
-        ? [{ name: ws.workspaceName, isDefault: true }]
+        ? [
+            {
+              name: ws.workspaceName,
+              isDefault: ws.workspaceIsDefault === true,
+            },
+          ]
         : [],
     }))
     .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
