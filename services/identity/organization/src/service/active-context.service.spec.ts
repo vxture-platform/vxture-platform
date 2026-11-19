@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { Pool } from "pg";
+import { PgOrganizationRepository } from "../repository/pg-organization.repository";
 import { ActiveContextService } from "./active-context.service";
 import type { OrganizationReadRepository } from "../types/organization.types";
 
@@ -30,6 +32,79 @@ const membership = (
   },
 });
 
+// ============================================================================
+// Real repository query against a local database; all fixture changes roll back
+// ============================================================================
+
+describe.runIf(process.env.ORG_PRESENTATION_ITEST === "1")(
+  "organization presentation through PostgreSQL",
+  () => {
+    let pool: Pool;
+    let service: ActiveContextService;
+    let userId: string;
+    let orgId: string;
+    let fullName: string;
+
+    beforeAll(async () => {
+      pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+      await pool.query("begin");
+      const selected = await pool.query<{
+        user_id: string;
+        id: string;
+        name: string;
+      }>(
+        `select m.user_id, o.id, o.name
+           from tenancy.tenant_memberships m
+           join tenancy.tenants o on o.id = m.tenant_id
+          where m.status = 'active' and o.deleted_at is null
+          limit 1`,
+      );
+      const row = selected.rows[0];
+      if (!row)
+        throw new Error(
+          "The local fixture needs an active organization membership",
+        );
+      userId = row.user_id;
+      orgId = row.id;
+      fullName = row.name;
+      service = new ActiveContextService(new PgOrganizationRepository(pool));
+    });
+
+    afterAll(async () => {
+      if (pool) {
+        await pool.query("rollback");
+        await pool.end();
+      }
+    });
+
+    it.each(["Short", "Renamed", " \t ", null])(
+      "reads the current database short name (%j), preserving the full name",
+      async (displayName) => {
+        await pool.query(
+          "update tenancy.tenants set display_name=$2 where id=$1",
+          [orgId, displayName],
+        );
+        expect(await service.resolveActiveContext(userId, orgId)).toMatchObject(
+          {
+            activeOrg: orgId,
+            activeOrgName: fullName,
+            activeOrgDisplayName: displayName?.trim() || null,
+          },
+        );
+      },
+    );
+
+    it("does not return another account's organization presentation", async () => {
+      expect(
+        await service.resolveActiveContext(
+          "00000000-0000-4000-8000-000000000638",
+          orgId,
+        ),
+      ).toBeNull();
+    });
+  },
+);
+
 const build = (
   over: Partial<Record<keyof OrganizationReadRepository, unknown>> = {},
 ) => {
@@ -47,6 +122,68 @@ const build = (
 };
 
 describe("resolveActiveContext", () => {
+  it.each([undefined, null, "", " \t ", " Short name "])(
+    "keeps the full name and normalizes the selected organization's short name (%j)",
+    async (displayName) => {
+      const selected = membership(
+        "org-1",
+        "member",
+        "organization",
+        "Full name",
+      );
+      const { service } = build({
+        listOrgMembershipsForUser: vi.fn().mockResolvedValue([
+          {
+            ...selected,
+            organization: { ...selected.organization, displayName },
+          },
+        ]),
+      });
+      expect(await service.resolveActiveContext("u-1")).toMatchObject({
+        activeOrgName: "Full name",
+        activeOrgDisplayName: displayName?.trim() || null,
+        roles: ["org:member"],
+      });
+    },
+  );
+
+  it("reloads presentation from the selected membership on switch and refresh", async () => {
+    const first = membership("org-1", "owner");
+    const second = membership("org-2", "member");
+    const memberships = [
+      {
+        ...first,
+        organization: { ...first.organization, displayName: "First" },
+      },
+      {
+        ...second,
+        organization: { ...second.organization, displayName: "Second" },
+      },
+    ];
+    const { service } = build({
+      listOrgMembershipsForUser: vi.fn().mockResolvedValue(memberships),
+    });
+    expect(await service.resolveActiveContext("u-1", "org-1")).toMatchObject({
+      activeOrg: "org-1",
+      activeOrgDisplayName: "First",
+    });
+    expect(await service.resolveActiveContext("u-1", "org-2")).toMatchObject({
+      activeOrg: "org-2",
+      activeOrgDisplayName: "Second",
+    });
+    memberships[1]!.organization.displayName = "Renamed";
+    expect(await service.resolveActiveContext("u-1", "org-2")).toMatchObject({
+      activeOrg: "org-2",
+      activeOrgDisplayName: "Renamed",
+    });
+    expect(
+      await service.resolveActiveContext("u-1", "unrelated-org"),
+    ).toMatchObject({
+      activeOrg: "org-1",
+      activeOrgDisplayName: "First",
+    });
+  });
+
   it("returns null and skips the workspace lookup when the user has no membership", async () => {
     const { service, repo } = build({
       listOrgMembershipsForUser: vi.fn().mockResolvedValue([]),

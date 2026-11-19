@@ -35,6 +35,7 @@ export interface IssueAccessInput {
   activeOrg?: string | null;
   activeOrgType?: string | null;
   activeOrgName?: string | null;
+  activeOrgDisplayName?: string | null;
   activeWorkspace?: string | null;
   activeWorkspaceName?: string | null;
   roles?: string[];
