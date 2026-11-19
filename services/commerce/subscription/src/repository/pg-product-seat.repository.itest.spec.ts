@@ -30,6 +30,7 @@ describe.skipIf(process.env.SUBSCRIPTION_SEAT_ITEST !== "1")(
       repo = new PgProductSeatRepository(pool);
       await pool.query(`create schema account; create schema tenancy; create schema metering; create schema product;
    create table account.users(id uuid primary key,user_no bigint,status text,deleted_at timestamptz);
+   create table account.user_profiles(user_id uuid primary key,display_name text);
    create table tenancy.tenants(id uuid primary key,status text,deleted_at timestamptz);
    create table tenancy.tenant_memberships(tenant_id uuid,user_id uuid,status text);
    create table tenancy.workspaces(id uuid primary key,tenant_id uuid,status text,deleted_at timestamptz);
@@ -44,7 +45,7 @@ describe.skipIf(process.env.SUBSCRIPTION_SEAT_ITEST !== "1")(
     });
     beforeEach(async () => {
       await pool.query(
-        `truncate account.users,tenancy.tenants,tenancy.tenant_memberships,tenancy.workspaces,tenancy.workspace_memberships,metering.product_seats,product.products,product.plan_components,metering.subscriptions`,
+        `truncate account.user_profiles,account.users,tenancy.tenants,tenancy.tenant_memberships,tenancy.workspaces,tenancy.workspace_memberships,metering.product_seats,product.products,product.plan_components,metering.subscriptions`,
       );
       await pool.query(
         `insert into account.users values($1,1234567890,'active',null);
@@ -126,6 +127,16 @@ describe.skipIf(process.env.SUBSCRIPTION_SEAT_ITEST !== "1")(
     ])("denies invalidated authority: %s", async (sql) => {
       await pool.query(sql);
       expect(await repo.hasUserAccess(input)).toBe(false);
+      expect((await repo.listAuthorizedUsers(input, null, 100))?.items).toEqual(
+        [],
+      );
+      expect(
+        await repo.listAuthorizedUsers(
+          { ...input, requesterSubject: input.subject },
+          null,
+          100,
+        ),
+      ).toBeNull();
     });
     it.each(["active", "trialing", "expiring", "overdue"])(
       "allows %s coverage and rejects another component",
@@ -134,10 +145,153 @@ describe.skipIf(process.env.SUBSCRIPTION_SEAT_ITEST !== "1")(
           status,
         ]);
         expect(await repo.hasUserAccess(input)).toBe(true);
+        expect(
+          (await repo.listAuthorizedUsers(input, null, 100))?.items,
+        ).toEqual([{ subject: input.subject, displayName: null }]);
         await pool.query("update product.plan_components set product_id=$1", [
           OTHER,
         ]);
         expect(await repo.hasUserAccess(input)).toBe(false);
+        expect(
+          (await repo.listAuthorizedUsers(input, null, 100))?.items,
+        ).toEqual([]);
+      },
+    );
+
+    // ========================================================================
+    // Product roster: live identities, minimal projection and paging
+    // ========================================================================
+    it("returns the exact OIDC subject without the public user number or account data", async () => {
+      const page = await repo.listAuthorizedUsers(input, null, 100);
+      expect(page).toEqual({
+        items: [{ subject: input.subject, displayName: null }],
+        version: expect.stringMatching(/^[a-f0-9]{32}$/),
+        hasMore: false,
+      });
+      expect(
+        await repo.listAuthorizedUsers(
+          { ...input, requesterSubject: input.subject },
+          null,
+          100,
+        ),
+      ).toEqual(page);
+    });
+    it.each([null, "", "  ", "CoSpace Manager"])(
+      "handles display name %j without a private account fallback",
+      async (name) => {
+        await pool.query("insert into account.user_profiles values ($1,$2)", [
+          USER,
+          name,
+        ]);
+        expect(
+          (await repo.listAuthorizedUsers(input, null, 100))?.items[0]
+            ?.displayName,
+        ).toBe(name?.trim() || null);
+      },
+    );
+    it.each(["orgId", "workspaceId", "productCode"] as const)(
+      "isolates roster %s",
+      async (key) => {
+        expect(
+          (
+            await repo.listAuthorizedUsers(
+              {
+                ...input,
+                [key]: key === "productCode" ? "another-product" : OTHER,
+              },
+              null,
+              100,
+            )
+          )?.items,
+        ).toEqual([]);
+      },
+    );
+    it("requires an explicit seat even when every active workspace member has subscription coverage", async () => {
+      await pool.query(
+        "insert into account.users values ($1,9876543210,'active',null)",
+        [OTHER],
+      );
+      await pool.query(
+        "insert into tenancy.tenant_memberships values ($1,$2,'active')",
+        [ORG, OTHER],
+      );
+      await pool.query(
+        "insert into tenancy.workspace_memberships values ($1,$2,'active')",
+        [WS, OTHER],
+      );
+      expect(
+        (await repo.listAuthorizedUsers(input, null, 100))?.items,
+      ).toHaveLength(1);
+      expect(
+        await repo.hasUserAccess({ ...input, subject: `usr_${OTHER}` }),
+      ).toBe(false);
+      await pool.query(
+        "insert into metering.product_seats values ($1,$2,$3,null)",
+        [WS, OTHER, PRODUCT],
+      );
+      const first = await repo.listAuthorizedUsers(input, null, 1);
+      const second = await repo.listAuthorizedUsers(
+        input,
+        first!.items[0]!.subject,
+        1,
+      );
+      expect(first?.hasMore).toBe(true);
+      expect(second?.hasMore).toBe(false);
+      expect(first?.version).toBe(second?.version);
+      expect(
+        [...first!.items, ...second!.items].map((item) => item.subject),
+      ).toEqual([input.subject, `usr_${OTHER}`]);
+      const before = first?.version;
+      await pool.query(
+        "update metering.product_seats set revoked_at=now() where user_id=$1",
+        [OTHER],
+      );
+      expect(
+        (await repo.listAuthorizedUsers(input, null, 100))?.version,
+      ).not.toBe(before);
+    });
+    it("changes the revision for a name edit but not for a repeated identical read", async () => {
+      const before = await repo.listAuthorizedUsers(input, null, 100);
+      expect((await repo.listAuthorizedUsers(input, null, 100))?.version).toBe(
+        before?.version,
+      );
+      await pool.query(
+        "insert into account.user_profiles values ($1,'New Name')",
+        [USER],
+      );
+      expect(
+        (await repo.listAuthorizedUsers(input, null, 100))?.version,
+      ).not.toBe(before?.version);
+    });
+    it("rejects an OBO reader whose verified subject is not eligible", async () => {
+      expect(
+        await repo.listAuthorizedUsers(
+          { ...input, requesterSubject: `usr_${OTHER}` },
+          null,
+          100,
+        ),
+      ).toBeNull();
+    });
+    it("does not collapse database faults into an empty roster", async () => {
+      await pool.query(
+        "alter table account.user_profiles rename to unavailable_profiles",
+      );
+      try {
+        await expect(
+          repo.listAuthorizedUsers(input, null, 100),
+        ).rejects.toThrow();
+      } finally {
+        await pool.query(
+          "alter table account.unavailable_profiles rename to user_profiles",
+        );
+      }
+    });
+    it.each([0, -1, 201, 1.5, NaN])(
+      "rejects unbounded internal page size %s",
+      async (limit) => {
+        await expect(
+          repo.listAuthorizedUsers(input, null, limit),
+        ).rejects.toThrow(RangeError);
       },
     );
   },
