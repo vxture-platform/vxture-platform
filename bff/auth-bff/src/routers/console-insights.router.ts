@@ -93,7 +93,7 @@ export class ConsoleInsightsRouter {
     const request = parse(body);
     const status = await this.oidc.sessionStatus(creds, {
       sid: request.sid,
-      active: false,
+      active: request.kind === "members",
     });
     if (!status.valid) throw new UnauthorizedException("invalid_session");
     const session = await this.redis.getOidcSession(request.sid);
@@ -141,7 +141,12 @@ export class ConsoleInsightsRouter {
     // Only the live central session can establish recent foreground activity.
     const candidates = members.rows.map((row) => ({
       userId: row.user_id,
-      sessionIds: row.session_ids,
+      // The authenticated actor's session is authoritative even when historical
+      // refresh chains have filled the bounded candidate window.
+      sessionIds:
+        session.sub === `usr_${row.user_id}`
+          ? [...new Set([request.sid, ...row.session_ids])]
+          : row.session_ids,
     }));
     const items = await this.redis.customerPresence(candidates).catch(() =>
       candidates.map((row) => ({
