@@ -520,6 +520,15 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     this.profiles.set(orgId, next);
     return next;
   }
+  async getPublicOrgLogo(
+    orgId: string,
+    hash: string,
+  ): Promise<OrgLogoRecord | null> {
+    const org = this.orgs.get(orgId);
+    const logo = this.logos.get(orgId);
+    return org?.status === "active" && logo?.hash === hash ? logo : null;
+  }
+
   async getOrgLogo(orgId: string): Promise<OrgLogoRecord | null> {
     return this.logos.get(orgId) ?? null;
   }
@@ -561,7 +570,15 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       .filter((m) => m.userId === userId && m.status === "active")
       .map((m) => {
         const organization = this.orgs.get(m.organizationId);
-        return organization ? { ...m, organization } : { ...m };
+        return organization
+          ? {
+              ...m,
+              organization: {
+                ...organization,
+                logoHash: this.logos.get(m.organizationId)?.hash ?? null,
+              },
+            }
+          : { ...m };
       });
   }
   async setDefaultOrgForUser(userId: string, orgId: string): Promise<boolean> {

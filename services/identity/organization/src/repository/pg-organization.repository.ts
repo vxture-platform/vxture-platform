@@ -1443,6 +1443,29 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return mapOrgProfile(r.rows[0]!);
   }
 
+  async getPublicOrgLogo(
+    orgId: string,
+    hash: string,
+  ): Promise<OrgLogoRecord | null> {
+    const result = await this.pool.query<{
+      data: Buffer;
+      content_type: string;
+      hash: string;
+    }>(
+      `select l.data, l.content_type, l.hash
+         from tenancy.tenant_logos l
+         join tenancy.tenants o on o.id = l.tenant_id
+        where l.tenant_id = $1 and l.kind = 'logo' and l.hash = $2
+          and o.deleted_at is null and o.status = 'active'
+        limit 1`,
+      [orgId, hash],
+    );
+    const row = result.rows[0];
+    return row
+      ? { data: row.data, contentType: row.content_type, hash: row.hash }
+      : null;
+  }
+
   async getOrgLogo(orgId: string): Promise<OrgLogoRecord | null> {
     const r = await this.pool.query<{
       logo_data: Buffer | null;

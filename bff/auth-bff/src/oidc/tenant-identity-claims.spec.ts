@@ -13,7 +13,6 @@ import { createHash } from "node:crypto";
 import { buildTenantIdentityClaims, OidcService } from "./oidc.service";
 import { AuthnService } from "../authn/authn.service";
 import { TokenService, type IssueAccessInput } from "../token/token.service";
-import { buildAccessClaims } from "../token/access-claims";
 
 // ============================================================================
 // Account profile claims
@@ -127,17 +126,25 @@ function presentationFixture() {
     allowedScopes: ["openid", "profile"],
   };
   const context: ActiveOrgContext = {
-    activeOrg: "org-1",
+    activeOrg: "00000000-0000-4000-8000-000000000001",
     activeOrgType: "organization",
     activeOrgName: "First Organization Limited",
     activeOrgDisplayName: "First",
+    activeOrgLogoHash: "a".repeat(64),
     activeWorkspace: "ws-1",
     activeWorkspaceName: "Default",
     roles: ["org:member"],
   };
+  const authority = Object.create(TokenService.prototype) as TokenService;
+  Object.assign(authority, {
+    config: {
+      auth: { OIDC_ISSUER: "https://accounts.example", OIDC_ACCESS_TTL: 300 },
+    },
+    keys: { sign: (claims: Record<string, unknown>) => JSON.stringify(claims) },
+  });
   const token = {
     issueAccessToken: vi.fn((input: IssueAccessInput) =>
-      JSON.stringify(buildAccessClaims(input)),
+      authority.issueAccessToken(input),
     ),
     issueRefreshToken: vi.fn(async () => "refresh"),
     inspectRefreshToken: vi.fn(async () => ({
@@ -234,32 +241,72 @@ describe("organization presentation", () => {
       const f = presentationFixture();
       const first = await f.exchange(grant);
       expect(JSON.parse(first.access_token)).toMatchObject({
-        active_org: "org-1",
+        active_org: "00000000-0000-4000-8000-000000000001",
+        active_org_logo_url: `https://accounts.example/avatar/organization/00000000-0000-4000-8000-000000000001/${"a".repeat(64)}`,
         active_org_name: "First Organization Limited",
         active_org_display_name: "First",
         roles: ["org:member"],
       });
-      f.context.activeOrg = "org-2";
+      f.context.activeOrg = "00000000-0000-4000-8000-000000000002";
+      f.context.activeOrgLogoHash = "b".repeat(64);
       f.context.activeOrgName = "Second Organization Limited";
       f.context.activeOrgDisplayName = "Second";
       const second = await f.exchange(grant);
       expect(JSON.parse(second.access_token)).toMatchObject({
-        active_org: "org-2",
+        active_org: "00000000-0000-4000-8000-000000000002",
+        active_org_logo_url: `https://accounts.example/avatar/organization/00000000-0000-4000-8000-000000000002/${"b".repeat(64)}`,
         active_org_name: "Second Organization Limited",
         active_org_display_name: "Second",
         roles: ["org:member"],
       });
       f.context.activeOrgDisplayName = "";
+      f.context.activeOrgLogoHash = null;
+      expect(
+        JSON.parse((await f.exchange(grant)).access_token),
+      ).not.toHaveProperty("active_org_logo_url");
       expect(
         JSON.parse((await f.exchange(grant)).access_token),
       ).not.toHaveProperty("active_org_display_name");
       for (const [claims] of f.keys.sign.mock.calls) {
         expect(claims).not.toHaveProperty("active_org_display_name");
+        expect(claims).not.toHaveProperty("active_org_logo_url");
       }
     },
   );
 
-  it("advertises the optional short-name claim in discovery", () => {
+  it.each([
+    {
+      userType: "operator",
+      activeOrg: "00000000-0000-4000-8000-000000000001",
+      activeOrgLogoHash: "a".repeat(64),
+    },
+    {
+      userType: "tenant_user",
+      activeOrg: "untrusted/path",
+      activeOrgLogoHash: "a".repeat(64),
+    },
+    {
+      userType: "tenant_user",
+      activeOrg: "00000000-0000-4000-8000-000000000001",
+      activeOrgLogoHash: "invalid",
+    },
+  ])("omits logo URLs outside a valid customer context (%j)", (context) => {
+    const authority = Object.create(TokenService.prototype) as TokenService;
+    const sign = vi.fn((_claims: Record<string, unknown>) => "token");
+    Object.assign(authority, { keys: { sign } });
+    authority.issueAccessToken({
+      sub: "usr_u1",
+      audience: "product",
+      ttlSeconds: 300,
+      ...context,
+    });
+    expect(sign.mock.calls[0]?.[0]).not.toHaveProperty("active_org_logo_url");
+  });
+
+  it("advertises optional organization presentation claims in discovery", () => {
+    expect(
+      presentationFixture().oidc.buildDiscoveryDocument().claims_supported,
+    ).toContain("active_org_logo_url");
     expect(
       presentationFixture().oidc.buildDiscoveryDocument().claims_supported,
     ).toContain("active_org_display_name");
@@ -280,12 +327,16 @@ describe("organization presentation", () => {
     const input = f.token.issueAccessToken.mock.calls[0]![0];
     const authority = Object.create(TokenService.prototype) as TokenService;
     const sign = vi.fn(() => "signed-token");
-    Object.assign(authority, { keys: { sign } });
+    Object.assign(authority, {
+      keys: { sign },
+      config: { auth: { OIDC_ISSUER: "https://accounts.example" } },
+    });
     authority.issueAccessToken({ ...input, ttlSeconds: 300 });
     expect(sign).toHaveBeenCalledWith(
       expect.objectContaining({
         active_org_name: "First Organization Limited",
         active_org_display_name: "First",
+        active_org_logo_url: `https://accounts.example/avatar/organization/00000000-0000-4000-8000-000000000001/${"a".repeat(64)}`,
       }),
       expect.objectContaining({
         audience: "product-client",

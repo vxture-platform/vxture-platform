@@ -234,6 +234,11 @@ export class OrganizationService {
   ): Promise<OrganizationProfileView> {
     return this.repo.upsertOrgProfile(orgId, input);
   }
+  /** Read a public presentation image without exposing organization metadata. */
+  getPublicOrgLogo(orgId: string, hash: string): Promise<OrgLogoRecord | null> {
+    return this.repo.getPublicOrgLogo(orgId, hash);
+  }
+
   getOrgLogo(orgId: string): Promise<OrgLogoRecord | null> {
     return this.repo.getOrgLogo(orgId);
   }
