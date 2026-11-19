@@ -36,6 +36,7 @@ export interface IssueAccessInput {
   activeOrgType?: string | null;
   activeOrgName?: string | null;
   activeOrgDisplayName?: string | null;
+  activeOrgLogoHash?: string | null;
   activeWorkspace?: string | null;
   activeWorkspaceName?: string | null;
   roles?: string[];
@@ -105,7 +106,18 @@ export class TokenService {
 
   /** Mint an RS256 access token with the new claim set. */
   issueAccessToken(input: IssueAccessInput): string {
-    const claims = buildAccessClaims(input);
+    const logoUrl =
+      input.userType === "tenant_user" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+        input.activeOrg ?? "",
+      ) &&
+      /^[0-9a-f]{64}$/.test(input.activeOrgLogoHash ?? "")
+        ? `${this.config.auth.OIDC_ISSUER.replace(/\/$/, "")}/avatar/organization/${input.activeOrg}/${input.activeOrgLogoHash}`
+        : undefined;
+    const claims = buildAccessClaims({
+      ...input,
+      activeOrgLogoUrl: logoUrl ?? null,
+    });
     return this.keys.sign(claims, {
       audience: input.audience,
       subject: input.sub,

@@ -67,6 +67,7 @@ import { OperatorPublicRouter } from "./routers/operator-public.router";
 import { InternalAuthGuard } from "./authn/internal-auth.guard";
 import { ActorBindingGuard } from "./authn/actor-binding.guard";
 import { AvatarController } from "./avatar/avatar.controller";
+import { OrganizationLogoController } from "./avatar/organization-logo.controller";
 import { AvatarUploadController } from "./avatar/avatar-upload.controller";
 import { RedisModule } from "./redis/redis.module";
 import { HealthRouter } from "./routers/health.router";
@@ -117,6 +118,7 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     OperatorPublicRouter,
     SocialController,
     AvatarController,
+    OrganizationLogoController,
     AvatarUploadController,
   ],
   providers: [

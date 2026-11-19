@@ -302,6 +302,8 @@ export interface ActiveOrgContext {
   activeOrgName: string | null;
   /** Optional short name for presentation only; never an authorization input. */
   activeOrgDisplayName?: string | null;
+  /** Current custom logo version for presentation only. */
+  activeOrgLogoHash?: string | null;
   activeWorkspace: string | null;
   /** Active (default) workspace display name (null if no workspace). */
   activeWorkspaceName: string | null;
@@ -598,6 +600,8 @@ export interface OrganizationReadRepository {
   ): Promise<OrganizationProfileView>;
   /** Load the org's logo bytes; null when none. */
   getOrgLogo(orgId: string): Promise<OrgLogoRecord | null>;
+  /** Read only the current logo of a live, active organization. */
+  getPublicOrgLogo(orgId: string, hash: string): Promise<OrgLogoRecord | null>;
   /** Store/replace the org's logo bytes (mirrors logo_hash on the profile row). */
   setOrgLogo(orgId: string, logo: OrgLogoRecord): Promise<void>;
   /** Remove the org's logo bytes (clears logo_hash). */

@@ -94,6 +94,44 @@ describe.runIf(process.env.ORG_PRESENTATION_ITEST === "1")(
       },
     );
 
+    it("reads and invalidates versioned public logos through PostgreSQL", async () => {
+      const repo = new PgOrganizationRepository(pool);
+      const hash = "a".repeat(64);
+      const data = Buffer.from("89504e470d0a1a0a00000000", "hex");
+      await repo.setOrgLogo(orgId, { data, hash, contentType: "image/png" });
+      expect(await service.resolveActiveContext(userId, orgId)).toMatchObject({
+        activeOrgLogoHash: hash,
+      });
+      expect(await repo.getPublicOrgLogo(orgId, hash)).toEqual({
+        data,
+        hash,
+        contentType: "image/png",
+      });
+      expect(await repo.getPublicOrgLogo(orgId, "b".repeat(64))).toBeNull();
+      await pool.query(
+        "update tenancy.tenants set status='suspended' where id=$1",
+        [orgId],
+      );
+      expect(await repo.getPublicOrgLogo(orgId, hash)).toBeNull();
+      expect(await service.resolveActiveContext(userId, orgId)).toMatchObject({
+        activeOrgLogoHash: null,
+      });
+      await pool.query(
+        "update tenancy.tenants set status='active', deleted_at=now() where id=$1",
+        [orgId],
+      );
+      expect(await repo.getPublicOrgLogo(orgId, hash)).toBeNull();
+      await pool.query(
+        "update tenancy.tenants set deleted_at=null where id=$1",
+        [orgId],
+      );
+      await repo.deleteOrgLogo(orgId);
+      expect(await repo.getPublicOrgLogo(orgId, hash)).toBeNull();
+      expect(await service.resolveActiveContext(userId, orgId)).toMatchObject({
+        activeOrgLogoHash: null,
+      });
+    });
+
     it("does not return another account's organization presentation", async () => {
       expect(
         await service.resolveActiveContext(

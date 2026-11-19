@@ -24,6 +24,8 @@ export interface AccessClaimsInput {
   activeOrgName?: string | null;
   /** Optional short name for presentation, independent of the full name. */
   activeOrgDisplayName?: string | null;
+  /** Trusted public image URL built by the token authority. */
+  activeOrgLogoUrl?: string | null;
   /** Active workspace id (default workspace). */
   activeWorkspace?: string | null;
   /** Active workspace display name. */
@@ -52,6 +54,8 @@ export function buildAccessClaims(
   if (input.activeOrgName != null) claims.active_org_name = input.activeOrgName;
   const orgDisplayName = input.activeOrgDisplayName?.trim();
   if (orgDisplayName) claims.active_org_display_name = orgDisplayName;
+  if (input.activeOrgLogoUrl)
+    claims.active_org_logo_url = input.activeOrgLogoUrl;
   if (input.activeWorkspace != null)
     claims.active_workspace = input.activeWorkspace;
   if (input.activeWorkspaceName != null)
