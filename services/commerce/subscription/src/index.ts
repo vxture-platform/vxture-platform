@@ -21,6 +21,9 @@ export { PgProductSeatRepository } from "./repository/pg-product-seat.repository
 export type {
   ProductSeatGrantOutcome,
   ProductSeatHolder,
+  ProductRosterScope,
+  ProductRosterMember,
+  ProductRosterPage,
   WorkspaceProductSeats,
 } from "./types/product-seat.types";
 export { PgOrderRepository } from "./repository/pg-order.repository";

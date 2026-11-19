@@ -14,6 +14,28 @@ export interface ProductSeatHolder {
   grantedAt: string;
 }
 
+/** Ticket-bound identity scope for a product's read-only authorized roster. */
+export interface ProductRosterScope {
+  orgId: string;
+  workspaceId: string;
+  productCode: string;
+  /** OBO readers must themselves remain eligible in the same read snapshot. */
+  requesterSubject?: string;
+}
+
+/** Minimal identity projection; subject matches the platform OIDC subject. */
+export interface ProductRosterMember {
+  subject: string;
+  displayName: string | null;
+}
+
+/** One live page and a revision of the complete eligible identity projection. */
+export interface ProductRosterPage {
+  items: ProductRosterMember[];
+  version: string;
+  hasMore: boolean;
+}
+
 /** 一个工作区里某个**被订阅覆盖的产品**的席位实况。 */
 export interface WorkspaceProductSeats {
   productId: string;

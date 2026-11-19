@@ -26,6 +26,7 @@ import { ProvisioningModule } from "@vxture/service-provisioning";
 import { SharingModule } from "@vxture/service-sharing";
 import { SubscriptionModule } from "@vxture/service-subscription";
 import { PlatformAuthGuard } from "./authn/platform-auth.guard";
+import { ProductRosterGuard } from "./authn/product-roster.guard";
 import { ProvisioningReadGuard } from "./authn/provisioning-read.guard";
 import { S2sTokenVerifier } from "./authn/s2s-token-verifier.service";
 import { AccountDeletionPurgeJob } from "./jobs/account-deletion-purge.job";
@@ -63,6 +64,7 @@ import { TokenUsageService } from "./platform/token-usage.service";
 import { CapabilityUsageService } from "./platform/capability-usage.service";
 import { HealthRouter } from "./routers/health.router";
 import { PlatformProductAccessRouter } from "./routers/platform-product-access.router";
+import { PlatformProductRosterRouter } from "./routers/platform-product-roster.router";
 import { PlatformEntitlementsRouter } from "./routers/platform-entitlements.router";
 import { PlatformProvisioningRouter } from "./routers/platform-provisioning.router";
 import { PlatformProvisioningReadRouter } from "./routers/platform-provisioning-read.router";
@@ -88,6 +90,7 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     HealthRouter,
     PlatformEntitlementsRouter,
     PlatformProductAccessRouter,
+    PlatformProductRosterRouter,
     PlatformUsageRouter,
     PlatformSharingRouter,
     PlatformProvisioningRouter,
@@ -108,6 +111,7 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     // E6（2026-10-04）：谁还在走旧凭据——四个产品面 router 在旧头那条路上计数，opera 读回
     LegacyAuthUsageService,
     PlatformAuthGuard,
+    ProductRosterGuard,
     S2sTokenVerifier,
     JobHeartbeatService,
     // 裁定 4(2026-10-04):库会话时区 ≠ UTC 时启动期记一条 error 日志(只信号,不拒启)

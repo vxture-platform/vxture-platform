@@ -2,6 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { PgProductSeatRepository } from "../repository/pg-product-seat.repository";
 import type {
   ProductSeatGrantOutcome,
+  ProductRosterScope,
+  ProductRosterPage,
   WorkspaceProductSeats,
 } from "../types/product-seat.types";
 
@@ -20,9 +22,29 @@ export class ProductSeatService {
     private readonly repo: PgProductSeatRepository,
   ) {}
 
+  // ============================================================================
+  // Seat and authorized-user reads
+  // ============================================================================
+
   /** 这个工作区每个被覆盖产品的上限 / 占用 / 占用者。 */
   listWorkspaceSeats(workspaceId: string): Promise<WorkspaceProductSeats[]> {
     return this.repo.listWorkspaceSeats(workspaceId);
+  }
+
+  /**
+   * Read eligible identities without granting or revoking product access.
+   * @param scope - Verified organization, workspace and calling product.
+   * @param afterSubject - Exclusive pagination position, or null for the first page.
+   * @param limit - Maximum page size validated by the caller.
+   * @returns A live page, or null if the OBO reader is no longer eligible.
+   * @throws Error When the live authority read fails.
+   */
+  listAuthorizedUsers(
+    scope: ProductRosterScope,
+    afterSubject: string | null,
+    limit: number,
+  ): Promise<ProductRosterPage | null> {
+    return this.repo.listAuthorizedUsers(scope, afterSubject, limit);
   }
 
   /** Product entry uses the same assignments as Console and operator management. */
@@ -34,6 +56,10 @@ export class ProductSeatService {
   }): Promise<boolean> {
     return this.repo.hasUserAccess(input);
   }
+
+  // ============================================================================
+  // Seat mutations
+  // ============================================================================
 
   grant(input: {
     workspaceId: string;

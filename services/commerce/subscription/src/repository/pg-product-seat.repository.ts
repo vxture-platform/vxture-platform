@@ -3,6 +3,9 @@ import { Pool } from "pg";
 import { COMMERCE_PG_POOL } from "../tokens";
 import type {
   ProductSeatGrantOutcome,
+  ProductRosterScope,
+  ProductRosterPage,
+  ProductRosterMember,
   ProductSeatHolder,
   WorkspaceProductSeats,
 } from "../types/product-seat.types";
@@ -137,6 +140,78 @@ export class PgProductSeatRepository {
       [input.subject, input.orgId, input.workspaceId, input.productCode],
     );
     return result.rows[0]?.allowed === true;
+  }
+
+  // ============================================================================
+  // Product-facing authorized roster
+  // ============================================================================
+
+  /**
+   * Apply the live product-access predicate to every identity in one workspace.
+   * @param scope - Verified ticket scope; never taken from browser parameters.
+   * @param afterSubject - Exclusive OIDC subject pagination position.
+   * @param limit - Positive page bound, at most 200.
+   * @returns A bounded page and revision, or null for an ineligible OBO reader.
+   * @throws RangeError When an internal caller supplies an invalid page bound.
+   * @throws Error When the database cannot produce a live snapshot.
+   */
+  async listAuthorizedUsers(
+    scope: ProductRosterScope,
+    afterSubject: string | null,
+    limit: number,
+  ): Promise<ProductRosterPage | null> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+      throw new RangeError("Roster page limit must be between 1 and 200");
+    const result = await this.pool.query<{
+      caller_allowed: boolean;
+      version: string;
+      items: ProductRosterMember[];
+    }>(
+      `with eligible as materialized (
+        select distinct ('usr_' || u.id::text) collate "C" as subject,
+               nullif(btrim(up.display_name), '') as "displayName"
+          from account.users u
+          join tenancy.tenant_memberships tm on tm.user_id = u.id and tm.status = 'active'
+          join tenancy.tenants t on t.id = tm.tenant_id and t.status = 'active' and t.deleted_at is null
+          join tenancy.workspaces w on w.tenant_id = t.id and w.status = 'active' and w.deleted_at is null
+          join tenancy.workspace_memberships wm on wm.workspace_id = w.id and wm.user_id = u.id and wm.status = 'active'
+          join metering.product_seats ps on ps.workspace_id = w.id and ps.user_id = u.id and ps.revoked_at is null
+          join product.products p on p.id = ps.product_id and p.deleted_at is null
+          left join account.user_profiles up on up.user_id = u.id
+         where u.status = 'active' and u.deleted_at is null
+           and t.id = $1::uuid and w.id = $2::uuid and p.product_code = $3
+           and exists (
+             select 1 from metering.subscriptions s
+             join product.plan_components pc on pc.plan_version_id = s.plan_version_id and pc.product_id = p.id
+             where s.workspace_id = w.id and s.tenant_id = t.id and s.deleted_at is null
+               and s.status in ('active','trialing','expiring','overdue')
+           )
+      ), page as (
+        select subject, "displayName" from eligible
+         where ($4::text is null or subject > $4::text collate "C")
+         order by subject limit $5
+      )
+      select ($6::text is null or exists(select 1 from eligible where subject = $6)) as caller_allowed,
+             (select md5(coalesce(jsonb_agg(jsonb_build_array(subject, "displayName") order by subject)::text, '[]')) from eligible) as version,
+             coalesce((select jsonb_agg(to_jsonb(page) order by subject) from page), '[]'::jsonb) as items`,
+      [
+        scope.orgId,
+        scope.workspaceId,
+        scope.productCode,
+        afterSubject,
+        limit + 1,
+        scope.requesterSubject ?? null,
+      ],
+    );
+    const row = result.rows[0];
+    // A failed read must never masquerade as an empty roster.
+    if (!row) throw new Error("Roster query returned no snapshot");
+    if (!row.caller_allowed) return null;
+    return {
+      version: row.version,
+      items: row.items.slice(0, limit),
+      hasMore: row.items.length > limit,
+    };
   }
 
   /** 指派席位。上限由库判，这里只翻译结果。 */
