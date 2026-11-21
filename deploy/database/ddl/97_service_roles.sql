@@ -337,3 +337,10 @@ GRANT SELECT (workspace_id, tenant_id, plan_version_id, deleted_at, status, star
 GRANT SELECT (plan_version_id, component_role, product_id) ON product.plan_components TO svc_customer_portal;
 GRANT SELECT (id, product_code, product_name, description, deleted_at, is_customer_visible, status) ON product.products TO svc_customer_portal;
 GRANT SELECT (product_id, home_url) ON product.product_webhooks TO svc_customer_portal;
+
+-- Match the forward migrations after all broad schema grants have been applied.
+-- The final column-lock pass retains its existing platform_svc update columns;
+-- the append-only trigger continues to reject mutation of raw usage facts.
+REVOKE UPDATE, DELETE ON metering.capability_usage_events
+  FROM platform_svc, svc_platform_api, svc_console_bff, svc_admin_bff;
+GRANT SELECT ON admin.maintenance_window_products TO svc_platform_api;
