@@ -103,8 +103,8 @@ BEGIN
        OR original_consume.amount <> -1.00 OR original_consume.balance_before <> 533.62 OR original_consume.balance_after <> 532.62
        OR original_grant.actor_type <> 'customer' OR original_consume.actor_type <> 'customer'
        OR original_grant.actor_id IS NULL OR original_consume.actor_id IS NULL
-       OR original_grant.created_at <> '2026-11-11 06:36:18.628+00'::timestamptz
-       OR original_consume.created_at <> '2026-11-11 16:49:05.018+00'::timestamptz
+       OR original_grant.created_at <> '2026-11-11 06:36:18.628580+00'::timestamptz
+       OR original_consume.created_at <> '2026-11-11 16:49:05.018169+00'::timestamptz
        OR original_grant.related_no IS DISTINCT FROM 'ORD-202611-B3135B0D48'
        OR original_grant.bill_id IS NOT NULL
        OR (SELECT count(*) FROM billing.transactions WHERE tenant_id = wallet.tenant_id
