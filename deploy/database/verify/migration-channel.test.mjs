@@ -8,7 +8,7 @@
  */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { Duplex } from "node:stream";
 import {
@@ -374,6 +374,151 @@ async function invitationMigrationRegression(t) {
 // Fresh DDL and actual upgraded catalogs must agree, including physical bounds.
 // Every database below belongs to this test's private, networkless container.
 // ===========================================================================
+
+// ===========================================================================
+// Run the actual audit bodies; wrapper policy probes alone cannot prove them.
+// ===========================================================================
+async function baselineReadonlyRegression(t) {
+  const db = "baseline_readonly";
+  const ddl = readdirSync(resolve(root, "deploy/database/ddl"))
+    .filter((name) => /^\d+_.*\.sql$/.test(name))
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => read("deploy/database/ddl/" + name).replaceAll("\r\n", "\n"))
+    .join("");
+  const count = [...ddl.matchAll(/^CREATE TABLE/gm)].length;
+  const hash = createHash("md5").update(ddl).digest("hex");
+  const baseline = read("deploy/database/verify/baseline-assertions.sql");
+  const locks = read("deploy/database/verify/column-locks-drift.sql");
+  const before = facts("upgraded");
+  ok(sql("postgres", "CREATE DATABASE " + db + " TEMPLATE upgraded;"));
+  // Database-level settings are not inherited by CREATE DATABASE TEMPLATE.
+  ok(sql("postgres", "ALTER DATABASE " + db + " SET timezone = 'UTC';"));
+  // These are isolated provisioning fixtures, never operational credentials.
+  ok(
+    sql(
+      db,
+      "CREATE TABLE public.vx_ddl_baseline(id int PRIMARY KEY,ddl_hash text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now());" +
+        "INSERT INTO public.vx_ddl_baseline(id,ddl_hash) VALUES(1,'" +
+        hash +
+        "');" +
+        "UPDATE appoidc.oidc_clients SET client_secret_hash='isolated-audit-fixture' WHERE client_id IN ('umbra','console','admin');" +
+        "UPDATE appoidc.oidc_clients SET redirect_uris=ARRAY['https://ruyin.ai/auth/callback'] WHERE client_id='umbra';" +
+        "INSERT INTO admin.settings(config_group,config_key,value_type,config_value) VALUES('customer_portal','customer_portal.reserved_host_bindings','json','{}');",
+    ),
+  );
+  const settings = () =>
+    ok(
+      sql(
+        db,
+        "SELECT jsonb_agg(to_jsonb(s) ORDER BY config_key) FROM admin.settings s;",
+      ),
+    );
+  const initialSettings = settings();
+  const audit = (body, name = db, expectedCount = count) =>
+    sql(
+      name,
+      "BEGIN READ ONLY; SET LOCAL statement_timeout=20000; SET LOCAL lock_timeout=1000;" +
+        "DO $$ BEGIN IF current_setting('transaction_read_only')<>'on' THEN RAISE EXCEPTION 'AUDIT_NOT_READONLY'; END IF; END $$;\n" +
+        body +
+        "\nROLLBACK;",
+      [
+        "-v",
+        "expected_tables=" + expectedCount,
+        "-v",
+        "expected_ddl_hash=" + hash,
+      ],
+    );
+  const reject = (result, message) => {
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, new RegExp(message));
+  };
+  const negative = async (name, mutation, body, message) =>
+    t.test(name, () => {
+      const clone = "baseline_negative";
+      ok(sql("postgres", "CREATE DATABASE " + clone + " TEMPLATE " + db + ";"));
+      try {
+        ok(sql(clone, mutation));
+        reject(audit(body, clone), message);
+      } finally {
+        ok(sql("postgres", "DROP DATABASE " + clone + ";"));
+      }
+    });
+  try {
+    for (const [name, body] of [
+      [
+        "real baseline includes the public archive and preserves internal reservations",
+        baseline,
+      ],
+      [
+        "real column policy verifies inside an explicit read-only transaction",
+        locks,
+      ],
+      [
+        "real database timezone verifies inside an explicit read-only transaction",
+        read("deploy/database/verify/database-timezone.sql"),
+      ],
+    ])
+      await t.test(name, () => ok(audit(body)));
+    await t.test("wrong expected table count is rejected", () =>
+      reject(audit(baseline, db, count + 1), "\\[B\\]"),
+    );
+    await negative(
+      "missing seeded setting label is rejected",
+      "UPDATE admin.settings SET description_key=NULL WHERE config_key='operator.mfa.policy';",
+      baseline,
+      "\\[C2\\]",
+    );
+    await negative(
+      "unrecognized unlabelled setting is rejected",
+      "INSERT INTO admin.settings(config_group,config_key,config_value) VALUES('test','audit.unknown','test');",
+      baseline,
+      "\\[C2\\]",
+    );
+    await negative(
+      "extra public table is rejected",
+      "CREATE TABLE public.audit_extra(id int);",
+      baseline,
+      "\\[B\\]",
+    );
+    await negative(
+      "missing column grant is rejected",
+      "REVOKE UPDATE(balance) ON billing.credits FROM platform_svc;",
+      locks,
+      "Missing:[\\s\\S]*billing.credits: balance",
+    );
+    await negative(
+      "extra anchor grant is rejected",
+      "GRANT UPDATE(id) ON billing.credits TO platform_svc;",
+      locks,
+      "Extra:[\\s\\S]*billing.credits: id",
+    );
+    for (const [name, content] of [
+      ["empty", ""],
+      ["malformed", "SELECT 1;"],
+    ])
+      await t.test(name + " policy is rejected", () => {
+        const target = "/tmp/audit-" + name + ".sql";
+        ok(docker(["exec", "-i", container, "tee", target], content));
+        reject(
+          audit(locks.replace("/ddl/98_column_locks.sql", target)),
+          "No declared column grants parsed",
+        );
+      });
+    await t.test("unreadable policy is rejected", () =>
+      reject(
+        audit(
+          locks.replace("/ddl/98_column_locks.sql", "/tmp/audit-absent.sql"),
+        ),
+        "No declared column grants parsed",
+      ),
+    );
+    assert.equal(settings(), initialSettings);
+    assert.deepEqual(facts("upgraded"), before);
+  } finally {
+    ok(sql("postgres", "DROP DATABASE " + db + ";"));
+  }
+}
+
 async function schemaParityRegression(t) {
   let successful = 0;
   const check = (name, work) =>
@@ -1507,6 +1652,10 @@ export DATABASE_URL='postgresql://postgres@127.0.0.1/upgraded?options=-c%20defau
         await t.test(
           "S08-R4a actual catalog and legacy partition safety",
           schemaParityRegression,
+        );
+        await t.test(
+          "S08-R4c real read-only baseline audits",
+          baselineReadonlyRegression,
         );
         await t.test(
           "full-history repeat preserves money and final wallet guards",

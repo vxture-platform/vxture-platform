@@ -75,10 +75,14 @@ BEGIN
                              ddlhash, current_setting('vx.expected_ddl_hash'));
   END IF;
 
+  -- Numbered DDL includes the public principal archive; the baseline stamp
+  -- itself is created by the apply script and is not part of that expectation.
   -- ── B. table count == DDL-derived expectation ─────────────────────────────
   SELECT count(*) INTO cnt
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-   WHERE c.relkind IN ('r', 'p') AND NOT c.relispartition AND n.nspname = ANY (targets);
+   WHERE c.relkind IN ('r', 'p') AND NOT c.relispartition
+     AND (n.nspname = ANY (targets)
+       OR (n.nspname = 'public' AND c.relname <> 'vx_ddl_baseline'));
   IF cnt <> expected THEN
     fails := fails || format('[B] table count %s <> DDL expectation %s; ', cnt, expected);
   END IF;
@@ -114,6 +118,8 @@ BEGIN
   --   whole display/i18n columns silently stay NULL). Scope predicates confine the
   --   assertions to seed-owned rows: operator-created rows (custom roles, admin-made
   --   plans, ...) legitimately carry no locale keys.
+  -- Host reservations are internal runtime state, not a seeded display setting.
+  -- Every other setting keeps the existing nonempty description-key assertion.
   FOR chk IN
     SELECT * FROM (VALUES
       ('access.roles',                   'role_name_key',   'is_system = true'),
@@ -134,7 +140,7 @@ BEGIN
       ('product.plans',                  'plan_name_key',   'created_by = ''00000000-0000-4000-a000-000000000010'''),
       ('product.plans',                  'description_key', 'created_by = ''00000000-0000-4000-a000-000000000010'''),
       ('product.launch_checklist_items', 'item_name_key',   'true'),
-      ('admin.settings',                 'description_key', 'true')
+      ('admin.settings',                 'description_key', 'config_key <> ''customer_portal.reserved_host_bindings''')
     ) v(tbl, col, scope_pred)
   LOOP
     EXECUTE format(
