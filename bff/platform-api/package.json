@@ -45,6 +45,7 @@
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/pg": "^8.16.0",
+    "@vxture/service-promotion": "workspace:*",
     "esbuild": "^0.28.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"

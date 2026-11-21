@@ -702,6 +702,9 @@ importers:
       '@types/pg':
         specifier: ^8.16.0
         version: 8.20.0
+      '@vxture/service-promotion':
+        specifier: workspace:*
+        version: link:../../services/commerce/promotion
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
