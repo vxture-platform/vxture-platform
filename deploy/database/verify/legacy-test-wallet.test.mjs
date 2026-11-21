@@ -113,7 +113,7 @@ function args(db = database, variables = {}) {
 function sql(source, db = database) {
   return ok(command(args(db), `SET TIME ZONE 'UTC';\n${source}`));
 }
-function apply(variables = {}, prefix = "", db = database) {
+function apply(variables = {}, prefix = "", db = database, source = adoption) {
   return command(
     args(db, {
       target_sha256: target(db),
@@ -122,7 +122,7 @@ function apply(variables = {}, prefix = "", db = database) {
       test_data_ack: "SELF_CREATED_NO_EXTERNAL_PAYMENT",
       ...variables,
     }),
-    `${prefix}\nSET ROLE ${owner};\n${adoption}`,
+    `${prefix}\nSET ROLE ${owner};\n${source}`,
   );
 }
 function target(db = database, role = owner) {
@@ -236,9 +236,9 @@ INSERT INTO billing.credits(id,tenant_id,balance,total_granted,total_consumed,ve
 INSERT INTO billing.transactions(id,tenant_id,bill_id,transaction_no,trade_type,amount,
  balance_before,balance_after,actor_type,actor_id,related_no,created_at) VALUES
  ('295b8d57-3e4e-4154-843b-5471ab02f08a','${tenant}',NULL,'TXN-S05-GRANT','grant',
- 533.62,0,533.62,'customer','${actor}','ORD-202611-B3135B0D48','2026-11-11 06:36:18.628+00'),
+ 533.62,0,533.62,'customer','${actor}','ORD-202611-B3135B0D48','2026-11-11 06:36:18.628580+00'),
  ('fcb84583-9dd9-43aa-9fec-d944f76bc8c0','${tenant}','00000000-0000-4000-8000-000000000008',
- 'TXN-S05-CONSUME','consume',-1,533.62,532.62,'customer','${actor}',NULL,'2026-11-11 16:49:05.018+00');
+ 'TXN-S05-CONSUME','consume',-1,533.62,532.62,'customer','${actor}',NULL,'2026-11-11 16:49:05.018169+00');
 INSERT INTO billing.payments(id,tenant_id,bill_id,transaction_id,pay_order_no,pay_source,total_amount,
  paid_amount,pay_status,paid_at) VALUES ('9a54431d-fda3-41fa-9eb0-08d0ed90f054','${tenant}',
  '00000000-0000-4000-8000-000000000008','fcb84583-9dd9-43aa-9fec-d944f76bc8c0',
@@ -386,6 +386,23 @@ test("S05-R3b scoped test-wallet adoption", { timeout: 180000 }, async (t) => {
       "default dry run validates every constraint and rolls back all adoption rows",
       () => {
         assert.match(ok(apply()), /S05_TEST_WALLET_DRY_RUN_ROLLED_BACK/);
+        // Preserve microseconds and keep the guard exact; do not round evidence.
+        for (const [expectedTime, alteredTime] of [
+          ["2026-11-11 06:36:18.628580+00", "2026-11-11 06:36:18.628+00"],
+          ["2026-11-11 16:49:05.018169+00", "2026-11-11 16:49:05.018+00"],
+          ["2026-11-11 06:36:18.628580+00", "2026-11-11 06:36:18.628581+00"],
+          ["2026-11-11 16:49:05.018169+00", "2026-11-11 16:49:05.018170+00"],
+        ]) {
+          denied(
+            apply(
+              {},
+              "",
+              database,
+              adoption.replace(expectedTime, alteredTime),
+            ),
+            "S05_ADOPTION_TRANSACTION_DRIFT",
+          );
+        }
         walletEmpty();
         assert.equal(originalFacts(), before);
       },
