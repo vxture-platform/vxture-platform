@@ -1,5 +1,5 @@
 /**
- * order-payment-expiry.job.ts — interval driver for the two payment-order
+ * order-payment-expiry.job.ts — interval driver for the payment-order
  * passes (product_321 §4.3):
  *
  *  1. Timeout sweep: close pending offline orders past the payment TTL. The
@@ -10,6 +10,14 @@
  *     invoice-cleared orders whose activation never landed (instant voucher
  *     settlement crash window / legacy ledger-bypass strays). Per-order
  *     failure ledger inside the service stops auto-retry at the limit.
+ *  3. Refund recovery: reverse persisted effects and complete durable voucher
+ *     compensation intentions, without initiating or repeating cash transfers.
+ *
+ * @package @vxture/bff-platform-api
+ * @layer Application
+ * @category job
+ * @author AI-Generated
+ * @date 2026-11-20
  *
  * Same host pattern as the trial expiry sweep: env read once at class
  * definition, in-flight guard against same-instance pile-up, cross-instance
@@ -27,14 +35,20 @@ import { AddonService, OrderService } from "@vxture/service-subscription";
 import { JobHeartbeatService } from "./job-heartbeat.service";
 import { sweepIntervalMs } from "./sweep-interval.util";
 
+// ============================================================================
+// Stable schedule settings and heartbeat identity.
+// ============================================================================
 const ttlMinutes = (): number => {
   const raw = Number(process.env.ORDER_PAYMENT_TTL_MINUTES);
   return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 30;
 };
 
-/** provisioning.background_jobs 主键，opera「任务调度」用它认作业。 */
+/** Stable heartbeat key used by the operations scheduler view. */
 export const JOB_NAME = "order-payment-expiry";
 
+// ============================================================================
+// The driver serializes local ticks; repositories serialize cross-process work.
+// ============================================================================
 @Injectable()
 export class OrderPaymentExpiryJob {
   private readonly logger = new Logger(OrderPaymentExpiryJob.name);
@@ -44,7 +58,7 @@ export class OrderPaymentExpiryJob {
   );
 
   constructor(
-    // product_330 P1-b2：两趟都在订单实体（billing.orders）上跑。
+    // Every payment pass uses billing.orders as the aggregate root.
     @Inject(OrderService)
     private readonly orders: OrderService,
     @Inject(AddonService)
@@ -58,8 +72,8 @@ export class OrderPaymentExpiryJob {
     if (this.inFlight) return;
     this.inFlight = true;
     const startedAt = Date.now();
-    await this.heartbeat.recordStart(JOB_NAME, this.intervalMs);
     try {
+      await this.heartbeat.recordStart(JOB_NAME, this.intervalMs);
       const closed = await this.orders.sweepExpired(ttlMinutes());
       if (closed > 0) {
         this.logger.log(`payment expiry sweep: ${closed} order(s) closed`);
@@ -76,10 +90,17 @@ export class OrderPaymentExpiryJob {
           `addon payment expiry sweep: ${addonClosed} order(s) closed`,
         );
       }
+      // Money has already committed; recovery only consumes durable intentions.
+      const compensated = await this.orders.reconcileRefundSettlements();
+      if (compensated > 0) {
+        this.logger.log(
+          `refund recovery: ${compensated} compensation(s) completed`,
+        );
+      }
       await this.heartbeat.recordSuccess(
         JOB_NAME,
         Date.now() - startedAt,
-        closed + healed + addonClosed,
+        closed + healed + addonClosed + compensated,
       );
     } catch (err) {
       // Never let a pass kill the interval; the next tick retries.

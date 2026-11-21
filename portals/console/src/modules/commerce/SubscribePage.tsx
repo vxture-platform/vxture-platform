@@ -16,7 +16,7 @@
  *    contact sales. Vouchers stay on the payment page (they attach to an order).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -39,6 +39,10 @@ import {
   ViewLayout,
   cn,
 } from "@vxture/design-system";
+import {
+  useVoucherContextKey,
+  useVoucherPermission,
+} from "./VoucherClaimDialog";
 import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import {
@@ -197,6 +201,13 @@ function UpgradeQuoteSummary({
 }
 
 export function SubscribePage() {
+  const identity = useVoucherContextKey();
+  const allowed = useVoucherPermission();
+  if (!allowed) return null;
+  return <SubscribeContent key={identity} />;
+}
+function SubscribeContent() {
+  const canPurchase = useVoucherPermission(true);
   const t = useTranslations("subscribePage");
   const router = useRouter();
   const params = useSearchParams();
@@ -237,6 +248,18 @@ export function SubscribePage() {
   // 自动续费 opt-in（owner 2026-09-03）：新订默认关；续订/升级按客户现有设置预填
   // （有 current 即非 new，见下方 orderIntent 推导）。
   const [autoRenew, setAutoRenew] = useState(false);
+  const orderAttempt = useRef<{
+    signature: string;
+    command: Parameters<typeof createSubscriptionOrder>[0];
+  } | null>(null);
+  const submitting = useRef(false),
+    live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -279,6 +302,7 @@ export function SubscribePage() {
     setError(null);
     try {
       const fresh = await fetchSubscribeContext(query);
+      if (!live.current) return;
       setCtx(fresh);
       // 换了工作区就换了 current，预填随之重算。
       setAutoRenew(fresh.current?.autoRenew ?? false);
@@ -455,39 +479,26 @@ export function SubscribePage() {
   );
 
   const onSubmit = async () => {
-    if (busy || !plan || isEnterprise || !price) return;
+    if (
+      !canPurchase ||
+      submitting.current ||
+      busy ||
+      !live.current ||
+      !plan ||
+      isEnterprise ||
+      !price
+    )
+      return;
     /* 降档不下单（owner 2026-09-24）。按钮已禁用，这一行是它被绕过时的那道。 */
     if (selectedIsDowngrade) return;
     if (currentSuspended) return;
     if (underMaintenance) return;
     if (purchaseBlocked || ctx.pendingOrder) return;
+    submitting.current = true;
     setBusy(true);
     setError(null);
     try {
-      // Another tab may have changed the subscription since this page loaded.
-      const fresh = await fetchSubscribeContext(query);
-      const freshPlan =
-        fresh.plans.find((p) => p.planVersionId === plan.planVersionId) ?? null;
-      const freshPurchase = resolveSubscriptionPurchase(
-        fresh.current,
-        freshPlan,
-        fresh.intent,
-      );
-      if (
-        fresh.pendingOrder ||
-        !freshPlan ||
-        fresh.product?.maintenance ||
-        fresh.current?.subscriptionId !== current?.subscriptionId ||
-        fresh.current?.planVersionId !== current?.planVersionId ||
-        freshPurchase.blocked ||
-        freshPurchase.orderIntent !== orderIntent
-      ) {
-        setCtx(fresh);
-        setError(t("confirm.contextChanged"));
-        setBusy(false);
-        return;
-      }
-      const result = await createSubscriptionOrder({
+      const purchase = {
         productCode: product.code,
         planVersionId: plan.planVersionId,
         cycleUnit: cycle,
@@ -496,12 +507,48 @@ export function SubscribePage() {
         ...(orderIntent !== "new" && current
           ? { upgradeOfSubscriptionId: current.subscriptionId }
           : {}),
-        /* 跨版本续订：把差异面板上呈现的那个来源版本回送，作为「客户已知情」的凭据。
-           服务端比对它与原订阅当前钉着的版本——期间若又发版，旧确认失效要重看。 */
         ...(orderIntent === "renew" && versionChange
           ? { acceptVersionChangeFrom: versionChange.fromPlanVersionId }
           : {}),
-      });
+      };
+      const signature = JSON.stringify(purchase);
+      if (orderAttempt.current?.signature !== signature) {
+        // Another tab may have changed the subscription since this page loaded.
+        const fresh = await fetchSubscribeContext(query);
+        if (!live.current) return;
+        const freshPlan =
+          fresh.plans.find((p) => p.planVersionId === plan.planVersionId) ??
+          null;
+        const freshPurchase = resolveSubscriptionPurchase(
+          fresh.current,
+          freshPlan,
+          fresh.intent,
+        );
+        if (
+          fresh.pendingOrder ||
+          !freshPlan ||
+          fresh.product?.maintenance ||
+          fresh.current?.subscriptionId !== current?.subscriptionId ||
+          fresh.current?.planVersionId !== current?.planVersionId ||
+          freshPurchase.blocked ||
+          freshPurchase.orderIntent !== orderIntent
+        ) {
+          setCtx(fresh);
+          setError(t("confirm.contextChanged"));
+          setBusy(false);
+          return;
+        }
+        if (!live.current) return;
+        orderAttempt.current = {
+          signature,
+          command: { ...purchase, idempotencyKey: crypto.randomUUID() },
+        };
+      }
+      if (!live.current) return;
+      const result = await createSubscriptionOrder(
+        orderAttempt.current.command,
+      );
+      if (!live.current) return;
       // 0 元也是订单（owner 2026-08-20）：一律进付款页,付款环节消化 ¥0。
       if (result.orderId) {
         router.push(`/subscribe/pay/${result.orderId}`);
@@ -510,8 +557,13 @@ export function SubscribePage() {
       await reload();
       setBusy(false);
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : t("orderFailed"));
-      setBusy(false);
+      if (live.current)
+        setError(
+          e instanceof Error && e.message ? e.message : t("orderFailed"),
+        );
+    } finally {
+      submitting.current = false;
+      if (live.current) setBusy(false);
     }
   };
 
@@ -902,6 +954,7 @@ export function SubscribePage() {
                     <Button
                       size="xl"
                       disabled={
+                        !canPurchase ||
                         busy ||
                         !price ||
                         selectedIsDowngrade ||

@@ -97,7 +97,6 @@ const UNCONSUMED = {
     "真正退款的人处理退款资金（财务）」。退款在 admin 里是「确认」，与确认收款同一角色同一码；" +
     "真正动钱的那一步在财务侧，不在这几个端点上。此码留在目录里不改门、不授角色，" +
     "等财务侧的退款资金动作进 admin 那天再接",
-  "promotion:campaign.read": MANAGE_IMPLIES_READ,
   "product:price.read":
     "**这个粒度的读端点不存在**（2026-10-04 核实）：价格没有自己的读入口，它作为套餐版本" +
     "详情的一部分随 product:plan.read 下发（GET plans / plan-versions/:id / plan-matrix / " +

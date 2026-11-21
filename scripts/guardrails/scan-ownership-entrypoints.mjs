@@ -125,6 +125,8 @@ const HTTP_VERBS = new Set(["Get", "Post", "Put", "Patch", "Delete"]);
 const GATE_DECORATORS = new Set([
   "RequireCapability",
   "RequireStepUp",
+  // The voucher wrapper sets the existing step-up gate and one-action metadata.
+  "RequireVoucherStepUp",
   "SelfScope",
   "Public",
   "UseGuards",
@@ -895,7 +897,31 @@ if (process.argv.includes("--self-test")) {
   );
   if (!metadataOk) bad += 1;
 
-  const checks = CHECKS.length + 3;
+  const voucherGateCases = [
+    ["RequireVoucherStepUp()", true],
+    ["RequireVoucherStepUpTypo()", false],
+  ];
+  const voucherGateOk = voucherGateCases.every(([expression, expected]) => {
+    const fixture = ts.createSourceFile(
+      "voucher-gate.ts",
+      `class Fixture { @${expression} method() {} }`,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const decorator = readDecorator(
+      decoratorsOf(fixture.statements[0].members[0])[0],
+    );
+    return (
+      GATE_DECORATORS.has(decorator.name) === expected &&
+      !NON_GATE_DECORATORS.has(decorator.name)
+    );
+  });
+  console.log(
+    `\n${voucherGateOk ? "✓" : "✗"} Voucher step-up: exact wrapper recognized; unfamiliar names stay unclassified`,
+  );
+  if (!voucherGateOk) bad += 1;
+
+  const checks = CHECKS.length + 4;
   console.log(`\n── 汇总 ──\n看得见 ${checks - bad}/${checks} 项判据`);
   if (bad) {
     console.log("这个单元还不能用 —— 先让它看得见上面标 ✗ 的那几条。");

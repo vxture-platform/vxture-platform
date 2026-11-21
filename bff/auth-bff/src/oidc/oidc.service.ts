@@ -10,13 +10,16 @@
  */
 import {
   BadRequestException,
+  ForbiddenException,
+  HttpException,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { SUPPORTED_LOCALES, type Locale } from "@vxture-platform/shared";
 import { VxConfigService } from "@vxture/core-config";
 import {
@@ -100,6 +103,42 @@ const OIDC_AUTH_CODE_TTL_SECONDS = 300;
 const OPERATOR_STEPUP_TTL_SECONDS = 300;
 /** Operator realm OIDC client id (aud of operator tokens incl. step-up). */
 const OPERATOR_CLIENT_ID = "admin";
+
+/** A single business request bound to the authenticated RP session. */
+export interface OperatorStepUpAction {
+  sessionHash: string;
+  requestHash: string;
+}
+
+function validStepUpAction(value: unknown): value is OperatorStepUpAction {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return (
+    "sessionHash" in value &&
+    typeof value.sessionHash === "string" &&
+    /^[a-f0-9]{64}$/.test(value.sessionHash) &&
+    "requestHash" in value &&
+    typeof value.requestHash === "string" &&
+    /^[a-f0-9]{64}$/.test(value.requestHash)
+  );
+}
+
+function stepUpActionBinding(
+  operatorId: string,
+  audience: string,
+  action: OperatorStepUpAction,
+): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        "operator-stepup-action",
+        operatorId,
+        audience,
+        action.sessionHash,
+        action.requestHash,
+      ]),
+    )
+    .digest("hex");
+}
 
 /** Result of /token — the OIDC token response body. */
 export interface OidcTokenResponse {
@@ -2628,11 +2667,16 @@ export class OidcService {
    * stepup=true) the operator RP verifies before high-risk writes. operatorId is
    * supplied by the trusted caller (admin-bff, from the RP session) — never a
    * browser body. Returns null on a bad code (caller maps to 401).
+   * Shared reservations include in-flight checks; successful checks release only
+   * their own slot. A code is exchanged once across all operator RPs for 90s.
+   * @throws {HttpException} When the operator's shared failure budget is exhausted.
+   * @throws {ServiceUnavailableException} When replay protection cannot be confirmed.
    */
   async issueOperatorStepUp(input: {
     operatorId: string;
     method: "totp";
     code: string;
+    action?: OperatorStepUpAction;
     ip?: string | undefined;
     userAgent?: string | undefined;
     /**
@@ -2651,14 +2695,72 @@ export class OidcService {
     if (!this.keys.isReady()) {
       throw new BadRequestException("temporarily_unavailable");
     }
-    const ok = await this.operatorMfa.verifySecondFactor({
-      operatorId: input.operatorId,
-      method: input.method,
-      code: input.code,
-    });
+    const operatorId =
+      typeof input.operatorId === "string"
+        ? input.operatorId.toLowerCase()
+        : "";
+    const code =
+      typeof input.code === "string" ? input.code.replace(/\s/g, "") : "";
+    if (
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+        operatorId,
+      ) ||
+      !/^\d{6}$/.test(code) ||
+      input.method !== "totp" ||
+      (input.action !== undefined && !validStepUpAction(input.action)) ||
+      (input.audience !== undefined &&
+        (typeof input.audience !== "string" ||
+          !input.audience ||
+          input.audience.length > 128))
+    )
+      throw new BadRequestException("invalid_request");
+    const replayKey = this.config.auth.OPERATOR_TOTP_ENC_KEY;
+    if (!replayKey)
+      throw new ServiceUnavailableException("operator_stepup_unavailable");
+    const reservation =
+      await this.redis.reserveOperatorStepUpAttempt(operatorId);
+    if (!reservation.attemptId)
+      throw new HttpException(
+        {
+          message: `too_many_attempts; retry after ${reservation.retryAfter}s`,
+          retryAfter: reservation.retryAfter,
+        },
+        429,
+      );
+    let ok = false;
+    try {
+      const policy = await this.operatorMfa.resolveLoginMfa(operatorId);
+      if (policy.decision.webauthnRequired)
+        throw new ForbiddenException("webauthn_required");
+      if (!policy.methods.includes("totp"))
+        throw new ForbiddenException("operator_totp_required");
+      if (
+        await this.operatorMfa.verifySecondFactor({
+          operatorId,
+          method: "totp",
+          code,
+        })
+      ) {
+        // Neither audience nor instance participates: the same code cannot mint another RP ticket.
+        const digest = createHmac("sha256", replayKey)
+          .update(`operator-stepup:${operatorId}:${code}`)
+          .digest("hex");
+        ok = await this.redis.consumeOperatorStepUpTotp(digest);
+      }
+    } finally {
+      // A lost/expired reservation must never turn into a newly signed proof.
+      if (
+        !(await this.redis.finishOperatorStepUpAttempt(
+          operatorId,
+          reservation.attemptId,
+          ok,
+        ))
+      )
+        throw new ServiceUnavailableException("operator_stepup_unavailable");
+    }
     if (!ok) {
       await this.recordOperatorAttempt({
-        operatorId: input.operatorId,
+        operatorId,
         identifier: "",
         authMethod: input.method,
         result: "mfa_failed",
@@ -2666,10 +2768,10 @@ export class OidcService {
         userAgent: input.userAgent,
       });
       await this.recordOperatorAudit({
-        operatorId: input.operatorId,
+        operatorId,
         action: "StepUp",
         result: "failure",
-        resourceId: input.operatorId,
+        resourceId: operatorId,
         errorCode: "invalid_mfa_code",
         ip: input.ip,
         userAgent: input.userAgent,
@@ -2678,24 +2780,96 @@ export class OidcService {
       return null;
     }
 
+    const action = input.action;
+    const audience = input.audience ?? OPERATOR_CLIENT_ID;
+    const tokenId = action ? randomUUID() : undefined;
     const stepUpToken = this.keys.sign(
-      { stepup: true, userType: "operator", amr: ["otp"] },
       {
-        audience: input.audience ?? OPERATOR_CLIENT_ID,
-        subject: `opr_${input.operatorId}`,
+        stepup: true,
+        userType: "operator",
+        amr: ["otp"],
+        ...(action ? { stepup_action: action } : {}),
+      },
+      {
+        audience,
+        subject: `opr_${operatorId}`,
         expiresInSec: OPERATOR_STEPUP_TTL_SECONDS,
+        ...(tokenId ? { jwtid: tokenId } : {}),
       },
     );
+    if (action && tokenId)
+      await this.redis.storeOperatorStepUpAction(
+        tokenId,
+        stepUpActionBinding(operatorId, audience, action),
+      );
     await this.recordOperatorAudit({
-      operatorId: input.operatorId,
+      operatorId,
       action: "StepUp",
       result: "success",
-      resourceId: input.operatorId,
+      resourceId: operatorId,
       ip: input.ip,
       userAgent: input.userAgent,
       metadata: { method: input.method },
     });
     return { stepUpToken, expiresIn: OPERATOR_STEPUP_TTL_SECONDS };
+  }
+
+  /**
+   * Verify and consume an action proof against the current authenticated caller.
+   * @param input - Signed proof and context supplied by the trusted operator RP.
+   * @returns One execution permit, or permission to replay only a committed receipt.
+   * @throws {ForbiddenException} When any proof, binding or positive grant is absent.
+   * @throws {ServiceUnavailableException} When the shared store is unavailable.
+   */
+  async consumeOperatorStepUp(input: {
+    operatorId: string;
+    stepUpToken: string;
+    action: OperatorStepUpAction;
+    audience: string;
+  }): Promise<{ mode: "execute" | "replay" }> {
+    if (
+      !input ||
+      typeof input.operatorId !== "string" ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+        input.operatorId,
+      ) ||
+      typeof input.audience !== "string" ||
+      !input.audience ||
+      input.audience.length > 128 ||
+      typeof input.stepUpToken !== "string" ||
+      !input.stepUpToken ||
+      !validStepUpAction(input.action)
+    )
+      throw new ForbiddenException("step_up_required");
+    let claims: Record<string, unknown>;
+    try {
+      claims = this.keys.verify(input.stepUpToken);
+    } catch {
+      throw new ForbiddenException("step_up_required");
+    }
+    const action = claims.stepup_action;
+    if (
+      !validStepUpAction(input.action) ||
+      !validStepUpAction(action) ||
+      claims.stepup !== true ||
+      claims.userType !== "operator" ||
+      claims.sub !== `opr_${input.operatorId}` ||
+      claims.aud !== input.audience ||
+      typeof claims.exp !== "number" ||
+      !Number.isSafeInteger(claims.exp) ||
+      claims.exp <= Math.floor(Date.now() / 1000) ||
+      typeof claims.jti !== "string" ||
+      !/^[a-f0-9-]{36}$/.test(claims.jti) ||
+      action.sessionHash !== input.action.sessionHash ||
+      action.requestHash !== input.action.requestHash
+    )
+      throw new ForbiddenException("step_up_required");
+    const mode = await this.redis.consumeOperatorStepUpAction(
+      claims.jti,
+      stepUpActionBinding(input.operatorId, input.audience, action),
+    );
+    if (!mode) throw new ForbiddenException("step_up_required");
+    return { mode };
   }
 
   // ─── operator audit (best-effort: never break a login) ─────────────────────

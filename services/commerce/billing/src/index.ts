@@ -15,6 +15,16 @@ export type {
 } from "./types/billing.types";
 export { InvoiceReceiptService } from "./service/receipt.service";
 export { TenantClosureReadService } from "./service/tenant-closure.service";
+export { PgWalletLedger } from "./repository/pg-wallet-ledger";
+export { PgRechargeCardFunding } from "./repository/pg-recharge-card-funding";
+export type {
+  WalletContext,
+  WalletCommand,
+  WalletResult,
+  WalletSummary,
+  WalletHistoryRecord,
+  WalletHistoryPage,
+} from "./types/wallet.types";
 export type { TenantClosureSnapshot } from "./types/closure.types";
 export type {
   BillingAddressRecord,

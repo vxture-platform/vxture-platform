@@ -1,4 +1,13 @@
 import type {
+  VoucherBatchConfiguration,
+  VoucherOperatorCommand,
+  VoucherBatchAction,
+  VoucherBatchDetail,
+  VoucherPage,
+  VoucherInstance,
+  VoucherAuditEvent,
+} from "./voucher-management.types";
+import type {
   ObjectState,
   TicketPriority,
   TicketStatus,
@@ -114,6 +123,8 @@ export class AdminBffError extends Error {
      * 决定「要不要提示带理由跳过」，才发现这一层拿不到它。
      */
     readonly code?: string,
+    readonly stepUpAction?: VoucherStepUpIntent,
+    readonly retryAfter?: number,
   ) {
     super(message);
     this.name = "AdminBffError";
@@ -170,16 +181,55 @@ async function responseErrorMessage(response: Response, fallback: string) {
 async function responseError(
   response: Response,
   fallback: string,
-): Promise<{ message: string; code?: string }> {
+): Promise<{
+  message: string;
+  code?: string;
+  stepUpAction?: VoucherStepUpIntent;
+  retryAfter?: number;
+}> {
   try {
     const body = (await response.clone().json()) as {
       message?: string | string[];
       code?: string;
+      stepUpAction?: unknown;
+      retryAfter?: unknown;
     };
     const message = Array.isArray(body.message)
       ? (body.message[0] ?? fallback)
       : (body.message ?? fallback);
-    return body.code ? { message, code: body.code } : { message };
+    const intent = body.stepUpAction;
+    const action =
+      intent &&
+      typeof intent === "object" &&
+      "requestHash" in intent &&
+      typeof intent.requestHash === "string" &&
+      /^[a-f0-9]{64}$/.test(intent.requestHash) &&
+      "action" in intent &&
+      typeof intent.action === "string" &&
+      intent.action.trim().length > 0 &&
+      intent.action.length <= 80 &&
+      "target" in intent &&
+      typeof intent.target === "string" &&
+      intent.target.trim().length > 0 &&
+      intent.target.length <= 128
+        ? {
+            requestHash: intent.requestHash,
+            action: intent.action,
+            target: intent.target,
+          }
+        : undefined;
+    return {
+      message,
+      ...(body.code ? { code: body.code } : {}),
+      ...(action ? { stepUpAction: action } : {}),
+      ...(response.status === 429 &&
+      typeof body.retryAfter === "number" &&
+      Number.isInteger(body.retryAfter) &&
+      body.retryAfter >= 1 &&
+      body.retryAfter <= 900
+        ? { retryAfter: body.retryAfter }
+        : {}),
+    };
   } catch {
     return { message: fallback };
   }
@@ -207,7 +257,24 @@ async function mutateJson<T>(
 
   if (!response.ok) {
     const err = await responseError(response, fallbackMessage);
-    throw new AdminBffError(err.message, response.status, err.code);
+    // Voucher writes must never fall back to an unbound general ceremony.
+    if (
+      response.status === 403 &&
+      err.message === "step_up_required" &&
+      /^\/api\/commercial\/(?:voucher-batches(?:\/[^/]+\/(?:actions|issue))?|vouchers\/(?:assign|[^/]+\/revoke))$/.test(
+        path,
+      ) &&
+      !err.stepUpAction
+    ) {
+      throw new AdminBffError("操作验证信息无效，请刷新后重试。", 502);
+    }
+    throw new AdminBffError(
+      err.message,
+      response.status,
+      err.code,
+      err.stepUpAction,
+      err.retryAfter,
+    );
   }
 
   return (await response.json()) as T;
@@ -1162,44 +1229,39 @@ export async function fetchPromotionOperations(): Promise<
 }
 
 // step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
-// Creates a voucher batch (product_321 §4.2; kinds discount / credit_voucher /
-// invite; gate fields rejected server-side).
+// Creates a reviewed draft for one of the six supported voucher kinds.
+// Eligibility fields and request bindings remain server-owned.
 //
 // `invite` 的 effect 只装 `{ planCode }`：它解锁的是「能买」，不改变「要付钱」。
 // 服务端只接受真存在、且真非公开的套餐（公开套餐本来就能买，发了等于骗人）。
-export async function createVoucherBatch(payload: {
-  kind: "discount" | "credit_voucher" | "invite";
-  name: string;
-  codePrefix?: string;
-  effect: Record<string, unknown>;
-  totalCount: number;
-  perUserLimit?: number;
-  validFrom: string;
-  validUntil: string;
-  tenantId?: string;
-}): Promise<{ batchId: string }> {
-  return mutateJson<{ batchId: string }>(
+export async function createVoucherBatch(
+  payload: VoucherBatchConfiguration & VoucherOperatorCommand,
+): Promise<{ batchId: string }> {
+  return mutateJson(
     "/api/commercial/voucher-batches",
     "POST",
     payload,
-    "Voucher batch creation failed",
+    "批次创建失败",
   );
 }
 
 // step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
 // Assigns vouchers from a batch (codes generated on demand; issued_count
 // seized atomically; per-user limit enforced for user targets).
-export async function assignVouchers(payload: {
-  batchId: string;
-  count?: number;
-  targetUserId?: string;
-  targetWorkspaceId?: string;
-}): Promise<{ codes: string[] }> {
-  return mutateJson<{ codes: string[] }>(
+export async function assignVouchers(
+  payload: VoucherOperatorCommand & {
+    batchId: string;
+    count: number;
+    targetTenantId?: string;
+    targetUserId?: string;
+    targetWorkspaceId?: string;
+  },
+): Promise<{ codes: string[]; voucherIds: string[] }> {
+  return mutateJson(
     "/api/commercial/vouchers/assign",
     "POST",
     payload,
-    "Voucher assignment failed",
+    "券码发放失败",
   );
 }
 
@@ -2601,11 +2663,12 @@ export function isStepUpRequiredError(error: unknown): boolean {
  */
 export async function submitOperatorStepUpTotp(
   code: string,
+  action?: VoucherStepUpIntent,
 ): Promise<{ ok: true; expiresIn: number }> {
   return mutateJson<{ ok: true; expiresIn: number }>(
     "/api/operator/step-up/totp",
     "POST",
-    { code },
+    { code, ...(action ? { action } : {}) },
     "二次验证失败",
   );
 }
@@ -3082,4 +3145,123 @@ export async function uploadCustomerPortalAsset(
 export function customerPortalAssetUrl(scope: string, hash: string): string {
   const path = `/api/tenants/${encodeURIComponent(scope)}/customer-portal`;
   return `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}${path}/assets/${encodeURIComponent(hash)}`;
+}
+
+export interface VoucherStepUpIntent {
+  requestHash: string;
+  action: string;
+  target: string;
+}
+
+export async function fetchPromotionPage(params: {
+  page: number;
+  pageSize: number;
+  status: string;
+  type: string;
+  q: string;
+}): Promise<{
+  items: PromotionOperationRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: {
+    total: number;
+    active: number;
+    redemptions: number;
+    tenants: number;
+    coupons: number;
+  };
+}> {
+  const query = new URLSearchParams(
+    Object.entries(params).map(([key, value]) => [key, String(value)]),
+  );
+  return readJsonStrict(`/api/commercial/promotions/page?${query}`);
+}
+
+export async function manageVoucherBatch(
+  id: string,
+  payload: VoucherBatchAction,
+): Promise<{ batchId: string; operationId: string; status: string }> {
+  return mutateJson(
+    `/api/commercial/voucher-batches/${encodeURIComponent(id)}/actions`,
+    "POST",
+    payload,
+    "批次操作失败",
+  );
+}
+
+export async function revokeVoucher(
+  id: string,
+  payload: VoucherOperatorCommand,
+): Promise<{ voucherId: string; status: string }> {
+  return mutateJson(
+    `/api/commercial/vouchers/${encodeURIComponent(id)}/revoke`,
+    "POST",
+    payload,
+    "撤回失败",
+  );
+}
+
+export async function fetchVoucherBatch(
+  id: string,
+): Promise<VoucherBatchDetail> {
+  return readJsonStrict(
+    `/api/commercial/voucher-batches/${encodeURIComponent(id)}`,
+  );
+}
+
+export async function fetchVoucherInstances(
+  id: string,
+  page = 1,
+): Promise<VoucherPage<VoucherInstance>> {
+  return readJsonStrict(
+    `/api/commercial/voucher-batches/${encodeURIComponent(id)}/vouchers?page=${page}`,
+  );
+}
+
+export async function fetchVoucherEvents(
+  id: string,
+  page = 1,
+): Promise<VoucherPage<VoucherAuditEvent>> {
+  return readJsonStrict(
+    `/api/commercial/voucher-batches/${encodeURIComponent(id)}/events?page=${page}`,
+  );
+}
+
+export function issueVoucherCredentials(
+  batchId: string,
+  command: {
+    count: number;
+    reason: string;
+    idempotencyKey: string;
+    fundingPaymentId?: string;
+  },
+): Promise<{
+  batchId: string;
+  voucherIds: string[];
+  codes: string[];
+  credentials: Array<{ voucherId: string; code: string; secret: string }>;
+  replayed: boolean;
+}> {
+  return mutateJson(
+    `/api/commercial/voucher-batches/${encodeURIComponent(batchId)}/issue`,
+    "POST",
+    command,
+    "领取凭证生成失败",
+  );
+}
+
+export function fetchCardFundingSources(batchId: string): Promise<
+  Array<{
+    id: string;
+    paymentNo: string;
+    paidAmount: string;
+    availableAmount: string;
+  }>
+> {
+  return readJsonStrict(
+    "/api/commercial/voucher-batches/" +
+      encodeURIComponent(batchId) +
+      "/funding-sources",
+  );
 }

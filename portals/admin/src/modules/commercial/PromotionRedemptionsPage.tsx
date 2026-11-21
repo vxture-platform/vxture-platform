@@ -1,7 +1,16 @@
 "use client";
 
+/**
+ * PromotionRedemptionsPage.tsx - Cash and subscription benefit redemption evidence.
+ * @package @vxture/admin
+ * @layer Presentation
+ * @category component
+ * @author AI-Generated
+ * @date 2026-11-19
+ */
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { visibleIdOr } from "@/lib/visible-id";
 import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
@@ -30,15 +39,14 @@ import type {
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { useBillStatusLabels } from "@/modules/shared/enum-labels";
 import type { BillStatus } from "@vxture-platform/shared";
-import {
-  formatDate,
-  formatNumber,
-  typeLabel,
-} from "@/modules/tenants/tenant-utils";
+import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { Tag, type PageSize, formatCurrency } from "./CommercialUtils";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
-type BillStatusFilter = "all" | BillingBillStatus;
+// ===========================================================================
+// Read models keep absent bills distinct from paid bills and cash discounts.
+// ===========================================================================
+type BillStatusFilter = "all" | "none" | BillingBillStatus;
 
 // C15: redemption status machine (applied/redeemed/reversed) removed — no status
 // column on voucher_redemptions (a redemption row IS a completed redemption; the
@@ -54,6 +62,7 @@ function billStatusTone(status: BillingBillStatus) {
 function redemptionSearchText(
   record: PromotionRedemptionRecord,
   billStatusLabels: Record<BillStatus, string>,
+  tShared: ReturnType<typeof useTranslations>,
 ) {
   return [
     record.redemptionNo,
@@ -66,7 +75,10 @@ function redemptionSearchText(
     record.servicePlanName,
     record.operatorName,
     record.remark,
-    billStatusLabels[record.billStatus],
+    record.benefitLabel,
+    record.billStatus
+      ? billStatusLabels[record.billStatus]
+      : tShared("voucherManagement.redemptions.noBill"),
   ]
     .filter(Boolean)
     .join(" ")
@@ -78,35 +90,99 @@ function redemptionSearchText(
 function redemptionCsvColumns(
   locale: string,
   billStatusLabels: Record<BillStatus, string>,
+  tShared: ReturnType<typeof useTranslations>,
 ): CsvColumn<PromotionRedemptionRecord>[] {
   return [
-    { label: "核销编号", value: (record) => record.redemptionNo },
-    { label: "券码", value: (record) => record.promotionCode },
-    { label: "优惠编号", value: (record) => record.promotionCode },
-    { label: "优惠名称", value: (record) => record.promotionName },
     {
-      label: "租户编号",
+      label: tShared("voucherManagement.redemptions.redemptionNo"),
+      value: (record) => record.redemptionNo,
+    },
+    {
+      label: tShared("voucherManagement.redemptions.voucherCode"),
+      value: (record) => record.promotionCode,
+    },
+    {
+      label: tShared("voucherManagement.redemptions.promotionCode"),
+      value: (record) => record.promotionCode,
+    },
+    {
+      label: tShared("voucherManagement.redemptions.promotionName"),
+      value: (record) => record.promotionName,
+    },
+    {
+      label: tShared("voucherManagement.redemptions.benefit"),
+      value: (record) => record.benefitLabel,
+    },
+    {
+      label: tShared("voucherManagement.redemptions.subscription"),
+      value: (record) =>
+        visibleIdOr(
+          record.subscriptionId,
+          tShared("voucherManagement.common.unavailable"),
+        ),
+    },
+    {
+      label: tShared("voucherManagement.redemptions.tenantCode"),
       value: (record) => formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
     },
-    { label: "租户名称", value: (record) => record.tenantName },
-    { label: "租户类型", value: (record) => typeLabel(record.tenantType) },
-    { label: "订单号", value: (record) => record.orderNo ?? "" },
-    { label: "账单号", value: (record) => record.billNo },
     {
-      label: "账单状态",
-      value: (record) => billStatusLabels[record.billStatus],
+      label: tShared("voucherManagement.redemptions.tenantName"),
+      value: (record) => record.tenantName,
     },
-    { label: "套餐", value: (record) => record.servicePlanName ?? "" },
-    { label: "货币", value: (record) => record.currency },
-    { label: "订单金额", value: (record) => record.orderAmount },
-    { label: "优惠金额", value: (record) => record.discountAmount },
-    { label: "应付金额", value: (record) => record.payableAmount },
-    { label: "操作人", value: (record) => record.operatorName },
     {
-      label: "核销时间",
+      label: tShared("voucherManagement.redemptions.tenantType"),
+      value: (record) =>
+        record.tenantType === "company"
+          ? tShared("voucherManagement.redemptions.company")
+          : tShared("voucherManagement.redemptions.individual"),
+    },
+    {
+      label: tShared("voucherManagement.redemptions.orderNo"),
+      value: (record) => record.orderNo ?? "",
+    },
+    {
+      label: tShared("voucherManagement.redemptions.billNo"),
+      value: (record) => record.billNo,
+    },
+    {
+      label: tShared("voucherManagement.redemptions.billStatus"),
+      value: (record) =>
+        record.billStatus
+          ? billStatusLabels[record.billStatus]
+          : tShared("voucherManagement.redemptions.noBill"),
+    },
+    {
+      label: tShared("voucherManagement.redemptions.plan"),
+      value: (record) => record.servicePlanName ?? "",
+    },
+    {
+      label: tShared("voucherManagement.redemptions.currency"),
+      value: (record) => (record.billId ? record.currency : ""),
+    },
+    {
+      label: tShared("voucherManagement.redemptions.orderAmount"),
+      value: (record) => (record.billId ? record.orderAmount : ""),
+    },
+    {
+      label: tShared("voucherManagement.redemptions.discountAmount"),
+      value: (record) => (record.billId ? record.discountAmount : ""),
+    },
+    {
+      label: tShared("voucherManagement.redemptions.payableAmount"),
+      value: (record) => (record.billId ? record.payableAmount : ""),
+    },
+    {
+      label: tShared("voucherManagement.redemptions.operator"),
+      value: (record) => record.operatorName,
+    },
+    {
+      label: tShared("voucherManagement.redemptions.redeemedAt"),
       value: (record) => formatDate(record.redeemedAt, locale),
     },
-    { label: "备注", value: (record) => record.remark ?? "" },
+    {
+      label: tShared("voucherManagement.redemptions.remark"),
+      value: (record) => record.remark ?? "",
+    },
   ];
 }
 
@@ -124,15 +200,33 @@ function RedemptionActionsMenu({
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
-        label={`${record.redemptionNo} 核销操作`}
+        label={tShared("voucherManagement.redemptions.actions", {
+          number: record.redemptionNo,
+        })}
         items={[
           {
             id: "bill",
-            label: "账单详情",
+            label: tShared("voucherManagement.redemptions.billDetail"),
             icon: "arrow-right",
+            disabled: !record.billNo,
             onSelect: () =>
               router.push(`/billing/${encodeURIComponent(record.billNo)}`),
           },
+          ...(record.subscriptionId
+            ? [
+                {
+                  id: "subscription",
+                  label: tShared(
+                    "voucherManagement.redemptions.subscriptionDetail",
+                  ),
+                  icon: "arrow-right" as const,
+                  onSelect: () =>
+                    router.push(
+                      `/subscriptions/${encodeURIComponent(record.subscriptionId!)}`,
+                    ),
+                },
+              ]
+            : []),
           {
             id: "tenant",
             label: tShared("actions.viewTenant"),
@@ -142,13 +236,13 @@ function RedemptionActionsMenu({
           },
           {
             id: "orders",
-            label: "订单列表",
+            label: tShared("voucherManagement.redemptions.orders"),
             icon: "table",
             onSelect: () => router.push("/orders"),
           },
           {
             id: "promotions",
-            label: "优惠活动",
+            label: tShared("voucherManagement.redemptions.promotions"),
             icon: "sparkles",
             onSelect: () => router.push("/promotions"),
           },
@@ -160,6 +254,7 @@ function RedemptionActionsMenu({
 
 /** 这一页的标已经是 DS `Tag`，不带业务色类，与批 4 无关。 */
 function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
+  const tShared = useTranslations();
   const billStatusLabels = useBillStatusLabels();
   const locale = useLocale();
   const router = useRouter();
@@ -167,77 +262,106 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
   return [
     {
       id: "redemption",
-      header: "核销记录",
+      header: tShared("voucherManagement.redemptions.records"),
       cell: (record) => (
         <TableTitleCell
           icon="check"
           title={record.redemptionNo}
           description={`${record.promotionCode} · ${record.promotionName}`}
           onTitleClick={() =>
-            router.push(`/billing/${encodeURIComponent(record.billNo)}`)
+            record.subscriptionId
+              ? router.push(
+                  `/subscriptions/${encodeURIComponent(record.subscriptionId)}`,
+                )
+              : record.billNo
+                ? router.push(`/billing/${encodeURIComponent(record.billNo)}`)
+                : undefined
           }
         />
       ),
     },
     {
       id: "tenant",
-      header: "租户",
+      header: tShared("voucherManagement.redemptions.tenant"),
       cell: (record) => (
         <TableTitleCell
           icon={
             record.tenantType === "company" ? "buildings" : "building-office"
           }
           title={record.tenantName}
-          description={`${formatPrincipalNoOr(record.tenantCode, "tenant", "—")} · ${typeLabel(record.tenantType)}`}
+          description={`${formatPrincipalNoOr(record.tenantCode, "tenant", "—")} · ${record.tenantType === "company" ? tShared("voucherManagement.redemptions.company") : tShared("voucherManagement.redemptions.individual")}`}
         />
       ),
     },
     {
       id: "bill",
-      header: "账单",
+      header: tShared("voucherManagement.redemptions.bill"),
       cell: (record) => (
         <span className="inline-flex flex-col items-center gap-2xs">
-          {
+          {record.billStatus ? (
             <Tag tone={billStatusTone(record.billStatus)}>
               {billStatusLabels[record.billStatus]}
             </Tag>
-          }
-          <span className="text-body-small text-muted-foreground">{`${record.billNo} · ${record.orderNo ?? "未关联订单"}`}</span>
+          ) : (
+            <Tag tone="muted">
+              {tShared("voucherManagement.redemptions.noBill")}
+            </Tag>
+          )}
+          <span className="text-body-sm text-muted-foreground">
+            {[record.billNo, record.orderNo].filter(Boolean).join(" · ") ||
+              (record.kind === "recharge_card"
+                ? tShared("voucherManagement.redemptions.recharge")
+                : tShared("voucherManagement.redemptions.subscriptionBenefit"))}
+          </span>
         </span>
       ),
     },
     {
       id: "discount",
-      header: "优惠金额",
+      header: tShared("voucherManagement.redemptions.benefitAmount"),
       align: "numeric",
       cell: (record) => (
         <span className="inline-flex flex-col items-end gap-2xs">
-          {formatCurrency(record.discountAmount, record.currency)}
-          <span className="text-body-small text-muted-foreground">{`应付 ${formatCurrency(record.payableAmount, record.currency)} / 原价 ${formatCurrency(record.orderAmount, record.currency)}`}</span>
+          {record.billId
+            ? formatCurrency(record.discountAmount, record.currency)
+            : record.benefitLabel}
+          <span className="text-body-sm text-muted-foreground">
+            {record.billId
+              ? tShared("voucherManagement.redemptions.amounts", {
+                  payable: formatCurrency(
+                    record.payableAmount,
+                    record.currency,
+                  ),
+                  original: formatCurrency(record.orderAmount, record.currency),
+                })
+              : tShared("voucherManagement.redemptions.noAmount")}
+          </span>
         </span>
       ),
     },
     {
       id: "operator",
-      header: "核销方",
+      header: tShared("voucherManagement.redemptions.redeemer"),
       align: "center",
       cell: (record) => (
         <TableTitleCell
           layout="stacked"
           title={record.operatorName}
-          description="已核销"
+          description={tShared("voucherManagement.redemptions.redeemed")}
         />
       ),
     },
     {
       id: "time",
-      header: "时间",
+      header: tShared("voucherManagement.redemptions.time"),
       align: "center",
       cell: (record) => (
         <TableTitleCell
           layout="stacked"
           title={formatDate(record.redeemedAt, locale)}
-          description={record.remark ?? "系统记录"}
+          description={
+            record.remark ?? tShared("voucherManagement.redemptions.system")
+          }
         />
       ),
     },
@@ -278,7 +402,9 @@ export function PromotionRedemptionsPage() {
           setRecords([]);
           setRecordsTruncated(false);
           setLoadError(
-            error instanceof Error ? error.message : "核销数据读取失败",
+            error instanceof Error
+              ? error.message
+              : tShared("voucherManagement.redemptions.loadFailed"),
           );
         }
       })
@@ -288,25 +414,29 @@ export function PromotionRedemptionsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [tShared]);
 
   const redemptionColumns = useRedemptionColumns();
 
   const filteredRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return records.filter((record) => {
-      if (billStatusFilter !== "all" && record.billStatus !== billStatusFilter)
+      if (
+        billStatusFilter === "none"
+          ? Boolean(record.billId)
+          : billStatusFilter !== "all" && record.billStatus !== billStatusFilter
+      )
         return false;
       if (
         normalizedQuery &&
-        !redemptionSearchText(record, billStatusLabels).includes(
+        !redemptionSearchText(record, billStatusLabels, tShared).includes(
           normalizedQuery,
         )
       )
         return false;
       return true;
     });
-  }, [billStatusFilter, query, records]);
+  }, [billStatusFilter, query, records, billStatusLabels, tShared]);
 
   const pageCount = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   const activePage = Math.min(currentPage, pageCount);
@@ -339,7 +469,7 @@ export function PromotionRedemptionsPage() {
   function handleExportSelected() {
     exportRowsToCsv(
       "promotion-redemptions-export",
-      redemptionCsvColumns(locale, billStatusLabels),
+      redemptionCsvColumns(locale, billStatusLabels, tShared),
       selectedRecords,
     );
   }
@@ -347,7 +477,7 @@ export function PromotionRedemptionsPage() {
   function handleExportAll() {
     exportRowsToCsv(
       "promotion-redemptions-export",
-      redemptionCsvColumns(locale, billStatusLabels),
+      redemptionCsvColumns(locale, billStatusLabels, tShared),
       filteredRecords,
     );
   }
@@ -363,9 +493,9 @@ export function PromotionRedemptionsPage() {
         header={
           <PageHeader
             icon="check"
-            eyebrow="订阅交易"
-            title="优惠核销"
-            description="运营侧查看券核销台账（核销均为客户自助）。减免金额来自账单 discount_amount。"
+            eyebrow={tShared("voucherManagement.redemptions.eyebrow")}
+            title={tShared("voucherManagement.redemptions.title")}
+            description={tShared("voucherManagement.redemptions.description")}
           />
         }
         summary={
@@ -373,41 +503,45 @@ export function PromotionRedemptionsPage() {
             {" "}
             <MetricGrid
               loading={loading}
-              aria-label="优惠核销统计"
+              aria-label={tShared("voucherManagement.redemptions.statistics")}
               items={[
                 {
                   id: "records",
-                  help: "当前筛选条件下的优惠核销记录条数。",
+                  help: tShared("voucherManagement.redemptions.recordsHelp"),
                   icon: "check",
-                  label: "核销记录",
+                  label: tShared("voucherManagement.redemptions.records"),
                   value: formatNumber(records.length),
-                  tags: [`筛选 ${formatNumber(filteredRecords.length)}`],
+                  tags: [
+                    tShared("voucherManagement.redemptions.filtered", {
+                      count: formatNumber(filteredRecords.length),
+                    }),
+                  ],
                 },
                 {
                   id: "discount",
-                  help: "这些核销记录带来的减免金额合计。",
+                  help: tShared("voucherManagement.redemptions.discountHelp"),
                   icon: "chart-bar",
-                  label: "减免金额",
+                  label: tShared("voucherManagement.redemptions.discount"),
                   value: formatCurrency(discountAmount, "CNY"),
-                  tags: ["账单减免"],
+                  tags: [tShared("voucherManagement.redemptions.billDiscount")],
                   tone: "success",
                 },
                 {
                   id: "tenant-reach",
-                  help: "核销记录去重后涉及的租户数。",
+                  help: tShared("voucherManagement.redemptions.tenantsHelp"),
                   icon: "buildings",
-                  label: "覆盖租户",
+                  label: tShared("voucherManagement.redemptions.tenants"),
                   value: formatNumber(tenantReach),
-                  tags: ["去重"],
+                  tags: [tShared("voucherManagement.redemptions.distinct")],
                   tone: "success",
                 },
                 {
                   id: "paid-bills",
-                  help: "关联账单已结清的核销记录数。",
+                  help: tShared("voucherManagement.redemptions.paidHelp"),
                   icon: "sparkles",
-                  label: "账单已结清",
+                  label: tShared("voucherManagement.redemptions.settled"),
                   value: formatNumber(paidBillCount),
-                  tags: ["billStatus=paid"],
+                  tags: [tShared("voucherManagement.redemptions.settledTag")],
                   tone: "success",
                 },
               ]}
@@ -415,8 +549,10 @@ export function PromotionRedemptionsPage() {
             {recordsTruncated ? (
               <Banner
                 tone="warning"
-                title="当前核销列表可能未展示全部数据"
-                description="本次加载已达到单次读取上限（500 条），如未看到目标记录，请尝试缩小筛选范围（如按账单状态等）重新查询。"
+                title={tShared("voucherManagement.redemptions.truncated")}
+                description={tShared(
+                  "voucherManagement.redemptions.truncatedHint",
+                )}
               />
             ) : null}
           </>
@@ -427,14 +563,16 @@ export function PromotionRedemptionsPage() {
             onViewChange={() => {}}
             cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
-            aria-label="优惠核销筛选"
+            aria-label={tShared("voucherManagement.redemptions.filters")}
             search={
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索核销、租户、账单、套餐"
+                placeholder={tShared(
+                  "voucherManagement.redemptions.searchPlaceholder",
+                )}
                 className="min-w-media-2xl grow basis-0 max-w-panel-sm"
-                aria-label="搜索核销"
+                aria-label={tShared("voucherManagement.redemptions.search")}
               />
             }
             onReset={handleReset}
@@ -446,7 +584,7 @@ export function PromotionRedemptionsPage() {
                   onClick={handleExportAll}
                   disabled={filteredRecords.length === 0}
                 >
-                  导出全部
+                  {tShared("voucherManagement.redemptions.exportAll")}
                 </ActionButton>
               </>
             }
@@ -458,9 +596,14 @@ export function PromotionRedemptionsPage() {
                 onChange={(event) =>
                   setBillStatusFilter(event.target.value as BillStatusFilter)
                 }
-                aria-label="账单状态"
+                aria-label={tShared("voucherManagement.redemptions.billStatus")}
               >
-                <option value="all">全部账单</option>
+                <option value="all">
+                  {tShared("voucherManagement.redemptions.allBills")}
+                </option>
+                <option value="none">
+                  {tShared("voucherManagement.redemptions.noBill")}
+                </option>
                 <option value="unpaid">
                   {tShared("status.generic.awaitingPayment")}
                 </option>
@@ -502,7 +645,7 @@ export function PromotionRedemptionsPage() {
         table={
           <section
             className="grid min-w-0 max-w-full gap-xs"
-            aria-label="优惠核销清单"
+            aria-label={tShared("voucherManagement.redemptions.list")}
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             <DataTable
@@ -517,9 +660,14 @@ export function PromotionRedemptionsPage() {
               rowActions={(record) => <RedemptionActionsMenu record={record} />}
               empty={
                 <EmptyState
-                  title={loadError ? "核销数据读取失败" : "没有匹配的核销记录"}
+                  title={
+                    loadError
+                      ? tShared("voucherManagement.redemptions.loadFailed")
+                      : tShared("voucherManagement.redemptions.empty")
+                  }
                   description={
-                    loadError ?? "清空筛选条件后可查看全部核销记录。"
+                    loadError ??
+                    tShared("voucherManagement.redemptions.emptyHint")
                   }
                   action={
                     <ActionButton

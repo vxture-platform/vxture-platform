@@ -27,12 +27,16 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+import { withOrderCreationOperation } from "../lib/order-creation-operation";
 import { FavoritesService } from "@vxture/service-account";
 import { MailService } from "@vxture/core-mail";
 import { BillingService } from "@vxture/service-billing";
 import {
   PromotionService,
+  invitationMatchSql as inviteMatchSql, // ⚠️ 跨层引用: Share the domain invitation predicate.
+  hasInvitation,
+  redeemInvitationTx,
   computeSettlement,
   centsToYuan,
   yuanToCents,
@@ -201,45 +205,6 @@ interface SubscribePlanOption {
   inviteOnly: boolean;
 }
 
-/**
- * 「此人此刻持有一张指向该套餐的有效邀请」——邀请订阅的**唯一**判据。
- *
- * 看得见（subscribe-context 的套餐阶梯）与买得到（createOrder 的闸门）必须共用它。
- * 两边各写一份，迟早分叉成「看得见却买不到」或「买得到却没人看得见」——后者正是
- * 2026-09-22 上线时的样子：闸门认邀请，阶梯只认 is_public，券发下去客户点不到。
- *
- * 判据本身：批次是 invite 且在效期内、券已定向发放未核销、未超次数、未过期、
- * 定向到本人或本人租户的工作区、effect 指的就是这个套餐。
- *
- * 表别名与「这个套餐」两半由调用点给：消耗那条按参数比（$3/$4），阶梯那条按
- * 当前行比（pv.id / pl.plan_code）。其余每一个条件都只有这一份。
- */
-function inviteMatchSql(o: {
-  v: string;
-  b: string;
-  user: string;
-  tenant: string;
-  planVersion: string;
-  planCode: string;
-}): string {
-  return `${o.b}.kind = 'invite' and ${o.b}.status = 'active'
-      and ${o.v}.status = 'assigned'
-      and ${o.v}.used_count < ${o.v}.max_uses
-      and (${o.v}.expires_at is null or ${o.v}.expires_at > now())
-      and ${o.b}.valid_from <= now() and ${o.b}.valid_until > now()
-      and (
-            ${o.v}.assigned_user_id = ${o.user}
-         or ${o.v}.assigned_workspace_id in (
-              select w.id from tenancy.workspaces w
-               where w.tenant_id = ${o.tenant} and w.deleted_at is null
-            )
-          )
-      and (
-            ${o.b}.effect ->> 'planVersionId' = ${o.planVersion}
-         or ${o.b}.effect ->> 'planCode' = ${o.planCode}
-          )`;
-}
-
 interface SubscribeCurrent {
   subscriptionId: string;
   status: string;
@@ -342,6 +307,8 @@ export interface SubscribeContext {
 // ── order endpoints (product_320 §4.4) ──────────────────────────────────────
 
 interface CreateOrderBody {
+  /** Stable across retries of one confirmed purchase. */
+  idempotencyKey?: string;
   productCode: string;
   planVersionId: string;
   cycleUnit: string;
@@ -401,6 +368,7 @@ export interface UpgradeQuoteResult {
 }
 
 interface MyOrderRecord {
+  noncashReversed?: boolean;
   orderId: string;
   orderNo: string;
   billNo: string | null;
@@ -1100,7 +1068,12 @@ export class SubscriptionRouter {
     const [current, pendingOrder, plans] = await Promise.all([
       this.queryCurrentForProduct(req.tenant.id, product.code, workspaceId),
       this.queryPendingOrder(req.tenant.id, product.code, workspaceId),
-      this.queryPlanLadder(product.code, req.user.id, req.tenant.id),
+      this.queryPlanLadder(
+        product.code,
+        req.user.id,
+        req.tenant.id,
+        workspaceId,
+      ),
     ]);
     /*
      * 他在用的那一档，在阶梯里还找得到吗（按 plan_code 比，不按版本）。
@@ -1240,8 +1213,9 @@ export class SubscriptionRouter {
     tenantId: string,
     productCode: string,
     workspaceId?: string,
+    client?: PoolClient,
   ): Promise<SubscribeCurrent | null> {
-    const res = await this.pool.query<{
+    const res = await (client ?? this.pool).query<{
       id: string;
       status: string;
       plan_version_id: string;
@@ -1308,7 +1282,7 @@ export class SubscriptionRouter {
    * 上线时只做了闸门认邀请、阶梯没认，整条链在客户那一侧是断的。判据与闸门共用
    * `inviteMatchSql`，不另写一份。
    *
-   * 这里**不消耗**邀请，只是看：消耗在下单那一刻（`consumeInviteForPlan`）。
+   * 这里**不消耗**邀请，只是看：消耗在下单那一刻（`redeemInvitationTx`）。
    * 刷一次订阅页就烧掉一张券，是这条链上最容易犯的错。
    *
    * TODO(shared-ladder): 本查询与 website-bff product-plans.router 是同一口径
@@ -1325,6 +1299,7 @@ export class SubscriptionRouter {
     productCode: string,
     userId: string,
     tenantId: string,
+    workspaceId: string,
   ): Promise<SubscribePlanOption[]> {
     const res = await this.pool.query<{
       plan_id: string;
@@ -1366,6 +1341,7 @@ export class SubscriptionRouter {
                      b: "ib",
                      user: "$2",
                      tenant: "$3",
+                     workspace: "$4",
                      planVersion: "pv.id::text",
                      planCode: "pl.plan_code",
                    })}
@@ -1375,7 +1351,7 @@ export class SubscriptionRouter {
         where prod.product_code = $1 and pc.tier is not null
         group by pl.id, pl.plan_code, pl.plan_name, pl.is_public,
                  pv.id, pc.tier, pc.features`,
-      [productCode, userId, tenantId],
+      [productCode, userId, tenantId, workspaceId],
     );
     const rank = (t: string) => {
       const i = (TIERS as readonly string[]).indexOf(t);
@@ -1723,46 +1699,80 @@ export class SubscriptionRouter {
     if (intent === "upgrade" && !upgradeOf)
       throw new BadRequestException("upgrade 需要 upgradeOfSubscriptionId");
 
-    // 价格 + 套餐名：无价格行 = 企业版/不可自助购买 → 拒单（0 元有价格行，正常建单）
-    const plan = await this.lookupPlanPrice(planVersionId, cycleUnit);
-    if (!plan)
-      throw new BadRequestException({
-        code: "NOT_PURCHASABLE",
-        message: "该套餐/周期不可自助购买（如企业版请联系销售）",
-      });
+    const tenant = req.tenant;
+    const user = req.user;
+    const workspaceId = await this.resolveRequestWorkspace(tenant);
+    if (
+      body.idempotencyKey !== undefined &&
+      typeof body.idempotencyKey !== "string"
+    ) {
+      throw new BadRequestException("idempotencyKey 非法");
+    }
+    return withOrderCreationOperation(
+      this.pool,
+      {
+        userId: user.id,
+        tenantId: tenant.id,
+        workspaceId,
+        key: body.idempotencyKey,
+        request: {
+          productCode,
+          planVersionId,
+          cycleUnit,
+          intent,
+          upgradeOfSubscriptionId: upgradeOf ?? null,
+          autoRenew: body.autoRenew === true,
+          acceptVersionChangeFrom:
+            typeof body.acceptVersionChangeFrom === "string"
+              ? body.acceptVersionChangeFrom.trim() || null
+              : null,
+        },
+      },
+      async (client) => {
+        // 价格 + 套餐名：无价格行 = 企业版/不可自助购买 → 拒单（0 元有价格行，正常建单）
+        const plan = await this.lookupPlanPrice(
+          planVersionId,
+          cycleUnit,
+          client,
+        );
+        if (!plan)
+          throw new BadRequestException({
+            code: "NOT_PURCHASABLE",
+            message: "该套餐/周期不可自助购买（如企业版请联系销售）",
+          });
 
-    /*
-     * 成熟度兜底（2026-09-17）。「开发中不可订」此前**只长在官网卡片上**：
-     * `ProductCatalogCard` 判 developing 就隐掉订阅按钮，而服务端从头到尾没有一处读
-     * `release_stage`——权威源里那个 `isReleaseStageSubscribable` 写了，却没有调用者。
-     *
-     * 必须卡在这里而不是只卡列表查询：`lookupPlanPrice` 只按 plan_version_id 查价，
-     * 根本不碰产品行，所以「列表里滤掉了」不等于「下单拦得住」。
-     */
-    /*
-     * 一次查库答两件事：这个套餐到底卖的是哪个产品，那个产品能不能订。
-     *
-     * **归属校验**：`productCode` 与 `planVersionId` 是请求体里**各自独立**送来的两个
-     * 字段，此前全程没有一处校验它们属于同一个产品：`lookupPlanPrice` 只按
-     * plan 查价、不碰产品行，`assertNoPendingOrderForProduct` 只按产品查在途单。
-     * 不合一的后果不只是绕过下面的成熟度门——订单落库时产品与套餐就是对不上的。
-     *
-     * **成熟度兜底**：「开发中不可订」此前只长在官网卡片上（`ProductCatalogCard`
-     * 判 developing 就隐掉按钮），而服务端从头到尾没有一处读 `release_stage`——权威源里
-     * 那个 `isReleaseStageSubscribable` 写了，却没有调用者。
-     *
-     * 卡在这里而不是只卡列表查询：列表能滤掉不等于下单拦得住。
-     */
-    const soldRow = await this.pool.query<{
-      product_code: string;
-      product_status: string;
-      release_stage: string;
-      maintenance_window_id: string | null;
-      maintenance_until: Date | string | null;
-      plan_is_public: boolean;
-      plan_code: string;
-    }>(
-      `select prod.product_code, prod.status as product_status,
+        /*
+         * 成熟度兜底（2026-09-17）。「开发中不可订」此前**只长在官网卡片上**：
+         * `ProductCatalogCard` 判 developing 就隐掉订阅按钮，而服务端从头到尾没有一处读
+         * `release_stage`——权威源里那个 `isReleaseStageSubscribable` 写了，却没有调用者。
+         *
+         * 必须卡在这里而不是只卡列表查询：`lookupPlanPrice` 只按 plan_version_id 查价，
+         * 根本不碰产品行，所以「列表里滤掉了」不等于「下单拦得住」。
+         */
+        /*
+         * 一次查库答两件事：这个套餐到底卖的是哪个产品，那个产品能不能订。
+         *
+         * **归属校验**：`productCode` 与 `planVersionId` 是请求体里**各自独立**送来的两个
+         * 字段，此前全程没有一处校验它们属于同一个产品：`lookupPlanPrice` 只按
+         * plan 查价、不碰产品行，`assertNoPendingOrderForProduct` 只按产品查在途单。
+         * 不合一的后果不只是绕过下面的成熟度门——订单落库时产品与套餐就是对不上的。
+         *
+         * **成熟度兜底**：「开发中不可订」此前只长在官网卡片上（`ProductCatalogCard`
+         * 判 developing 就隐掉按钮），而服务端从头到尾没有一处读 `release_stage`——权威源里
+         * 那个 `isReleaseStageSubscribable` 写了，却没有调用者。
+         *
+         * 卡在这里而不是只卡列表查询：列表能滤掉不等于下单拦得住。
+         */
+        const soldRow = await client.query<{
+          product_code: string;
+          product_status: string;
+          release_stage: string;
+          maintenance_window_id: string | null;
+          maintenance_until: Date | string | null;
+          plan_is_public: boolean;
+          plan_code: string;
+        }>(
+          `select prod.product_code, prod.status as product_status,
               prod.release_stage,
               prod.maintenance_window_id, prod.maintenance_until,
               pl.is_public as plan_is_public, pl.plan_code
@@ -1774,210 +1784,244 @@ export class SubscriptionRouter {
           and pc.component_role = 'primary'
           and prod.deleted_at is null
         limit 1`,
-      [planVersionId],
-    );
-    const sold = soldRow.rows[0];
-    if (!sold || sold.product_code !== productCode) {
-      throw new BadRequestException({
-        code: "PLAN_PRODUCT_MISMATCH",
-        message: "套餐与产品不匹配，请重新选择。",
-      });
-    }
-    /*
-     * 生命周期轴：没上线的产品不能下单（2026-09-24）。
-     *
-     * 这一条**此前不存在**——上面那句只查 `release_stage`，整个下单路径从头到尾没读
-     * 过 `prod.status`。两个目录（console 的 subscribe-context、官网的定价端点）都按
-     * `status = 'active'` 过滤，所以界面上到不了这里；但**判据不在界面上**：只要拿到
-     * 一个 planVersionId，一个「信息填好了、东西还没建」的产品照样能被下单成功。
-     *
-     * 2026-09-24 有 13 个只填了信息的产品要转 `developing`，这个洞当场变成实际风险
-     * （它们中若有仍挂着公开套餐的，下单会成功）。不靠「承诺等级反正也是 preview」
-     * 兜——那是两根轴碰巧一致，而下一行那条判据只看得见其中一根。
-     */
-    if (sold.product_status !== "active") {
-      throw new ConflictException({
-        code: "PRODUCT_NOT_LIVE",
-        message: "该产品尚未上线，还不能订阅。",
-      });
-    }
-    if (!isReleaseStageSubscribable(sold.release_stage)) {
-      /*
-       * 同一个码，两句话（2026-09-27）：不可订的承诺等级有两档，preview 是「还没到」，
-       * sunset 是「已经过了」。此前一律说「尚在预览阶段」——对停售产品的客户这句是错的，
-       * 他会拿着「预览」去问运营，而运营在承诺链的另一头找。码不拆：console 直接展示
-       * message、没有按码翻译的表，拆码只是多一处要对齐的地方。
-       */
-      const sunset = sold.release_stage === "sunset";
-      throw new ConflictException({
-        code: "PRODUCT_NOT_RELEASED",
-        /* 「开发中」自 2026-09-24 起是生命周期轴上的一个状态（见上一条），这里说的是
-           承诺等级最低那一档——2026-10-29 已对外改称「预览版」。两句话必须分得开，
-           否则客户拿着错的词去问运营，而运营在两个不同的轴上找。 */
-        message: sunset
-          ? "该产品已停售，不再接受新订阅。"
-          : "该产品尚在预览阶段，还未开放订阅。",
-      });
-    }
-
-    /*
-     * 产品级维护窗口（owner 2026-09-27）：升级 / 迁移期间产品「当前不可用」，未订阅的
-     * 暂时不能订阅。这是**非正常**的一道，放在生命周期与承诺等级之后——正常流程的判定
-     * 一条不动，维护只是额外加的一道；又放在套餐可见性之前：维护是产品级、可见性是
-     * 套餐级，先答产品再答套餐，而且拦在这里就不会为一张注定拒掉的单烧掉一张邀请券。
-     *
-     * 判据只看 `product.products` 的两列（不读 admin schema）：window id 非空 = 维护中，
-     * `maintenance_until` = 预计恢复。时间走共用件（平台时区，与 console 其他时间同形）。
-     * console 直接展示 message、没有按码翻译的表，所以时间要在这句话里。
-     */
-    if (sold.maintenance_window_id) {
-      const until = formatDateTime(sold.maintenance_until, "zh-CN", "");
-      throw new ConflictException({
-        code: "PRODUCT_UNDER_MAINTENANCE",
-        message: until
-          ? `该产品升级维护中，预计 ${until} 恢复，暂不可订阅。`
-          : "该产品升级维护中，暂不可订阅。",
-      });
-    }
-
-    /*
-     * 非公开套餐不可自助购买（2026-09-22）。
-     *
-     * `plans.is_public` 此前**只是个列表过滤**：console-bff 在 `subscribe-context`
-     * 与 `recommended-products` 两处滤掉它，而本端点从头到尾没读过这一列。后果是
-     * 「非公开」只做到了看不见——**知道 planVersionId 的人照样下得了单**。
-     *
-     * 这正是上面那段成熟度注释写过的同一条教训（「列表能滤掉不等于下单拦得住」），
-     * 当时补了 `release_stage` 却没有回头看同在一条路径上的 `is_public`。
-     *
-     * 放在成熟度之后：两者都是「这东西现在不该卖」，但成熟度是产品级、可见性是
-     * 套餐级，先答产品再答套餐，报错也按这个次第给。
-     *
-     * **凭邀请解锁**（2026-09-22）：非公开套餐本身不开放自助购买，但持有一张有效
-     * 邀请（`promotion.vouchers` 的 `kind='invite'`）的人可以买。邀请**只解锁
-     * 「能买」，不改变「要付钱」**——客户照常下单、照常付款，与运营直接发订阅
-     * （`operator_grant`，无订单无钱）和兑换码（`redemption`，输码抵扣）是三件事。
-     */
-    // Validate an explicit workspace before any invitation can be consumed.
-    const scopedWorkspaceId = req.tenant.workspace
-      ? await this.resolveRequestWorkspace(req.tenant)
-      : undefined;
-    if (!sold.plan_is_public) {
-      /*
-       * 续订例外：邀请挡的是**进门**，不是挡已经在里面的人续费。
-       *
-       * 少了这一条，把一个在售档改成邀请制就会连带掐断老客户的续订——界面上
-       * 只是 409，而客户什么都没做错；更糟的是 `consumeInviteForPlan` 每次都要
-       * 烧掉一张券，等于「每个周期续一次要重发一张邀请」。都不是这条机制的本意。
-       *
-       * 范围按**套餐**（跨版本）而不是按版本：续订延长的就是手上这一档。换档是
-       * `upgrade`，那是新进一档，照样要邀请。
-       */
-      const renewingOwnPlan =
-        intent === "renew" &&
-        (await this.holdsSubscriptionOnPlan(
-          req.tenant.id,
-          planVersionId,
-          scopedWorkspaceId,
-        ));
-      if (!renewingOwnPlan) {
-        const invite = await this.consumeInviteForPlan({
-          userId: req.user.id,
-          tenantId: req.tenant.id,
-          planVersionId,
-          planCode: sold.plan_code,
-        });
-        if (!invite) {
-          throw new ConflictException({
-            code: "PLAN_NOT_PUBLIC",
-            message: "该套餐未对外开放自助购买，请联系销售。",
+          [planVersionId],
+        );
+        const sold = soldRow.rows[0];
+        if (!sold || sold.product_code !== productCode) {
+          throw new BadRequestException({
+            code: "PLAN_PRODUCT_MISMATCH",
+            message: "套餐与产品不匹配，请重新选择。",
           });
         }
-      }
-    }
+        /*
+         * 生命周期轴：没上线的产品不能下单（2026-09-24）。
+         *
+         * 这一条**此前不存在**——上面那句只查 `release_stage`，整个下单路径从头到尾没读
+         * 过 `prod.status`。两个目录（console 的 subscribe-context、官网的定价端点）都按
+         * `status = 'active'` 过滤，所以界面上到不了这里；但**判据不在界面上**：只要拿到
+         * 一个 planVersionId，一个「信息填好了、东西还没建」的产品照样能被下单成功。
+         *
+         * 2026-09-24 有 13 个只填了信息的产品要转 `developing`，这个洞当场变成实际风险
+         * （它们中若有仍挂着公开套餐的，下单会成功）。不靠「承诺等级反正也是 preview」
+         * 兜——那是两根轴碰巧一致，而下一行那条判据只看得见其中一根。
+         */
+        if (sold.product_status !== "active") {
+          throw new ConflictException({
+            code: "PRODUCT_NOT_LIVE",
+            message: "该产品尚未上线，还不能订阅。",
+          });
+        }
+        if (!isReleaseStageSubscribable(sold.release_stage)) {
+          /*
+           * 同一个码，两句话（2026-09-27）：不可订的承诺等级有两档，preview 是「还没到」，
+           * sunset 是「已经过了」。此前一律说「尚在预览阶段」——对停售产品的客户这句是错的，
+           * 他会拿着「预览」去问运营，而运营在承诺链的另一头找。码不拆：console 直接展示
+           * message、没有按码翻译的表，拆码只是多一处要对齐的地方。
+           */
+          const sunset = sold.release_stage === "sunset";
+          throw new ConflictException({
+            code: "PRODUCT_NOT_RELEASED",
+            /* 「开发中」自 2026-09-24 起是生命周期轴上的一个状态（见上一条），这里说的是
+           承诺等级最低那一档——2026-10-29 已对外改称「预览版」。两句话必须分得开，
+           否则客户拿着错的词去问运营，而运营在两个不同的轴上找。 */
+            message: sunset
+              ? "该产品已停售，不再接受新订阅。"
+              : "该产品尚在预览阶段，还未开放订阅。",
+          });
+        }
 
-    const workspaceId =
-      scopedWorkspaceId ?? (await this.resolveRequestWorkspace(req.tenant));
-    const createdBy = req.user.id;
+        /*
+         * 产品级维护窗口（owner 2026-09-27）：升级 / 迁移期间产品「当前不可用」，未订阅的
+         * 暂时不能订阅。这是**非正常**的一道，放在生命周期与承诺等级之后——正常流程的判定
+         * 一条不动，维护只是额外加的一道；又放在套餐可见性之前：维护是产品级、可见性是
+         * 套餐级，先答产品再答套餐，而且拦在这里就不会为一张注定拒掉的单烧掉一张邀请券。
+         *
+         * 判据只看 `product.products` 的两列（不读 admin schema）：window id 非空 = 维护中，
+         * `maintenance_until` = 预计恢复。时间走共用件（平台时区，与 console 其他时间同形）。
+         * console 直接展示 message、没有按码翻译的表，所以时间要在这句话里。
+         */
+        if (sold.maintenance_window_id) {
+          const until = formatDateTime(sold.maintenance_until, "zh-CN", "");
+          throw new ConflictException({
+            code: "PRODUCT_UNDER_MAINTENANCE",
+            message: until
+              ? `该产品升级维护中，预计 ${until} 恢复，暂不可订阅。`
+              : "该产品升级维护中，暂不可订阅。",
+          });
+        }
 
-    // One open order per (workspace × product)，0 元订单同样受限（P3/§7.3）；
-    // 库级部分唯一索引 uidx_orders_open_per_product 兜底并发。
-    await this.assertNoPendingOrderForProduct(workspaceId, productCode);
-    // 冻结中的订阅占着槽位：买第二份会让它恢复不了（见方法头注）。
-    await this.assertNoSuspendedSubscriptionForProduct(
-      workspaceId,
-      productCode,
+        /*
+         * 非公开套餐不可自助购买（2026-09-22）。
+         *
+         * `plans.is_public` 此前**只是个列表过滤**：console-bff 在 `subscribe-context`
+         * 与 `recommended-products` 两处滤掉它，而本端点从头到尾没读过这一列。后果是
+         * 「非公开」只做到了看不见——**知道 planVersionId 的人照样下得了单**。
+         *
+         * 这正是上面那段成熟度注释写过的同一条教训（「列表能滤掉不等于下单拦得住」），
+         * 当时补了 `release_stage` 却没有回头看同在一条路径上的 `is_public`。
+         *
+         * 放在成熟度之后：两者都是「这东西现在不该卖」，但成熟度是产品级、可见性是
+         * 套餐级，先答产品再答套餐，报错也按这个次第给。
+         *
+         * **凭邀请解锁**（2026-09-22）：非公开套餐本身不开放自助购买，但持有一张有效
+         * 邀请（`promotion.vouchers` 的 `kind='invite'`）的人可以买。邀请**只解锁
+         * 「能买」，不改变「要付钱」**——客户照常下单、照常付款，与运营直接发订阅
+         * （`operator_grant`，无订单无钱）和兑换码（`redemption`，输码抵扣）是三件事。
+         */
+        const scopedWorkspaceId = workspaceId;
+        let requiresInvite = false;
+        if (!sold.plan_is_public) {
+          /*
+           * 续订例外：邀请挡的是**进门**，不是挡已经在里面的人续费。
+           *
+           * 少了这一条，把一个在售档改成邀请制就会连带掐断老客户的续订——界面上
+           * 只是 409，而客户什么都没做错；更糟的是 `redeemInvitationTx` 每次都要
+           * 烧掉一张券，等于「每个周期续一次要重发一张邀请」。都不是这条机制的本意。
+           *
+           * 范围按**套餐**（跨版本）而不是按版本：续订延长的就是手上这一档。换档是
+           * `upgrade`，那是新进一档，照样要邀请。
+           */
+          const renewingOwnPlan =
+            intent === "renew" &&
+            (await this.holdsSubscriptionOnPlan(
+              tenant.id,
+              planVersionId,
+              scopedWorkspaceId,
+              client,
+            ));
+          if (!renewingOwnPlan) {
+            const invite = await hasInvitation(client, {
+              workspaceId,
+              userId: user.id,
+              tenantId: tenant.id,
+              planVersionId,
+              planCode: sold.plan_code,
+            });
+            requiresInvite = true;
+            if (!invite) {
+              throw new ConflictException({
+                code: "PLAN_NOT_PUBLIC",
+                message: "该套餐未对外开放自助购买，请联系销售。",
+              });
+            }
+          }
+        }
+
+        const createdBy = user.id;
+
+        // One open order per (workspace × product)，0 元订单同样受限（P3/§7.3）；
+        // 库级部分唯一索引 uidx_orders_open_per_product 兜底并发。
+        await this.assertNoPendingOrderForProduct(
+          workspaceId,
+          productCode,
+          client,
+        );
+        // 冻结中的订阅占着槽位：买第二份会让它恢复不了（见方法头注）。
+        await this.assertNoSuspendedSubscriptionForProduct(
+          workspaceId,
+          productCode,
+          client,
+        );
+
+        // 原订阅：upgrade / renew 由客户端指定；renew 未指定时取本产品的代表订阅（续订即延长它）。
+        const effectiveIntent = intent as OrderCreateIntent;
+        let fromSubscriptionId = upgradeOf;
+        if (effectiveIntent === "renew") {
+          const current = await this.queryCurrentForProduct(
+            tenant.id,
+            productCode,
+            workspaceId,
+            client,
+          );
+          if (!fromSubscriptionId) {
+            if (!current)
+              throw new BadRequestException("没有可续订的订阅，请直接订阅");
+            fromSubscriptionId = current.subscriptionId;
+          }
+          // The domain service validates plan identity across versions. Never silently
+          // turn a renewal into an upgrade or a new purchase here.
+        }
+        // Renewal/upgrade targets must belong to this exact tenant and workspace.
+        if (fromSubscriptionId) {
+          const target = await this.subscriptionService
+            .getSubscription(fromSubscriptionId, client)
+            .catch(() => null);
+          if (
+            !target ||
+            target.tenantId !== tenant.id ||
+            target.workspaceId !== workspaceId
+          )
+            throw new BadRequestException("目标订阅不存在或无权操作");
+        }
+
+        // 0 元与付费同路（owner 2026-08-20）：产生待付款订单（billing.orders + unpaid 账单）。
+        // TTL 在此定格并随单持久化（P4 修订）：个人 30min / 组织 48h。
+        const ttlMinutes = paymentTtlMinutesFor(tenant.tenantType);
+        try {
+          const { order, billNo } = await this.orderService.createOrder(
+            {
+              tenantId: tenant.id,
+              workspaceId,
+              planVersionId,
+              cycleUnit,
+              price: Number(plan.price),
+              currency: plan.currency,
+              createdBy,
+              intent: effectiveIntent,
+              ...(fromSubscriptionId ? { fromSubscriptionId } : {}),
+              itemName: plan.planName,
+              paymentTtlMinutes: ttlMinutes,
+              autoRenew: body.autoRenew === true,
+              /* 原样透传，判据在服务层（它才拿得到原订阅当前钉着的版本）。 */
+              ...(typeof body.acceptVersionChangeFrom === "string" &&
+              body.acceptVersionChangeFrom.trim()
+                ? {
+                    acceptVersionChangeFrom:
+                      body.acceptVersionChangeFrom.trim(),
+                  }
+                : {}),
+            },
+            client,
+          );
+          const result: CreateOrderResult = {
+            status: "pending_payment",
+            orderId: order.id,
+            orderNo: order.orderNo,
+            billNo,
+            amount: Number(plan.price).toFixed(2),
+            currency: plan.currency,
+            planCode: plan.planCode,
+            cycleUnit,
+            paymentInstructions: buildPaymentInstructions(order.orderNo),
+            subscriptionId: null,
+            expireAt: new Date(
+              order.createdAt.getTime() + ttlMinutes * 60_000,
+            ).toISOString(),
+          };
+          return {
+            result,
+            onCreated: requiresInvite
+              ? async (operationId: string) => {
+                  await redeemInvitationTx(
+                    client,
+                    {
+                      userId: user.id,
+                      tenantId: tenant.id,
+                      workspaceId,
+                      planVersionId,
+                      planCode: sold.plan_code,
+                    },
+                    order.id,
+                    operationId,
+                  );
+                }
+              : undefined,
+          };
+        } catch (err) {
+          throw mapOrderError(err);
+        }
+      },
     );
-
-    // 原订阅：upgrade / renew 由客户端指定；renew 未指定时取本产品的代表订阅（续订即延长它）。
-    const effectiveIntent = intent as OrderCreateIntent;
-    let fromSubscriptionId = upgradeOf;
-    if (effectiveIntent === "renew") {
-      const current = await this.queryCurrentForProduct(
-        req.tenant.id,
-        productCode,
-        workspaceId,
-      );
-      if (!fromSubscriptionId) {
-        if (!current)
-          throw new BadRequestException("没有可续订的订阅，请直接订阅");
-        fromSubscriptionId = current.subscriptionId;
-      }
-      // The domain service validates plan identity across versions. Never silently
-      // turn a renewal into an upgrade or a new purchase here.
-    }
-    // Renewal/upgrade targets must belong to this exact tenant and workspace.
-    if (fromSubscriptionId) {
-      const target = await this.subscriptionService
-        .getSubscription(fromSubscriptionId)
-        .catch(() => null);
-      if (
-        !target ||
-        target.tenantId !== req.tenant.id ||
-        target.workspaceId !== workspaceId
-      )
-        throw new BadRequestException("目标订阅不存在或无权操作");
-    }
-
-    // 0 元与付费同路（owner 2026-08-20）：产生待付款订单（billing.orders + unpaid 账单）。
-    // TTL 在此定格并随单持久化（P4 修订）：个人 30min / 组织 48h。
-    const ttlMinutes = paymentTtlMinutesFor(req.tenant.tenantType);
-    try {
-      const { order, billNo } = await this.orderService.createOrder({
-        tenantId: req.tenant.id,
-        workspaceId,
-        planVersionId,
-        cycleUnit,
-        price: Number(plan.price),
-        currency: plan.currency,
-        createdBy,
-        intent: effectiveIntent,
-        ...(fromSubscriptionId ? { fromSubscriptionId } : {}),
-        itemName: plan.planName,
-        paymentTtlMinutes: ttlMinutes,
-        autoRenew: body.autoRenew === true,
-        /* 原样透传，判据在服务层（它才拿得到原订阅当前钉着的版本）。 */
-        ...(typeof body.acceptVersionChangeFrom === "string" &&
-        body.acceptVersionChangeFrom.trim()
-          ? { acceptVersionChangeFrom: body.acceptVersionChangeFrom.trim() }
-          : {}),
-      });
-      return {
-        status: "pending_payment",
-        orderId: order.id,
-        orderNo: order.orderNo,
-        billNo,
-        amount: Number(plan.price).toFixed(2),
-        currency: plan.currency,
-        planCode: plan.planCode,
-        cycleUnit,
-        paymentInstructions: buildPaymentInstructions(order.orderNo),
-        subscriptionId: null,
-        expireAt: new Date(Date.now() + ttlMinutes * 60_000).toISOString(),
-      };
-    } catch (err) {
-      throw mapOrderError(err);
-    }
   }
 
   // GET /api/subscription/upgrade-quote — 升级折抵报价（product_330 §4.1，零副作用）
@@ -2412,8 +2456,9 @@ export class SubscriptionRouter {
     tenantId: string,
     planVersionId: string,
     workspaceId?: string,
+    client?: PoolClient,
   ): Promise<boolean> {
-    const res = await this.pool.query<{ one: number }>(
+    const res = await (client ?? this.pool).query<{ one: number }>(
       `select 1 as one
          from metering.subscriptions ts
          join product.plan_versions mine on mine.id = ts.plan_version_id
@@ -2425,70 +2470,6 @@ export class SubscriptionRouter {
       [tenantId, planVersionId, ...(workspaceId ? [workspaceId] : [])],
     );
     return res.rows.length > 0;
-  }
-
-  private async consumeInviteForPlan(params: {
-    userId: string;
-    tenantId: string;
-    planVersionId: string;
-    planCode: string;
-  }): Promise<string | null> {
-    const { userId, tenantId, planVersionId, planCode } = params;
-
-    const consumed = await this.pool.query<{ id: string; batch_id: string }>(
-      `update promotion.vouchers v
-          set status      = 'redeemed',
-              used_count  = v.used_count + 1,
-              redeemed_at = now()
-         from promotion.voucher_batches b
-        where b.id = v.batch_id
-          and ${inviteMatchSql({
-            v: "v",
-            b: "b",
-            user: "$1",
-            tenant: "$2",
-            planVersion: "$3",
-            planCode: "$4",
-          })}
-          and v.id = (
-            -- 多张都有效时取最早过期的那张，先用快到期的。
-            select v2.id from promotion.vouchers v2
-              join promotion.voucher_batches b2 on b2.id = v2.batch_id
-             where ${inviteMatchSql({
-               v: "v2",
-               b: "b2",
-               user: "$1",
-               tenant: "$2",
-               planVersion: "$3",
-               planCode: "$4",
-             })}
-             order by v2.expires_at asc nulls last, v2.created_at asc
-             limit 1
-          )
-       returning v.id, v.batch_id`,
-      [userId, tenantId, planVersionId, planCode],
-    );
-
-    const row = consumed.rows[0];
-    if (!row) return null;
-
-    /* 台账：每次核销一行。`subscription_id` 此刻还没有（订阅要等付款后才建），
-       四个效果 FK 列按 kind 填——invite 一个都不填，去向记在 effect_snapshot 里。 */
-    await this.pool.query(
-      `insert into promotion.voucher_redemptions
-         (redemption_no, voucher_id, tenant_id, workspace_id, user_id, kind, effect_snapshot)
-       select
-         'RV-' || to_char(now(), 'YYYYMMDD') || '-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 8),
-         $1, $2,
-         (select w.id from tenancy.workspaces w
-           where w.tenant_id = $2 and w.deleted_at is null
-           order by w.is_default desc, w.created_at asc limit 1),
-         $3, 'invite',
-         jsonb_build_object('planCode', $4::text, 'planVersionId', $5::text, 'unlockedAt', now())`,
-      [row.id, tenantId, userId, planCode, planVersionId],
-    );
-
-    return row.id;
   }
 
   /**
@@ -2509,8 +2490,9 @@ export class SubscriptionRouter {
   private async assertNoSuspendedSubscriptionForProduct(
     workspaceId: string,
     productCode: string,
+    client?: PoolClient,
   ): Promise<void> {
-    const { rows } = await this.pool.query<{ id: string }>(
+    const { rows } = await (client ?? this.pool).query<{ id: string }>(
       `select s.id
          from metering.subscriptions s
          join product.products p on p.id = s.product_id
@@ -2532,10 +2514,12 @@ export class SubscriptionRouter {
   private async assertNoPendingOrderForProduct(
     workspaceId: string,
     productCode: string,
+    client?: PoolClient,
   ): Promise<void> {
     const open = await this.orderService.findOpenOrderForProduct(
       workspaceId,
       productCode,
+      client,
     );
     if (open) {
       throw new ConflictException({
@@ -2613,7 +2597,7 @@ export class SubscriptionRouter {
    *
    * **这里只查价，不判能不能买。** 原来这条 SQL 里还带着 `plan.is_public = true`，
    * 于是「可见性」这一道门同时长在两个地方——而它排在下单路径的**最前面**，
-   * 在邀请解锁（createOrder 的 `consumeInviteForPlan`）之前。后果是邀请订阅整条
+   * 在邀请解锁（createOrder 的 `redeemInvitationTx`）之前。后果是邀请订阅整条
    * 分支在真库里永远走不到：非公开套餐在这一步就返回 0 行 → NOT_PURCHASABLE 400。
    *
    * 单测照不出来，因为桩对第一次查询无条件回一行价格，不模拟这个上游过滤。
@@ -2622,13 +2606,14 @@ export class SubscriptionRouter {
   private async lookupPlanPrice(
     planVersionId: string,
     cycleUnit: string,
+    client?: PoolClient,
   ): Promise<{
     price: string;
     currency: string;
     planCode: string;
     planName: string;
   } | null> {
-    const res = await this.pool.query<{
+    const res = await (client ?? this.pool).query<{
       price: string;
       currency: string;
       plan_code: string;
@@ -2893,6 +2878,7 @@ interface OrderRow {
   suspension_extends_term: boolean | null;
   /** billing.orders.status（订单实体状态机） */
   order_status: string;
+  order_close_reason?: string | null;
   /** 每单付款时效（分钟，P4 修订）；NULL=存量单 → 回退 env */
   payment_ttl_minutes: number | null;
   invoice_id: string | null;
@@ -2941,6 +2927,7 @@ select
   o.workspace_id,
   o.subscription_id,
   o.status             as order_status,
+  o.close_reason       as order_close_reason,
   o.payment_ttl_minutes,
   inv.id               as invoice_id,
   inv.bill_no,
@@ -3072,7 +3059,9 @@ function deriveOrderState(r: OrderRow): OrderState {
       if (isPartiallyRefunded(r)) return "partially_refunded";
       return "completed";
     case "refunded":
-      return "refunded";
+      return r.order_close_reason === "noncash_reversal"
+        ? "cancelled"
+        : "refunded";
     case "cancelled":
       return "cancelled";
     case "expired":
@@ -3155,6 +3144,7 @@ function mapVoucherOption(v: AvailableVoucher): OrderVoucherOption {
 function mapMyOrderRow(r: OrderRow): MyOrderRecord {
   const state = deriveOrderState(r);
   return {
+    noncashReversed: r.order_close_reason === "noncash_reversal",
     orderId: r.order_id,
     orderNo: r.order_no,
     billNo: r.bill_no,
@@ -3201,7 +3191,9 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     // 服务开通时刻 = 订阅周期起算锚点（owner 口径：自服务开通,非确认收款）。
     // 认整个已履约族：退款中/已退款的单也开通过，开通时间不会因为退款而消失。
     activatedAt:
-      FULFILLED_STATES.has(state) && r.start_at
+      (FULFILLED_STATES.has(state) ||
+        r.order_close_reason === "noncash_reversal") &&
+      r.start_at
         ? r.start_at.toISOString()
         : null,
   };

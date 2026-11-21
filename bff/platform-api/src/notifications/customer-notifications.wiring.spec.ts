@@ -9,6 +9,8 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
+// ⚠️ 跨层引用: verify the runtime domain transaction port is composed.
+import { PgWalletLedger } from "@vxture/service-billing";
 import type {
   AddonService,
   OrderService,
@@ -20,7 +22,7 @@ import { CustomerNotificationsWiring } from "./customer-notifications.wiring";
 const stub = () => ({ setCustomerNotifier: vi.fn() });
 
 function build() {
-  const orders = stub();
+  const orders = { ...stub(), setWalletSettlement: vi.fn() };
   const subscriptions = stub();
   const addons = stub();
   const orgs = stub();
@@ -35,6 +37,14 @@ function build() {
 }
 
 describe("CustomerNotificationsWiring.onModuleInit", () => {
+  it("injects the wallet transaction port into this process order service", () => {
+    const { wiring, orders } = build();
+    wiring.onModuleInit();
+    expect(orders.setWalletSettlement).toHaveBeenCalledTimes(1);
+    expect(orders.setWalletSettlement).toHaveBeenCalledWith(
+      expect.any(PgWalletLedger),
+    );
+  });
   it("四个服务都拿到同一个分发器（少挂一个 = 那一批通知静默不发）", () => {
     const { wiring, orders, subscriptions, addons, orgs } = build();
     wiring.onModuleInit();

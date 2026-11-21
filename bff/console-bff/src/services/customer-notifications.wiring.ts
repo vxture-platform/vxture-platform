@@ -9,6 +9,8 @@
  * 工厂 provider 在模块初始化时即执行（Nest 急切实例化），用 setter 注入——SubscriptionModule
  * 是自包含模块，跨模块的构造器令牌不可见。
  */
+// ⚠️ 跨层引用: the application composes the domain wallet transaction port.
+import { PgWalletLedger } from "@vxture/service-billing";
 import { Logger, type Provider } from "@nestjs/common";
 import type { Pool } from "pg";
 import { VxConfigService } from "@vxture/core-config";
@@ -68,6 +70,7 @@ export const customerNotificationsProvider: Provider = {
       logger: new Logger("CustomerNotifications"),
     };
     const dispatcher = new NotificationDispatcher(pool, options);
+    orders.setWalletSettlement(new PgWalletLedger(pool));
     orders.setCustomerNotifier(dispatcher);
     subscriptions.setCustomerNotifier(dispatcher);
     /*

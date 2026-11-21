@@ -2145,7 +2145,8 @@
         "settleZero": "自动结清（¥0）",
         "provision": "服务开通",
         "cancelled": "取消订单",
-        "expiredClosed": "超时关闭"
+        "expiredClosed": "超时关闭",
+        "noncashReversed": "非现金结算已冲回（未发起现金退款）"
       }
     },
     "favorite": {
@@ -2307,7 +2308,8 @@
       "scoreLabels": ["很不满意", "不太满意", "一般", "满意", "很满意"],
       "notRated": "未评分",
       "roleDescription": "评分"
-    }
+    },
+    "noncashReversed": "非现金结算已冲回"
   },
   "table": {
     "rowActions": "操作",
@@ -2887,14 +2889,99 @@
     }
   },
   "vouchersPage": {
+    "redeem": {
+      "action": "兑换订阅",
+      "title": "兑换订阅",
+      "description": "确认套餐版本、服务期限和目标工作空间；预览不会消耗卡券。",
+      "confirm": "确认兑换",
+      "retry": "重试预览",
+      "close": "关闭",
+      "context": "归属租户：{tenant} · 工作空间：{workspace}",
+      "term": "兑换成功起开通 {days} 天；不会延长已有订阅。",
+      "funding": "来源：运营赠送。本次无需付款，不入钱包，不产生可退现金。",
+      "policy": "自动续费关闭。确认后卡券即核销，不自动返券；产品维护或已有订阅、待处理订单时不能兑换。",
+      "previewFailed": "暂时无法兑换，请检查当前归属、产品状态或已有订阅与订单后重试。",
+      "failed": "请求未完成或兑换条件已变化；可以重试，同一请求不会重复开通。",
+      "success": "兑换成功，核销编号：{number}。可在订阅管理查看服务。",
+      "service": "服务期：{start} — {end}",
+      "loading": "正在读取兑换详情…",
+      "retryRequest": "查询并重试原请求",
+      "changed": "卡券或目标条件已变化，本次未执行。请重新预览并确认。",
+      "rateLimited": "请求过于频繁，请稍后查询原请求结果。",
+      "unavailable": "服务暂时不可用；已确认请求请查询并重试原请求。"
+    },
+    "extend": {
+      "action": "延长订阅",
+      "title": "使用展期券",
+      "description": "选择已有订阅，核对原到期日和展期后的到期日后确认。预览不会消耗卡券。",
+      "target": "目标订阅",
+      "context": "当前租户：{tenant} · 工作空间：{workspace}",
+      "days": "从原到期日延长 {days} 天",
+      "dates": "原到期日：{before} → 展期后：{after}",
+      "policy": "每一天为 24 小时。仅延长期限，保留套餐、状态、自动续费设置及配额用量；不重置配额或增加消耗性额度。本次无需付款，无现金退款，不自动返券。",
+      "empty": "当前工作空间没有合格订阅。仅支持有到期日的在用、临期、宽限中订阅；试用、暂停、终止和永久订阅不可展期，有在途订单时请先处理订单。",
+      "confirm": "确认展期并核销",
+      "retry": "刷新预览",
+      "retryRequest": "查询并重试原请求",
+      "close": "关闭",
+      "loading": "正在读取合格订阅…",
+      "previewFailed": "无法读取展期详情，请核对卡券归属与当前工作空间后重试。",
+      "changed": "卡券或目标条件已变化，本次未执行。请重新预览并确认。",
+      "failed": "尚未确认请求结果，请重试本次展期；同一请求不会重复增加天数。",
+      "success": "展期成功，核销编号：{number}。",
+      "rateLimited": "请求过于频繁，请稍后查询原请求结果。",
+      "unavailable": "服务暂时不可用；已确认请求请查询并重试原请求。"
+    },
+    "holder": {
+      "user": "本人持有 · 当前租户",
+      "workspace": "工作空间专属",
+      "tenant": "租户共享",
+      "returnOnReversal": "完整撤销后按政策返券",
+      "noReturn": "不自动返券"
+    },
+    "claim": {
+      "open": "领取卡券",
+      "title": "领取卡券",
+      "description": "先预览权益与归属，再确认领取；预览不会消耗凭证。",
+      "credential": "领取凭证",
+      "credentialHint": "粘贴发放方提供的完整领取凭证，区分大小写。展示券码不能用于领取。",
+      "preview": "预览卡券",
+      "confirm": "确认领取",
+      "close": "关闭",
+      "context": "当前租户：{tenant} · 当前工作空间：{workspace}",
+      "target": "领取归属",
+      "personal": "本人持有（绑定当前租户）",
+      "workspace": "当前工作空间专属",
+      "bindingHint": "领取后不可转移；个人券随当前租户绑定，工作空间券仅在该工作空间使用。请先核对页面顶部的租户与工作空间。",
+      "expiry": "预计使用截止：{date}",
+      "relativeDays": "领取后 {days} 天内有效，且不超过批次截止日。最终截止以领取结果为准。",
+      "batchExpiry": "沿用批次截止日。",
+      "returnOnReversal": "完整撤销并满足退款政策后，按剩余价值返券，沿用原有效期。",
+      "noReturn": "此券不自动返还。",
+      "credit": "代金券 · ¥{amount}",
+      "cap": "减免封顶 ¥{amount}",
+      "percent": "立减 {value}%",
+      "fixed": "立减 ¥{amount}",
+      "invite": "解锁非公开套餐购买资格，仍按套餐价格付款。",
+      "redemption": "运营赠送 · 兑换 {days} 天新订阅；确认兑换后开始服务期。",
+      "extension": "延长合格订阅 {days} 天，从原到期日计算；不改档位、不重置配额。",
+      "success": "已领取 {code}，可在卡券列表查看。",
+      "failed": "领取凭证不可用或请求未完成，请核对凭证与当前归属后重试；确认请求可安全重试。",
+      "rateLimited": "请求过于频繁，请稍后查询原请求结果。",
+      "unavailable": "服务暂时不可用；已确认请求请查询并重试原请求。",
+      "recharge": "入钱包本金 {principal} 元、赠额 {bonus} 元；确认核销后入账。",
+      "previewFailed": "暂时无法预览，请核对当前归属后重试。",
+      "retryRequest": "查询并重试原请求",
+      "changed": "卡券或目标条件已变化，本次未执行。请重新预览并确认。"
+    },
     "title": "我的卡券",
-    "description": "持有的卡券一目了然:可用的去支付页直接抵扣,用掉的能查到去向",
+    "description": "查看持有的卡券、适用状态与使用记录；邀请券用于解锁套餐购买资格",
     "metrics": {
       "groupLabel": "卡券概览",
       "available": "可用卡券",
       "expiringSoon": "{count} 张将于 7 天内到期",
       "noExpiring": "近期无到期",
-      "used": "已用卡券",
+      "used": "已使用",
       "usedHint": "累计核销",
       "total": "全部卡券",
       "totalHint": "含已用/已过期/已撤销"
@@ -2904,24 +2991,36 @@
       "credit_voucher": "抵扣金券",
       "recharge_card": "充值卡",
       "redemption": "兑换码",
-      "extension": "延期券"
+      "extension": "展期券",
+      "invite": "订阅邀请券"
     },
     "status": {
       "available": "可用",
       "reserved": "使用中",
       "redeemed": "已使用",
       "expired": "已过期",
-      "revoked": "已撤销"
+      "revoked": "已撤销",
+      "not_started": "未生效",
+      "paused": "已暂停",
+      "archived": "已停用",
+      "unavailable": "暂不可用"
     },
     "face": {
       "percentOff": "减 {percent}%",
       "maxOff": "(封顶 {amount})",
-      "fixedOff": "立减 {amount}"
+      "fixedOff": "立减 {amount}",
+      "invite": "解锁套餐购买资格",
+      "redemption": "兑换订阅",
+      "redemptionDays": "兑换 {days} 天订阅",
+      "extension": "延长订阅",
+      "extensionDays": "展期 {days} 天",
+      "recharge": "本金 {principal} + 赠额 {bonus}"
     },
     "table": {
       "title": "卡券列表",
-      "description": "「使用中」= 已挂在待支付订单上锁定,取消该订单会自动释放;挂在哪张单直接显示在状态下方",
+      "description": "使用中的券已被订单占用；暂停、停用和未生效与过期分别显示",
       "colCode": "券码",
+      "colHolder": "持有范围 / 返券政策",
       "colKind": "类型",
       "colFace": "面值",
       "colStatus": "状态 / 挂单",
@@ -2929,17 +3028,21 @@
       "colUsedAt": "使用时间 / 核销号",
       "empty": "暂无卡券",
       "usesLeft": "剩 {left} / 共 {total} 次",
-      "emptyHint": "平台活动发放的卡券会出现在这里"
+      "emptyHint": "平台活动发放的卡券会出现在这里",
+      "notEnabled": "此类卡券尚未开放使用",
+      "unavailable": "当前不满足使用条件",
+      "validFrom": "{date} 起生效",
+      "rechargeUnavailable": "资金来源、钱包状态或持有范围待核对"
     },
     "notes": {
       "title": "使用说明",
-      "description": "卡券如何参与结算",
+      "description": "卡券的用途与使用状态",
       "useTitle": "在哪使用",
-      "useBody": "订单支付页结算时选择:折扣券作用于订单价格,抵扣金券抵减应付金额;两类可各选一张叠加",
+      "useBody": "折扣券与代金券在订单付款页选择，每类最多一张；邀请券解锁套餐购买资格，仍按套餐价格付款。兑换券在本页确认后开通固定版本的新订阅；展期券选择合格订阅并确认前后到期日，不改档位或重置配额。充值卡预览后确认入租户钱包，本金与赠额分别记账。",
       "sourceTitle": "卡券来源",
       "sourceBody": "由平台运营活动发放(定向到租户、工作空间或个人);有效期以本页展示为准",
       "holdTitle": "挂单与释放",
-      "holdBody": "下单时选中的券会被锁定为「使用中」并显示挂单号;订单取消或超时关闭后自动释放回可用,支付完成才真正核销"
+      "holdBody": "付款申报时，折扣券与代金券会被占用；驳回或允许的关单操作会释放占用，释放后是否可用仍取决于有效期和批次状态。"
     },
     "filters": {
       "groupLabel": "卡券筛选",
@@ -2958,7 +3061,31 @@
       "viewOrder": "查看挂单",
       "viewOrderHint": "这张券还没有挂在任何订单上",
       "use": "去结算使用",
-      "useHint": "只有可用状态的券能参与结算"
+      "useHint": "仅已生效且开放使用的卡券可继续操作",
+      "useInvite": "查看可购套餐"
+    },
+    "recharge": {
+      "action": "兑换至钱包",
+      "title": "兑换充值卡",
+      "description": "确认本金、赠额及入账租户。",
+      "close": "关闭",
+      "retry": "重新预览",
+      "retryRequest": "查询并重试原请求",
+      "confirm": "确认入账",
+      "previewFailed": "充值卡暂不可用，请核对归属、有效期及钱包来源后重试。",
+      "changed": "卡券或目标条件已变化，本次未执行。请重新预览并确认。",
+      "failed": "结果尚未确认，请重试原请求，避免重复操作。",
+      "success": "已入账 · 核销号 {number}",
+      "amounts": "本金 {currency} {principal} · 赠额 {currency} {bonus}",
+      "balance": "入账后钱包余额 {currency} {balance}",
+      "expires": "赠额到期：{date}",
+      "noExpiry": "未设置赠额到期时间；本金不设到期。",
+      "days": "赠额自核销起 {days} 天有效；本金不设到期。",
+      "transactions": "钱包流水：{numbers}",
+      "context": "入账租户：{tenant}；当前操作工作区：{workspace}。余额属于租户钱包。",
+      "policy": "本金与赠额分别记账。赠额优先消费，不能退现；本金按原收款来源和未消耗部分核算，核销后不能通过撤券退回。",
+      "rateLimited": "请求过于频繁，请稍后查询原请求结果。",
+      "unavailable": "服务暂时不可用；已确认请求请查询并重试原请求。"
     }
   },
   "workspacePicker": {

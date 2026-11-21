@@ -120,7 +120,11 @@ export const parseDiscountEffect = (
 ): DiscountEffect | null => {
   const type = effect["discount_type"];
   const value = effect["value"];
-  if ((type !== "percent" && type !== "fixed") || typeof value !== "number") {
+  if (
+    (type !== "percent" && type !== "fixed") ||
+    typeof value !== "number" ||
+    !Number.isFinite(value)
+  ) {
     return null;
   }
   if (type === "percent" && (value < 0 || value > 100)) return null;

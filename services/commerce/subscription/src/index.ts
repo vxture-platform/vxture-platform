@@ -1,5 +1,10 @@
 export { SubscriptionModule } from "./module/subscription.module";
 export { SubscriptionService } from "./service/subscription.service";
+export { SubscriptionRedemption } from "./service/subscription-redemption";
+export type {
+  RedemptionPlan,
+  RedemptionComponent,
+} from "./service/subscription-redemption";
 export { OrderService } from "./service/order.service";
 export type { FulfillResult } from "./service/order.service";
 export {
@@ -96,6 +101,8 @@ export type {
   DeclareAddonPaymentInput,
 } from "./types/addon.types";
 export { COMMERCE_PG_POOL } from "./tokens";
+export { SubscriptionExtension } from "./service/subscription-extension";
+export type { ExtensionTarget } from "./service/subscription-extension";
 export type {
   ConsumeInput,
   ConsumeResult,
@@ -115,3 +122,9 @@ export type {
   MaintenanceCandidate,
   MaintenanceRelease,
 } from "./types/subscription.types";
+
+export type {
+  WalletSettlementPort,
+  WalletSettlementContext,
+  WalletSettlementCommand,
+} from "./types/wallet-settlement.types";

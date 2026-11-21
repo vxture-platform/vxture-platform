@@ -32,9 +32,19 @@ import {
 
 const provider = customerNotificationsProvider as FactoryProvider;
 
-const stub = () => ({ setCustomerNotifier: vi.fn() });
+const stub = () => ({
+  setCustomerNotifier: vi.fn(),
+  setWalletSettlement: vi.fn(),
+});
 
 describe("customerNotificationsProvider", () => {
+  it("connects order balance writes to the source wallet", () => {
+    const wired = build();
+    expect(wired.orders.setWalletSettlement).toHaveBeenCalledOnce();
+    expect(wired.orders.setWalletSettlement.mock.calls[0]?.[0]).toHaveProperty(
+      "postInTransaction",
+    );
+  });
   it("uses the independent accounts origin for security links", () => {
     const wired = build();
     const dispatcher = wired.securityDispatcher as { accountsBaseUrl?: string };

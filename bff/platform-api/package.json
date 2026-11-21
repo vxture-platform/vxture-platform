@@ -26,6 +26,7 @@
     "@vxture/core-config": "workspace:*",
     "@vxture/core-mail": "workspace:*",
     "@vxture/service-account": "workspace:*",
+    "@vxture/service-billing": "workspace:*",
     "@vxture/service-organization": "workspace:*",
     "@vxture/service-notification": "workspace:*",
     "@vxture/service-notice": "workspace:*",
@@ -44,6 +45,7 @@
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/pg": "^8.16.0",
+    "@vxture/service-promotion": "workspace:*",
     "esbuild": "^0.28.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"

@@ -6,19 +6,23 @@
  * 在途退款、在途开票、待付订单——外加订阅未到期。这些事实全在 commerce 库里,
  * 一次读齐比 BFF 逐张表拼 SQL 稳(批 3 的教训:SQL 下沉到服务层,BFF 只编排)。
  *
- * 付费 / 赠送余额:`billing.credits` 一租户一池,充值与赠送同入(52_billing 注释),
- * 库里没有分池。按 owner 裁定「付费余额先消耗赠送」,付费余额 = min(balance,
- * Σrecharge − Σrefund),从 append-only 的 transactions 流水推;赠送余额 = balance − 付费。
- * amount 正入负出,refund 本身就是负数,所以 recharge + refund 直接求和即可。
+ * Wallet source balances come from immutable lot entries. Cash receipt totals
+ * also include subscription payments and cannot prove a wallet's principal.
+ * Unclassified historical balances require reconciliation before account closure.
  *
  * 待付订单分两类:一分钱没收到的(可自动取消)与已有实收 / 有待核实付款腿的
  * (取消会 409,owner:阻断)。判据与 pg-order.repository.cancelOrder 的 409 条件一致。
  */
 
-import { Inject, Injectable } from "@nestjs/common";
+import { ConflictException, Inject, Injectable } from "@nestjs/common";
 import type { Pool } from "pg";
 import { COMMERCE_PG_POOL } from "../tokens";
 import type { TenantClosureSnapshot } from "../types/closure.types";
+import { walletCents, walletAmount } from "./wallet-money";
+
+// ===========================================================================
+// Financial and lifecycle facts share one repeatable-read snapshot.
+// ===========================================================================
 
 @Injectable()
 export class PgTenantClosureRepository {
@@ -30,8 +34,11 @@ export class PgTenantClosureRepository {
       await client.query("begin isolation level repeatable read read only");
       const [bills, credit, refunds, receipts, orders, subscriptions] =
         await Promise.all([
-          client.query<{ unpaid: string }>(
-            `select count(*)::text as unpaid
+          client.query<{ unpaid: string; card_principal: string }>(
+            `select count(*)::text as unpaid,
+              (select coalesce(sum(a.amount),0)::text from billing.wallet_card_allocations a
+                join billing.payments p on p.id=a.payment_id
+                where p.tenant_id=$1 and a.status='reserved') card_principal
              from billing.invoices i
             where i.tenant_id = $1 and i.deleted_at is null
               and i.bill_status in ('unpaid', 'paying', 'partial', 'overdue')
@@ -47,14 +54,16 @@ export class PgTenantClosureRepository {
           client.query<{
             balance: string | null;
             currency: string | null;
-            paid_flow: string | null;
+            principal: string;
+            bonus: string;
+            tracked: boolean;
           }>(
             `select c.balance::text as balance, c.currency,
-                  (select coalesce(sum(t.amount), 0)::numeric(12,2)::text
-                     from billing.transactions t
-                    where t.tenant_id = $1
-                      and t.trade_type in ('recharge', 'refund')
-                      and t.trade_status = 'success') as paid_flow
+                  exists(select from billing.wallet_accounts a where a.credit_id=c.id) tracked,
+                  (select coalesce(sum(e.amount),0)::text from billing.wallet_entries e
+                    join billing.wallet_lots l on l.id=e.lot_id where l.credit_id=c.id and l.kind='principal') principal,
+                  (select coalesce(sum(e.amount),0)::text from billing.wallet_entries e
+                    join billing.wallet_lots l on l.id=e.lot_id where l.credit_id=c.id and l.kind='bonus') bonus
              from billing.credits c
             where c.tenant_id = $1
             limit 1`,
@@ -102,20 +111,27 @@ export class PgTenantClosureRepository {
           ),
         ]);
 
-      await client.query("commit");
+      if (walletCents(bills.rows[0]?.card_principal ?? "0.00") > 0)
+        throw new ConflictException("存在尚未核销的充值卡本金，不能清账关闭");
       const creditRow = credit.rows[0];
-      const balance = Number(creditRow?.balance ?? 0);
-      const paidFlow = Number(creditRow?.paid_flow ?? 0);
-      const paidBalance = Math.max(0, Math.min(balance, paidFlow));
-      const giftedBalance = Math.max(0, balance - paidBalance);
+      const balance = walletCents(creditRow?.balance ?? "0.00");
+      if (creditRow && !creditRow.tracked && balance !== 0)
+        throw new ConflictException(
+          "历史钱包余额尚未完成来源核对，不能清账关闭",
+        );
+      const paidBalance = walletCents(creditRow?.principal ?? "0.00");
+      const giftedBalance = walletCents(creditRow?.bonus ?? "0.00");
+      if (balance !== paidBalance + giftedBalance || balance < 0)
+        throw new ConflictException("钱包来源对账不一致，不能清账关闭");
+      await client.query("commit");
 
       return {
         tenantId,
         unpaidBills: Number(bills.rows[0]?.unpaid ?? 0),
         currency: creditRow?.currency ?? "CNY",
-        balance: balance.toFixed(2),
-        paidBalance: paidBalance.toFixed(2),
-        giftedBalance: giftedBalance.toFixed(2),
+        balance: walletAmount(balance),
+        paidBalance: walletAmount(paidBalance),
+        giftedBalance: walletAmount(giftedBalance),
         refundsInProgress: Number(refunds.rows[0]?.in_progress ?? 0),
         receiptsInProgress: Number(receipts.rows[0]?.in_progress ?? 0),
         pendingOrdersCancellable: orders.rows

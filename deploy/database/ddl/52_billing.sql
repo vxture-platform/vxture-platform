@@ -368,7 +368,8 @@ CREATE TABLE billing.payments (
     created_at             timestamptz   NOT NULL DEFAULT now(),
     updated_at             timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT uq_payments_pay_order_no  UNIQUE (pay_order_no),
-    CONSTRAINT chk_payments_pay_source   CHECK (pay_source IN ('online','offline','voucher','balance')),  -- 'voucher' = settlement leg (product_321 P7)
+    -- Preserve balance payments; cash refunds accept only online/offline sources.
+    CONSTRAINT chk_payments_pay_source   CHECK (pay_source IN ('online','offline','voucher','balance')),
     -- 值域里有两个**保留值**，2026-09-25 核过：全仓没有写入方。
     --   'pending'    线下流程里腿一建就是 pending_verify。它同时是本列的 DEFAULT，
     --                所以**不能**从 CHECK 里摘掉——摘了以后任何不显式给 pay_status 的
@@ -426,6 +427,8 @@ CREATE TABLE billing.refunds (
     created_by_id     uuid          NOT NULL,                       -- 裸值，按 type 解引用（边界#2）
     created_at        timestamptz   NOT NULL DEFAULT now(),
     updated_at        timestamptz   NOT NULL DEFAULT now(),
+    calculation_snapshot jsonb,
+    CONSTRAINT chk_refunds_calculation_object CHECK (calculation_snapshot IS NULL OR jsonb_typeof(calculation_snapshot) = 'object'),
     CONSTRAINT uq_refunds_refund_no          UNIQUE (refund_no),
     -- 'partial' 等折算退上线时才有创建路径（判据是**金额** < 实付合计，不是这个类型字段）；
     -- 'dispute'（争议 / 拒付）是预留值：钱走线下对公汇款，没有拒付这回事。2026-09-25 核过。
@@ -493,3 +496,21 @@ CREATE INDEX idx_payments_transaction       ON billing.payments (transaction_id)
 CREATE INDEX idx_refunds_transaction        ON billing.refunds (transaction_id);
 CREATE INDEX idx_payment_mandates_user      ON billing.payment_mandates (user_id);
 CREATE INDEX idx_prepaid_charges_workspace  ON billing.prepaid_charges (workspace_id);
+-- ===========================================================================
+-- B02 refund allocation foundation: execution and aggregate caps arrive in B05.
+-- ===========================================================================
+CREATE TABLE billing.refund_allocations (
+    id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    refund_id     uuid NOT NULL REFERENCES billing.refunds(id),
+    payment_id    uuid NOT NULL REFERENCES billing.payments(id),
+    currency      varchar(16) NOT NULL,
+    amount        numeric(12,2) NOT NULL,
+    status        varchar(16) NOT NULL DEFAULT 'reserved',
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT uq_refund_allocations_source UNIQUE (refund_id, payment_id),
+    CONSTRAINT chk_refund_allocations_amount CHECK (amount > 0),
+    CONSTRAINT chk_refund_allocations_status CHECK (status IN ('reserved','succeeded','released')),
+    CONSTRAINT chk_refund_allocations_currency CHECK (length(btrim(currency)) > 0)
+);
+CREATE INDEX idx_refund_allocations_payment_status ON billing.refund_allocations (payment_id, status);

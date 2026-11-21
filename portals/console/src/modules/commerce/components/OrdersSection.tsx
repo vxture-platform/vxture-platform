@@ -335,11 +335,13 @@ export function OrdersSection() {
       align: "center",
       cell: (o) => {
         const zeroSettled =
-          o.orderStatus === "completed" && Number.parseFloat(o.amount) === 0;
-        const axis = PAY_AXIS[o.orderStatus];
+          (o.orderStatus === "completed" || o.noncashReversed) &&
+          Number.parseFloat(o.amount) === 0;
+        const axis = PAY_AXIS[o.noncashReversed ? "completed" : o.orderStatus];
         return (
           <StatusBadge tone={axis.tone}>
             {zeroSettled ? t("payAxis.settledZero") : t(`payAxis.${axis.key}`)}
+            {o.noncashReversed ? ` · ${t("noncashReversed")}` : null}
             {o.orderStatus === "pending_payment" && o.expireAt ? (
               <span className="tabular-nums">
                 {" "}

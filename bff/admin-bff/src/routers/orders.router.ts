@@ -249,6 +249,8 @@ export class OrdersRouter {
         );
         const declaredLeg = legResult.rows[0] ?? null;
         const credential = parseLegCredential(declaredLeg?.channel_raw_data);
+        if (credential?.released)
+          throw new BadRequestException("申报凭据已释放，不能确认收款。");
         let voucherOff = 0;
 
         if (declaredLeg) {
@@ -259,6 +261,15 @@ export class OrdersRouter {
             );
           }
           voucherOff = toNumber(credential?.voucherOff ?? 0);
+          if (
+            !Number.isFinite(voucherOff) ||
+            voucherOff < 0 ||
+            round2(input.paidAmount + voucherOff) !== remaining
+          ) {
+            throw new BadRequestException(
+              "申报金额与当前账单不一致，请驳回申报后重新确认。",
+            );
+          }
         } else if (round2(input.paidAmount) !== remaining) {
           // No declared leg (legacy / post-reject manual settle): the same
           // full-amount rule — ≤ would keep breeding unterminable partial
@@ -377,6 +388,11 @@ export class OrdersRouter {
             const finalizeInputs = [];
             if (credential.discountVoucherId) {
               finalizeInputs.push({
+                orderId: ord.id,
+                invoiceId: invoice.id,
+                declarationPaymentId: declaredLeg.id,
+                reservationId: credential.discountReservationId,
+                actor: { realm: "operator" as const, id: actorId },
                 voucherId: credential.discountVoucherId,
                 kind: "discount" as const,
                 scope,
@@ -386,6 +402,11 @@ export class OrdersRouter {
             }
             if (credential.creditVoucherId) {
               finalizeInputs.push({
+                orderId: ord.id,
+                invoiceId: invoice.id,
+                declarationPaymentId: declaredLeg.id,
+                reservationId: credential.creditReservationId,
+                actor: { realm: "operator" as const, id: actorId },
                 voucherId: credential.creditVoucherId,
                 kind: "credit_voucher" as const,
                 scope,
@@ -592,9 +613,16 @@ export class OrdersRouter {
         [declaredLeg.id, reason],
       );
 
-      // ② 券释放（reserved → assigned 退 used_count；stale 凭据由 status 守卫兜住）。
+      // Release only this declaration's reservation; stale retries cannot free a later reservation.
       if (credential?.discountVoucherId || credential?.creditVoucherId) {
         await this.promotion.releaseReserved(client, {
+          orderId: ord.id,
+          invoiceId: invoice.id,
+          declarationPaymentId: declaredLeg.id,
+          discountReservationId: credential.discountReservationId,
+          creditReservationId: credential.creditReservationId,
+          reason: "rejected",
+          actor: { realm: "operator", id: actorId },
           discountVoucherId: credential.discountVoucherId,
           creditVoucherId: credential.creditVoucherId,
         });
@@ -1043,6 +1071,8 @@ interface DeclaredLegRow {
 
 /** Settlement credential carried on the declared cash leg (product_321 P10). */
 interface LegCredential {
+  discountReservationId: string | null;
+  creditReservationId: string | null;
   discountVoucherId: string | null;
   creditVoucherId: string | null;
   voucherOff: string | number | null;
@@ -1059,6 +1089,12 @@ function parseLegCredential(raw: unknown): LegCredential | null {
   if (!settlement || typeof settlement !== "object") return null;
   const s = settlement as Record<string, unknown>;
   return {
+    discountReservationId:
+      typeof s.discountReservationId === "string"
+        ? s.discountReservationId
+        : null,
+    creditReservationId:
+      typeof s.creditReservationId === "string" ? s.creditReservationId : null,
     discountVoucherId:
       typeof s.discountVoucherId === "string" ? s.discountVoucherId : null,
     creditVoucherId:
@@ -1587,7 +1623,9 @@ export function mapOrderRow(
   // leg's paid_amount is one leg, not the order's total income.
   const paidAmount = toNumber(row.bill_paid_amount ?? row.payment_paid_amount);
   const orderStatus = mapEntityOrderStatus(
-    row.order_entity_status,
+    row.order_close_reason === "noncash_reversal"
+      ? "cancelled"
+      : row.order_entity_status,
     row.bill_status,
   );
   const closed = orderStatus === "closed";
@@ -1641,7 +1679,10 @@ export function mapOrderRow(
     paidAmount,
     currency: row.currency ?? "CNY",
     operatorName: operatorDisplay(row.operator_name, row.created_by_type),
-    operationHint: OPERATION_HINTS[orderStatus] ?? "",
+    operationHint:
+      row.order_close_reason === "noncash_reversal"
+        ? "服务已撤销，无现金退款；卡券按原政策处理。"
+        : (OPERATION_HINTS[orderStatus] ?? ""),
     declaredPayment: row.declared_at
       ? {
           channel: row.declared_channel,

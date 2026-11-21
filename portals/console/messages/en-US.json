@@ -2145,7 +2145,8 @@
         "settleZero": "Auto-settled (¥0)",
         "provision": "Service provisioned",
         "cancelled": "Order cancelled",
-        "expiredClosed": "Closed on timeout"
+        "expiredClosed": "Closed on timeout",
+        "noncashReversed": "Noncash settlement reversed (no cash refund)"
       }
     },
     "favorite": {
@@ -2307,7 +2308,8 @@
       "scoreLabels": ["Very poor", "Poor", "Fair", "Good", "Excellent"],
       "notRated": "Not rated",
       "roleDescription": "rating"
-    }
+    },
+    "noncashReversed": "Noncash settlement reversed"
   },
   "table": {
     "rowActions": "Actions",
@@ -2887,14 +2889,99 @@
     }
   },
   "vouchersPage": {
+    "redeem": {
+      "action": "Redeem subscription",
+      "title": "Redeem subscription",
+      "description": "Review the plan version, term and destination. Preview does not consume the voucher.",
+      "confirm": "Confirm redemption",
+      "retry": "Retry preview",
+      "close": "Close",
+      "context": "Tenant: {tenant} · Workspace: {workspace}",
+      "term": "Starts a new {days}-day subscription on redemption; existing subscriptions are not extended.",
+      "funding": "Source: operator grant. No payment, wallet credit or refundable cash is created.",
+      "policy": "Auto-renew is off. Confirmation consumes the voucher without automatic return. Maintenance, existing subscriptions and pending orders block redemption.",
+      "previewFailed": "Unable to redeem now. Check the current context, product status, subscriptions and orders, then retry.",
+      "failed": "The request did not complete or eligibility changed. Retrying the same request will not create a duplicate subscription.",
+      "success": "Redeemed successfully. Reference: {number}. View your service in subscriptions.",
+      "service": "Service term: {start} — {end}",
+      "loading": "Loading redemption details…",
+      "retryRequest": "Check and retry original request",
+      "changed": "Voucher or destination terms changed. Preview and confirm the operation again.",
+      "rateLimited": "Too many attempts. Wait before checking the original request.",
+      "unavailable": "Service unavailable. Check and retry the original confirmed request."
+    },
+    "extend": {
+      "action": "Extend subscription",
+      "title": "Use extension voucher",
+      "description": "Select an existing subscription and confirm its previous and new end dates. Preview does not consume the voucher.",
+      "target": "Target subscription",
+      "context": "Tenant: {tenant} · Workspace: {workspace}",
+      "days": "Add {days} days to the existing end date",
+      "dates": "Previous end: {before} → New end: {after}",
+      "policy": "Each day is 24 hours. Extends the term while preserving the plan, status, auto-renewal setting and quota usage. No quota reset or consumable grant. No payment, cash refund or automatic voucher return.",
+      "empty": "No eligible subscriptions in this workspace. Only active, expiring or overdue subscriptions with an end date qualify. Trials, suspended, terminated and perpetual subscriptions do not qualify. Resolve pending orders first.",
+      "confirm": "Confirm extension and consume voucher",
+      "retry": "Refresh preview",
+      "retryRequest": "Check and retry original request",
+      "close": "Close",
+      "loading": "Loading eligible subscriptions…",
+      "previewFailed": "Could not load extension details. Check voucher ownership and the current workspace, then retry.",
+      "changed": "Voucher or destination terms changed. Preview and confirm the operation again.",
+      "failed": "The request outcome is uncertain. Retry this extension; the same request will not add days twice.",
+      "success": "Subscription extended. Redemption reference: {number}.",
+      "rateLimited": "Too many attempts. Wait before checking the original request.",
+      "unavailable": "Service unavailable. Check and retry the original confirmed request."
+    },
+    "holder": {
+      "user": "Personal · current tenant",
+      "workspace": "Workspace only",
+      "tenant": "Shared within tenant",
+      "returnOnReversal": "Return per full reversal policy",
+      "noReturn": "No automatic return"
+    },
+    "claim": {
+      "open": "Claim voucher",
+      "title": "Claim voucher",
+      "description": "Preview the benefit and ownership before confirming. Preview does not consume the credential.",
+      "credential": "Claim credential",
+      "credentialHint": "Paste the complete, case-sensitive credential from the issuer. A visible voucher code cannot be claimed.",
+      "preview": "Preview voucher",
+      "confirm": "Confirm claim",
+      "close": "Close",
+      "context": "Current tenant: {tenant} · Current workspace: {workspace}",
+      "target": "Ownership",
+      "personal": "Personal (bound to current tenant)",
+      "workspace": "Current workspace only",
+      "bindingHint": "Ownership cannot be transferred after claiming. Personal vouchers stay with this tenant; workspace vouchers apply only to this workspace. Check the tenant and workspace at the top of the page first.",
+      "expiry": "Estimated use deadline: {date}",
+      "relativeDays": "Valid for {days} days from claim, capped by the batch deadline. The confirmed claim determines the final deadline.",
+      "batchExpiry": "Uses the batch deadline.",
+      "returnOnReversal": "A full reversal meeting the refund policy returns remaining voucher value with its original deadline.",
+      "noReturn": "This voucher is not returned automatically.",
+      "credit": "Credit voucher · CNY {amount}",
+      "cap": "Reduction capped at CNY {amount}",
+      "percent": "{value}% off",
+      "fixed": "CNY {amount} off",
+      "invite": "Unlocks purchase of a private plan; the plan price still applies.",
+      "redemption": "Operator grant · a new {days}-day subscription, starting when redeemed.",
+      "extension": "Extend an eligible subscription by {days} days from its existing end date, without changing its tier or resetting quota.",
+      "success": "Claimed {code}. You can find it in your voucher list.",
+      "failed": "The credential is unavailable or the request did not finish. Check the credential and current context, then retry. Confirmation can be retried safely.",
+      "rateLimited": "Too many attempts. Wait before checking the original request.",
+      "unavailable": "Service unavailable. Check and retry the original confirmed request.",
+      "recharge": "Wallet principal {principal}, bonus {bonus}; credited only after redemption.",
+      "previewFailed": "Preview is unavailable. Check the current destination and try again.",
+      "retryRequest": "Check and retry original request",
+      "changed": "Voucher or destination terms changed. Preview and confirm the operation again."
+    },
     "title": "My Vouchers",
-    "description": "Everything you hold at a glance: usable ones apply at checkout, used ones show where they went",
+    "description": "View your vouchers, availability and usage history. Invitations unlock access to purchase a plan.",
     "metrics": {
       "groupLabel": "Voucher overview",
       "available": "Available",
       "expiringSoon": "{count} expiring within 7 days",
       "noExpiring": "None expiring soon",
-      "used": "Used vouchers",
+      "used": "Used",
       "usedHint": "Total redeemed",
       "total": "All vouchers",
       "totalHint": "Including used / expired / revoked"
@@ -2904,42 +2991,58 @@
       "credit_voucher": "Credit voucher",
       "recharge_card": "Recharge card",
       "redemption": "Redemption code",
-      "extension": "Extension"
+      "extension": "Extension",
+      "invite": "Subscription invitation"
     },
     "status": {
       "available": "Available",
       "reserved": "In use",
       "redeemed": "Used",
       "expired": "Expired",
-      "revoked": "Revoked"
+      "revoked": "Revoked",
+      "not_started": "Not yet valid",
+      "paused": "Paused",
+      "archived": "Disabled",
+      "unavailable": "Unavailable"
     },
     "face": {
       "percentOff": "{percent}% off",
       "maxOff": " (up to {amount})",
-      "fixedOff": "{amount} off"
+      "fixedOff": "{amount} off",
+      "invite": "Unlocks plan purchase",
+      "redemption": "Redeem a subscription",
+      "redemptionDays": "Redeem {days} subscription days",
+      "extension": "Extend a subscription",
+      "extensionDays": "Extend by {days} days",
+      "recharge": "Principal {principal} + bonus {bonus}"
     },
     "table": {
       "title": "Vouchers",
-      "description": "\"In use\" = locked on a pending order; cancelling that order releases it automatically. The order it is held by shows under the status",
+      "description": "In-use vouchers are held by an order. Paused, disabled and not-yet-valid vouchers are shown separately from expired ones.",
       "colCode": "Code",
       "colKind": "Kind",
       "colFace": "Face value",
+      "colHolder": "Ownership / Return policy",
       "colStatus": "Status / Held by",
       "colExpires": "Valid until",
       "colUsedAt": "Used at / Redemption no.",
       "empty": "No vouchers yet",
       "usesLeft": "{left} of {total} left",
-      "emptyHint": "Vouchers issued by platform promotions show up here"
+      "emptyHint": "Vouchers issued by platform promotions show up here",
+      "notEnabled": "This voucher type is not enabled yet",
+      "unavailable": "Not currently eligible for use",
+      "validFrom": "Valid from {date}",
+      "rechargeUnavailable": "Funding, wallet status or ownership needs verification"
     },
     "notes": {
       "title": "How it works",
-      "description": "How vouchers join settlement",
+      "description": "Voucher purposes and availability",
       "useTitle": "Where to use",
-      "useBody": "Pick them on the order payment page: discounts act on the order price, credit vouchers offset the amount due; one of each can stack",
+      "useBody": "Choose up to one discount and one credit voucher on the payment page. Invitations unlock plan purchases at their normal price. Redeem subscription vouchers here for a new fixed-version subscription. Extension vouchers let you select an eligible subscription and confirm its previous and new end dates, without changing its tier or resetting quota. Recharge cards credit the tenant wallet after confirmation, with principal and bonus recorded separately.",
       "sourceTitle": "Where they come from",
       "sourceBody": "Issued by platform promotions (targeted at your tenant, workspace, or you); validity shown here is authoritative",
       "holdTitle": "Holding and release",
-      "holdBody": "A voucher picked at checkout is locked as “In use” and shows its order no.; cancelling or letting the order expire releases it back to available, and only a completed payment redeems it"
+      "holdBody": "Discount and credit vouchers are reserved when payment is declared. Rejection or an allowed order closure releases the reservation; validity and batch status determine whether the voucher can be used again."
     },
     "filters": {
       "groupLabel": "Voucher filters",
@@ -2958,7 +3061,31 @@
       "viewOrder": "View held order",
       "viewOrderHint": "This voucher is not held by any order",
       "use": "Use at checkout",
-      "useHint": "Only available vouchers can join settlement"
+      "useHint": "Only valid vouchers with an enabled use can continue",
+      "useInvite": "View available plans"
+    },
+    "recharge": {
+      "action": "Redeem to wallet",
+      "title": "Redeem recharge card",
+      "description": "Confirm principal, bonus and destination tenant.",
+      "close": "Close",
+      "retry": "Preview again",
+      "retryRequest": "Check and retry original request",
+      "confirm": "Confirm wallet credit",
+      "previewFailed": "This card is unavailable. Check its ownership, validity and wallet sources.",
+      "changed": "Voucher or destination terms changed. Preview and confirm the operation again.",
+      "failed": "The outcome is uncertain. Retry the original request.",
+      "success": "Credited · Redemption {number}",
+      "amounts": "Principal {currency} {principal} · Bonus {currency} {bonus}",
+      "balance": "Wallet balance after credit: {currency} {balance}",
+      "expires": "Bonus expires: {date}",
+      "noExpiry": "No bonus expiry is configured. Principal does not expire.",
+      "days": "Bonus is valid for {days} days after redemption. Principal does not expire.",
+      "transactions": "Wallet transactions: {numbers}",
+      "context": "Destination tenant: {tenant}. Current workspace: {workspace}. Funds belong to the tenant wallet.",
+      "policy": "Principal and bonus are recorded separately. Bonus is spent first and cannot be refunded as cash. Principal refunds follow the original payment and unused value. Redeemed cards cannot be revoked.",
+      "rateLimited": "Too many attempts. Wait before checking the original request.",
+      "unavailable": "Service unavailable. Check and retry the original confirmed request."
     }
   },
   "workspacePicker": {

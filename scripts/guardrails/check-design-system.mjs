@@ -1366,7 +1366,7 @@ const rules = [
     checkContent(file, content) {
       return checkCodeLines(
         file,
-        content,
+        maskInlineVitestMockBodies(file, content),
         /<(?:button|input|select|textarea)\b/,
         "使用 @vxture/design-system 的 Button/Input/Select 等组件；DS 不足时先补 DS。",
       );
@@ -2181,6 +2181,103 @@ function checkCodeLines(file, content, pattern, message) {
       results.push(violation(file, index + 1, message, line.trim()));
     });
   return results;
+}
+
+// ============================================================================
+// Test doubles are not shipped primitives; keep all other test JSX checked.
+// ============================================================================
+/**
+ * Mask only inline factories called through an imported Vitest mock binding.
+ * The checker resolves the import symbol, so similarly named objects and shadowed
+ * bindings receive no exemption. Unparseable modules retain the original checks.
+ * @param {string} file - Scanned source path.
+ * @param {string} content - Original source, with positions preserved on return.
+ * @returns {string} Source with recognized factory bodies replaced by whitespace.
+ */
+function maskInlineVitestMockBodies(file, content) {
+  if (
+    !/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file) ||
+    !content.includes(".mock")
+  )
+    return content;
+  const ts = createRequire(import.meta.url)("typescript");
+  const filename = path.resolve(ROOT, file);
+  const source = ts.createSourceFile(
+    filename,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  if (source.parseDiagnostics.length > 0) return content;
+  const options = {
+    allowJs: true,
+    noLib: true,
+    noResolve: true,
+    types: [],
+    jsx: ts.JsxEmit.Preserve,
+  };
+  const host = {
+    ...ts.createCompilerHost(options),
+    getSourceFile: (name) =>
+      path.resolve(name) === filename ? source : undefined,
+    fileExists: (name) => path.resolve(name) === filename,
+    readFile: (name) => (path.resolve(name) === filename ? content : undefined),
+  };
+  const checker = ts.createProgram([filename], options, host).getTypeChecker();
+  const bindings = new Set();
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "vitest" ||
+      statement.importClause?.isTypeOnly
+    )
+      continue;
+    const named = statement.importClause?.namedBindings;
+    if (!named || !ts.isNamedImports(named)) continue;
+    for (const binding of named.elements) {
+      if (
+        binding.isTypeOnly ||
+        !["vi", "vitest"].includes((binding.propertyName ?? binding.name).text)
+      )
+        continue;
+      const symbol = checker.getSymbolAtLocation(binding.name);
+      if (symbol?.declarations?.length === 1) bindings.add(symbol);
+    }
+  }
+  const bodies = [];
+  for (const statement of source.statements) {
+    if (
+      !ts.isExpressionStatement(statement) ||
+      !ts.isCallExpression(statement.expression)
+    )
+      continue;
+    const call = statement.expression;
+    const member = call.expression;
+    if (
+      !ts.isPropertyAccessExpression(member) ||
+      member.name.text !== "mock" ||
+      !ts.isIdentifier(member.expression) ||
+      !bindings.has(checker.getSymbolAtLocation(member.expression))
+    )
+      continue;
+    const [target, factory] = call.arguments;
+    if (
+      !target ||
+      !ts.isStringLiteral(target) ||
+      !factory ||
+      (!ts.isArrowFunction(factory) && !ts.isFunctionExpression(factory))
+    )
+      continue;
+    bodies.push([factory.body.getStart(source), factory.body.end]);
+  }
+  let masked = content;
+  for (const [start, end] of bodies.reverse())
+    masked =
+      masked.slice(0, start) +
+      masked.slice(start, end).replace(/[^\r\n]/g, " ") +
+      masked.slice(end);
+  return masked;
 }
 
 function hasAiPrimitiveTokenUsage(line) {

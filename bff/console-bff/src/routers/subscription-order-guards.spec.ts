@@ -12,10 +12,8 @@
  *     ga 产品的 planVersionId 配 developing 的 productCode），而且订单落库时产品与套餐就是
  *     对不上的。
  *
- * ── 假 pool 按调用序排队，不按 SQL 匹配 ──
- * `createOrder` 到这两道门之前只查一次库（`lookupPlanPrice`），紧接着就是归属+成熟度
- * 那条合并查询。**排错一位整份 spec 就测的是别的东西**，所以第一批必须喂价格行
- * （否则会先撞 `NOT_PURCHASABLE`，测到的是另一道门）。
+ * Query mocks dispatch by SQL meaning so workspace resolution and transactional
+ * receipt reads cannot silently shift the eligibility checks.
  */
 import { describe, expect, it, vi } from "vitest";
 import { BadRequestException, ConflictException } from "@nestjs/common";
@@ -32,53 +30,49 @@ const PRICE_ROW = {
   plan_name: "专业版",
 };
 
-/**
- * 按序回答：第一次 = lookupPlanPrice，第二次 = 归属+成熟度。
- * 后续调用一律抛——两道门拦住时不该还有第三次查库。
- *
- * **价格那一次按真库语义作答，不是无条件回一行。** 原来它写死
- * `mockResolvedValueOnce({ rows: [PRICE_ROW] })`，于是照不出这个缺陷：
- * `lookupPlanPrice` 的 SQL 里也带着 `plan.is_public = true`，而它排在邀请解锁
- * **之前**——真库里非公开套餐在这一步就返回 0 行，NOT_PURCHASABLE 400 抛出，
- * 下面那三条「非公开 + 有邀请」的用例要证的路径整条走不到，却照样全绿。
- *
- * 桩少模拟一个上游过滤，下游的门就等于没被测过。所以这里读真正发出的 SQL：
- * 带 is_public 过滤 + 这张套餐非公开 → 回 0 行，跟 Postgres 一样。
- */
+/** Model public-price filtering and fail on unexpected queries after the gates. */
 function poolOf(
   soldRow: Record<string, unknown> | undefined,
-  /* 非公开套餐会多打两次库：邀请消耗（UPDATE）与台账（INSERT）。`invite` 给的是
-     那条 UPDATE 的 returning——空数组 = 没有可用邀请。不传 = 不该走到那一步。
-     `owns` 是续订例外那一问（本租户手上有没有同一套餐的订阅）的答案；给了它，
-     那一问就排在邀请消耗之前。 */
+  // Invitations are read before order creation; no voucher is consumed by these gates.
   opts?: { invite?: unknown[]; owns?: boolean },
 ) {
   const planIsPublic = soldRow?.plan_is_public !== false;
-  const query = vi
-    .fn()
-    .mockImplementationOnce(async (sql: string) => ({
-      rows:
-        /plan\.is_public\s*=\s*true/.test(sql) && !planIsPublic
-          ? []
-          : [PRICE_ROW],
-    }))
-    .mockResolvedValueOnce({
-      /* 生命周期列（2026-09-24 新门）默认「已上线」：既有用例要证的是别的门，
-         桩少这一列会让它们全部撞在新门上——那时它们测的就不是自己声称的东西了。
-         专测新门的用例显式传 `product_status`。 */
-      rows: soldRow ? [{ product_status: "active", ...soldRow }] : [],
-    });
-  if (opts?.owns !== undefined) {
-    query.mockResolvedValueOnce({ rows: opts.owns ? [{ one: 1 }] : [] });
-  }
-  if (opts?.invite !== undefined) {
-    query.mockResolvedValueOnce({ rows: opts.invite });
-    query.mockResolvedValueOnce({ rows: [] });
-  }
-  query.mockImplementation(async () => {
-    throw new Error("不该走到这里：门未拦住");
+  const query = vi.fn(async (sql: string) => {
+    if (sql.includes("product.plan_prices"))
+      return {
+        rows:
+          /plan\.is_public\s*=\s*true/.test(sql) && !planIsPublic
+            ? []
+            : [PRICE_ROW],
+      };
+    if (sql.includes("as product_status"))
+      return {
+        rows: soldRow ? [{ product_status: "active", ...soldRow }] : [],
+      };
+    if (sql.includes("select id from tenancy.workspaces"))
+      return { rows: [{ id: "22222222-2222-4222-8222-222222222222" }] };
+    if (sql.includes("select 1 as one"))
+      return { rows: opts?.owns ? [{ one: 1 }] : [] };
+    if (sql.includes("from promotion.vouchers"))
+      return { rows: opts?.invite ?? [] };
+    throw new Error("Unexpected query after purchase gates");
   });
-  return { pool: { query } as unknown as Pool, query };
+  const transactionQuery = async (sql: string) => {
+    if (
+      ["begin", "commit", "rollback"].includes(sql) ||
+      sql.includes("pg_advisory_xact_lock") ||
+      sql.includes("promotion.voucher_operations")
+    )
+      return { rows: [] };
+    return query(sql);
+  };
+  return {
+    pool: {
+      query,
+      connect: async () => ({ query: transactionQuery, release: vi.fn() }),
+    } as unknown as Pool,
+    query,
+  };
 }
 
 /** 下单路径上所有发出的 SQL 里，提到 is_public 的有几条。 */
@@ -174,7 +168,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
     expect((error as BadRequestException).getResponse()).toMatchObject({
       code: "PLAN_PRODUCT_MISMATCH",
     });
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(touched(query, "promotion.voucher_redemptions")).toBe(false);
   });
 
   it("套餐根本找不到 primary 组件：同样按不匹配拒（fail-closed）", async () => {
@@ -244,7 +238,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
     });
     expect(messageOf(error)).toContain("预览");
     expect(messageOf(error)).not.toContain("停售");
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(touched(query, "promotion.voucher_redemptions")).toBe(false);
   });
 
   /*
@@ -267,7 +261,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
     expect(codeOf(error)).toBe("PRODUCT_NOT_RELEASED");
     expect(messageOf(error)).toContain("停售");
     expect(messageOf(error)).not.toContain("预览");
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(touched(query, "promotion.voucher_redemptions")).toBe(false);
   });
 
   it("beta + 公开套餐：三道门都放行", async () => {
@@ -326,7 +320,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
 
     expectPassedAllGates(error);
     expect(touched(query, "promotion.vouchers")).toBe(true);
-    expect(touched(query, "voucher_redemptions")).toBe(true);
+    expect(touched(query, "voucher_redemptions")).toBe(false);
   });
 
   it("非公开 + 无可用邀请：仍然 409，且不写台账", async () => {
@@ -471,7 +465,7 @@ describe("POST orders · 升级维护中", () => {
     expect(messageOf(error)).toContain("升级维护中");
     /* 平台时区 + 长日期长时间：与 console 其他时间同一形态。 */
     expect(messageOf(error)).toContain("2026/10/01 10:00:00");
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(touched(query, "promotion.voucher_redemptions")).toBe(false);
   });
 
   it("两列都空：与此前一样穿过所有带码的门", async () => {
@@ -526,7 +520,9 @@ describe("POST orders · 升级维护中", () => {
       .createOrder(req(), BODY)
       .catch(() => undefined);
 
-    const gateSql = String(query.mock.calls[1]?.[0]);
+    const gateSql = String(
+      query.mock.calls.find(([sql]) => sql.includes("as product_status"))?.[0],
+    );
     expect(gateSql).toContain("maintenance_window_id");
     expect(gateSql).toContain("maintenance_until");
   });

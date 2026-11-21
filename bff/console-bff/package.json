@@ -36,6 +36,7 @@
     "@vxture/service-notice": "workspace:*",
     "@vxture/service-organization": "workspace:*",
     "@vxture/service-promotion": "workspace:*",
+    "@vxture/service-provisioning": "workspace:*",
     "@vxture/service-review": "workspace:*",
     "@vxture/service-sms": "workspace:*",
     "@vxture/service-subscription": "workspace:*",

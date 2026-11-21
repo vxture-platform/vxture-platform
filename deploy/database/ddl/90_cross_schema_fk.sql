@@ -750,3 +750,66 @@ ALTER TABLE account.user_app_views ADD CONSTRAINT fk_user_app_views_tenant
     FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id) ON DELETE CASCADE;
 ALTER TABLE account.user_app_views ADD CONSTRAINT fk_user_app_views_workspace
     FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id) ON DELETE CASCADE;
+-- Promotion B02 expansion: operator/system actor IDs remain realm-qualified logical references.
+DO $$ BEGIN
+    ALTER TABLE promotion.vouchers ADD CONSTRAINT fk_vouchers_assigned_tenant
+        FOREIGN KEY (assigned_tenant_id) REFERENCES tenancy.tenants(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.vouchers ADD CONSTRAINT fk_vouchers_funding_order
+        FOREIGN KEY (funding_order_id) REFERENCES billing.orders(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.vouchers ADD CONSTRAINT fk_vouchers_funding_payment
+        FOREIGN KEY (funding_payment_id) REFERENCES billing.payments(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_redemptions ADD CONSTRAINT fk_voucher_redemptions_order
+        FOREIGN KEY (order_id) REFERENCES billing.orders(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_reservations ADD CONSTRAINT fk_voucher_reservations_order
+        FOREIGN KEY (order_id) REFERENCES billing.orders(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_reservations ADD CONSTRAINT fk_voucher_reservations_invoice
+        FOREIGN KEY (invoice_id) REFERENCES billing.invoices(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_reservations ADD CONSTRAINT fk_voucher_reservations_payment
+        FOREIGN KEY (declaration_payment_id) REFERENCES billing.payments(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_reservations ADD CONSTRAINT fk_voucher_reservations_tenant
+        FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_reservations ADD CONSTRAINT fk_voucher_reservations_workspace
+        FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_reservations ADD CONSTRAINT fk_voucher_reservations_user
+        FOREIGN KEY (user_id) REFERENCES account.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_events ADD CONSTRAINT fk_voucher_events_order
+        FOREIGN KEY (order_id) REFERENCES billing.orders(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_compensations ADD CONSTRAINT fk_voucher_compensations_order
+        FOREIGN KEY (order_id) REFERENCES billing.orders(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_compensations ADD CONSTRAINT fk_voucher_compensations_refund
+        FOREIGN KEY (refund_id) REFERENCES billing.refunds(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Card reservations have a real cross-domain instance identity.
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_redemptions ADD CONSTRAINT fk_redemption_principal_wallet FOREIGN KEY(principal_wallet_operation_id) REFERENCES billing.wallet_operations(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE promotion.voucher_redemptions ADD CONSTRAINT fk_redemption_bonus_wallet FOREIGN KEY(bonus_wallet_operation_id) REFERENCES billing.wallet_operations(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE billing.wallet_card_allocations ADD CONSTRAINT fk_wallet_card_voucher FOREIGN KEY(voucher_id) REFERENCES promotion.vouchers(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

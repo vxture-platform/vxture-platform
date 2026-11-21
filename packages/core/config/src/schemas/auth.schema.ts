@@ -60,6 +60,14 @@ export const authSchema = z.object({
   AUTH_INTERNAL_TOKEN: z.string().min(1).optional(),
   IDP_INTERNAL_TOKEN: z.string().min(1).optional(),
 
+  /** Dedicated rotating keys for anonymous voucher credentials; no JWT fallback. */
+  VOUCHER_CLAIM_ACTIVE_KEY: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,32}$/)
+    .optional(),
+  /** JSON version-to-hex-key map, validated by the credential consumer. */
+  VOUCHER_CLAIM_KEYS: z.string().min(2).optional(),
+
   // ── OIDC IdP (P0; coexists with the HS256 path until P5) ──────────────────
   /** OIDC issuer — the public-facing auth origin used as the `iss` claim */
   OIDC_ISSUER: z.string().default("http://localhost:3081"),

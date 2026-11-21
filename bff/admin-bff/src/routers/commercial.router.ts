@@ -1,51 +1,54 @@
 /**
- * commercial.router.ts - 商业化运营只读路由（用量计量 / 卡券营销 / 商业总览）
+ * commercial.router.ts - Commercial reporting and guarded voucher operations.
  * @package @vxture/bff-admin
- *
- * Description: 商业化四端点只读接口，接 18-schema 三域（metering / promotion / billing）：
- *   - GET /api/commercial/usage-metering     用量计量：metering.usage_summary_months + quota_pools（配额/余量）
- *   - GET /api/commercial/promotions         营销批次：promotion.voucher_batches 聚合 promotion.vouchers/redemptions
- *   - GET /api/commercial/promotion-redemptions 核销明细：voucher_redemptions join vouchers/batches
- *   - GET /api/commercial/overview           商业总览：billing.invoices/payments/transactions
- *                                            + metering.subscriptions + promotion.voucher_redemptions 的 KPI 聚合
- *   前端契约见 portals/admin/src/api/admin-bff.ts::fetchUsageMeteringRecords /
- *   fetchPromotionOperations / fetchPromotionRedemptionRecords / fetchCommerceOverview。
- *
- * 18-schema remap（cutover 后）：commerce→billing/metering/promotion（表复数）；
- *   tenant.tenant→tenancy.tenants，展示字段迁 tenancy.tenant_profiles；租户 type=personal/organization
- *   归一到前端口径 individual/company；新库无 province/city → region 走空态兜底。
- *   metering.usage_summary_* 只挂 workspace_id/product_id/metric_key → 经 workspaces 反查 tenant；
- *   用量维度无显示名（product_metrics 仅 metric_unit）→ metricName 回落 metric_key；
- *   模型分维度（request/input/output tokens）无独立汇总列 → 归零。
- *   promotion.voucher_batches 软下线走 status='archived'（无 deleted_at），故列表不加软删过滤。
- *   核销 operatorName 为客户 realm 自助（user_id），无运营名 → 默认兜底。
- *
- * @author AI-Generated
- * @date 2026-07-04
- * @version 1.0
- *
- * @copyright Vxture Team
- *
  * @layer Application
- * @category Router
+ * @category router
+ * @description
+ * Read projections use the reporting pool. Voucher commands delegate their
+ * transactions, durable receipts and audit trail to the promotion domain.
+ * @author AI-Generated
+ * @date 2026-11-19
  */
 
 import {
   BadRequestException,
+  HttpException,
   Body,
-  ConflictException,
   Controller,
   Get,
   Inject,
+  Optional,
   Post,
+  Param,
+  Query,
   Req,
+  Header,
+  Res,
   UnauthorizedException,
 } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
-import type { Request } from "express";
+// ⚠️ 跨层引用: Delegate voucher lifecycle and transaction ownership to the domain.
+import {
+  PgVoucherManagement,
+  VoucherClaimCredentials,
+  type CreateBatchCommand,
+  type AssignVoucherCommand,
+  type BatchAction,
+  type OperatorCommand,
+} from "@vxture/service-promotion";
+// ⚠️ 跨层引用: Read validated key material from infrastructure configuration.
+import { VxConfigService } from "@vxture/core-config";
+import {
+  readVoucherBatch,
+  readVoucherInstances,
+  readVoucherEvents,
+} from "./voucher-management.read";
+// ⚠️ 跨层引用: Billing verifies card sales sources within promotion transactions.
+import { PgRechargeCardFunding } from "@vxture/service-billing";
+import type { Request, Response } from "express";
 import type { Pool } from "pg";
 import { assertAnyCapability } from "../auth/capability";
-import { RequireStepUp } from "../auth/step-up.decorator";
+import { RequireVoucherStepUp } from "../auth/step-up.decorator";
+import { voucherStepUpRequired } from "../auth/voucher-step-up";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import type {
   BillingBillStatus,
@@ -66,241 +69,189 @@ import { industryLabel } from "@vxture/core-utils";
 
 // ── 发券写端点契约（product_321 §4.2，TD-028 部分销号）─────────────────────────
 
-interface CreateVoucherBatchBody {
-  /**
-   * 结算引擎已启用的两型（product_321 P7）+ 订阅邀请（2026-09-22）。
-   * invite 不进结算，它只解锁非公开套餐的自助购买资格。
-   */
-  kind: "discount" | "credit_voucher" | "invite";
-  name: string;
-  codePrefix?: string;
-  /**
-   * discount: {discountType, value, maxOffCents?}
-   * credit_voucher: {amountCents}
-   * invite: {planCode? | planVersionId?, note?} —— 这张邀请解锁哪个套餐
-   */
-  effect: Record<string, unknown>;
-  totalCount: number;
-  perUserLimit?: number;
-  validFrom: string;
-  validUntil: string;
-  /** 定向租户批次；缺省 = 平台级（券必须再定向 user/workspace 才可用，P7）。 */
-  tenantId?: string;
-}
-
-interface AssignVouchersBody {
-  batchId: string;
-  count?: number;
-  targetUserId?: string;
-  targetWorkspaceId?: string;
-}
-
 @Controller("api/commercial")
 export class CommercialRouter {
   constructor(
     @Inject(ADMIN_BFF_RO_POOL) private readonly pool: Pool,
     @Inject(ADMIN_BFF_RW_POOL) private readonly rwPool: Pool,
+    @Optional()
+    @Inject(VxConfigService)
+    private readonly config?: VxConfigService,
   ) {}
 
-  // 创建券批次（product_321 §4.2）：kind 限 discount/credit_voucher/invite，effect 结构化
-  // 校验（金额整数分、percent 0-100），未实现的门槛字段（applicable_plan_ids /
-  // min_user_level）显式拒绝——结算引擎会把带门槛的券过滤为不可用（P7），放行
-  // 配置只会造出永远用不了的券。
+  // ===========================================================================
+  // Operator voucher commands share the existing capability and step-up gates.
+  // ===========================================================================
   @Post("voucher-batches")
-  @RequireStepUp()
+  @RequireVoucherStepUp()
   async createVoucherBatch(
     @Req() req: Request & RequestContext,
-    @Body() body: CreateVoucherBatchBody,
-  ): Promise<{ batchId: string }> {
-    assertCanManagePromotion(req);
-    const operatorId = requireOperator(req);
-    const input = normalizeCreateBatchBody(body);
-    if (input.kind === "invite") {
-      await this.assertInvitablePlan(input.effect);
-    }
-
-    const { rows } = await this.rwPool.query<{ id: string }>(
-      `insert into promotion.voucher_batches (
-         tenant_id, kind, name, code_prefix, effect,
-         total_count, issued_count, per_user_limit,
-         valid_from, valid_until, status, created_by,
-         created_at, updated_at
-       ) values ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, 'active', $10, now(), now())
-       returning id`,
-      [
-        input.tenantId,
-        input.kind,
-        input.name,
-        input.codePrefix,
-        JSON.stringify(input.effect),
-        input.totalCount,
-        input.perUserLimit,
-        input.validFrom,
-        input.validUntil,
-        operatorId,
-      ],
+    @Body() body: CreateBatchCommand,
+  ) {
+    return this.executeVoucher(req, (manager, actor) =>
+      manager.createBatch(actor, body),
     );
-    const row = rows[0];
-    if (!row) throw new BadRequestException("批次创建失败");
-    return { batchId: row.id };
   }
 
-  /**
-   * 邀请只对**真存在、且真非公开**的套餐有意义。
-   *
-   * 不校的话会发出两种废券：指向不存在套餐的（永远解锁不了任何东西），和指向公开
-   * 套餐的（本来就能买，发了等于骗人）。两种都要等客户点下去才发现。
-   *
-   * 非公开的判据与 console 侧下单闸门同一列（`plans.is_public`）——两边看同一个
-   * 事实，不各自定义。
-   */
-  private async assertInvitablePlan(
-    effect: Record<string, unknown>,
-  ): Promise<void> {
-    const planCode =
-      typeof effect.planCode === "string" ? effect.planCode : null;
-    const planVersionId =
-      typeof effect.planVersionId === "string" ? effect.planVersionId : null;
-
-    const { rows } = await this.pool.query<{
-      plan_code: string;
-      is_public: boolean;
-    }>(
-      `select pl.plan_code, pl.is_public
-         from product.plans pl
-    left join product.plan_versions pv on pv.plan_id = pl.id
-        where ($1::text is null or pl.plan_code = $1)
-          and ($2::uuid is null or pv.id = $2)
-        limit 1`,
-      [planCode, planVersionId],
+  @Post("voucher-batches/:id/actions")
+  @RequireVoucherStepUp()
+  async actOnVoucherBatch(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Body() body: BatchAction,
+  ) {
+    return this.executeVoucher(req, (manager, actor) =>
+      manager.actOnBatch(actor, id, body),
     );
-    const plan = rows[0];
-    if (!plan) {
-      throw new BadRequestException(
-        `找不到套餐（${planVersionId ?? planCode}）——邀请必须指向一个真实存在的套餐`,
-      );
-    }
-    if (plan.is_public) {
-      throw new BadRequestException(
-        `套餐「${plan.plan_code}」本来就对外开放自助购买，不需要邀请`,
-      );
-    }
   }
 
-  // 定向发放（product_321 §4.2）：码按需生成（assign 时生成 voucher 行，
-  // issued_count = 已发放数）；issued_count 原子自增抢占（受影响行数=1 防并发
-  // 超发）；per_user_limit 仅对 user 目标生效。目标 = workspace / user 两维；
-  // tenant 定向 = tenant 专属批次里发放不填两列（租户全员可用，P7）；平台级
-  // 批次必须给定 user/workspace 目标（禁"通用无主券"）。
   @Post("vouchers/assign")
-  @RequireStepUp()
+  @RequireVoucherStepUp()
   async assignVouchers(
     @Req() req: Request & RequestContext,
-    @Body() body: AssignVouchersBody,
-  ): Promise<{ codes: string[] }> {
+    @Body() body: AssignVoucherCommand,
+  ) {
+    return this.executeVoucher(req, (manager, actor) =>
+      manager.assign(actor, body),
+    );
+  }
+
+  @Post("voucher-batches/:id/issue")
+  @RequireVoucherStepUp()
+  @Header("Cache-Control", "no-store")
+  async issueVoucherCredentials(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Body()
+    body: OperatorCommand & { count: number; fundingPaymentId?: string },
+  ) {
+    return this.executeVoucher(req, (manager, actor) =>
+      manager.issueClaimCredentials(
+        actor,
+        id,
+        body,
+        new VoucherClaimCredentials(this.config?.auth),
+      ),
+    );
+  }
+
+  @Post("vouchers/:id/revoke")
+  @RequireVoucherStepUp()
+  async revokeVoucher(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Body() body: OperatorCommand,
+  ) {
+    return this.executeVoucher(req, (manager, actor) =>
+      manager.revoke(actor, id, body),
+    );
+  }
+
+  /** Keep consumed credentials on the domain's receipt-only transaction path. */
+  private async executeVoucher<T>(
+    req: Request & RequestContext,
+    work: (manager: PgVoucherManagement, actor: string) => Promise<T>,
+  ): Promise<T> {
     assertCanManagePromotion(req);
-    requireOperator(req);
-    const batchId = (body?.batchId ?? "").trim();
-    if (!batchId) throw new BadRequestException("batchId 不能为空");
-    const count = Number.isInteger(body?.count) ? (body.count as number) : 1;
-    if (count < 1 || count > 200)
-      throw new BadRequestException("count 取值 1-200");
-    const targetUserId = body?.targetUserId?.trim() || null;
-    const targetWorkspaceId = body?.targetWorkspaceId?.trim() || null;
-    if (targetUserId && targetWorkspaceId)
-      throw new BadRequestException("user / workspace 目标二选一");
-
-    const client = await this.rwPool.connect();
+    const manager = new PgVoucherManagement(
+      this.rwPool,
+      new PgRechargeCardFunding(this.rwPool),
+      {
+        replayOnly: req.voucherReplayOnly === true,
+      },
+    );
     try {
-      await client.query("begin");
-
-      const batchResult = await client.query<{
-        id: string;
-        tenant_id: string | null;
-        kind: string;
-        code_prefix: string | null;
-        per_user_limit: number;
-        status: string;
-      }>(
-        `select id, tenant_id, kind, code_prefix, per_user_limit, status
-           from promotion.voucher_batches where id = $1 for update`,
-        [batchId],
-      );
-      const batch = batchResult.rows[0];
-      if (!batch) throw new BadRequestException("批次不存在");
-      if (batch.status !== "active")
-        throw new ConflictException("批次不是 active 状态，不能发放");
-      if (!batch.tenant_id && !targetUserId && !targetWorkspaceId) {
-        throw new BadRequestException(
-          "平台级批次必须定向到 user 或 workspace（禁无主券，P7）",
-        );
-      }
-      /*
-       * 邀请券必须定向到人或工作空间（2026-09-22）。
-       *
-       * 上面那条只管平台级批次；**租户级批次走「租户全员」时两个 assigned_* 列都是
-       * NULL**。而 console 侧的邀请判据认的正是这两列（本人 / 本人租户的工作空间），
-       * 于是这么发出去的邀请**永远匹配不上**——界面回「发放成功」还带着券码，客户
-       * 那边却始终看不见套餐。发得出去、用不了，比发不出去更糟。
-       *
-       * 选择拒绝而不是把判据放宽到「批次的 tenant_id 对上就算」：邀请这件事本身是
-       * 定向的，「整个租户都能买」说的是另一回事（那是把套餐改回公开订阅）。
-       */
-      if (batch.kind === "invite" && !targetUserId && !targetWorkspaceId) {
-        throw new BadRequestException(
-          "邀请券必须定向到具体用户或工作空间；「整个租户都能买」请把套餐改回公开订阅",
-        );
-      }
-
-      // per_user_limit：仅约束 user 目标（workspace/tenant-wide 发放不受限）。
-      if (targetUserId) {
-        const held = await client.query<{ held: string }>(
-          `select count(*) as held from promotion.vouchers
-            where batch_id = $1 and assigned_user_id = $2
-              and status not in ('revoked')`,
-          [batchId, targetUserId],
-        );
-        const heldCount = Number(held.rows[0]?.held ?? 0);
-        if (heldCount + count > batch.per_user_limit) {
-          throw new ConflictException(
-            `超出每用户上限（已持 ${heldCount}/${batch.per_user_limit}）`,
-          );
-        }
-      }
-
-      // issued_count 原子抢占：受影响行数=1 才算占到发行量。
-      const seized = await client.query(
-        `update promotion.voucher_batches
-            set issued_count = issued_count + $2, updated_at = now()
-          where id = $1 and status = 'active'
-            and issued_count + $2 <= total_count`,
-        [batchId, count],
-      );
-      if (seized.rowCount !== 1) {
-        throw new ConflictException("批次发行量不足");
-      }
-
-      const codes: string[] = [];
-      for (let i = 0; i < count; i += 1) {
-        const code = voucherCode(batch.code_prefix);
-        await client.query(
-          `insert into promotion.vouchers (
-             batch_id, code, status, max_uses, used_count,
-             assigned_workspace_id, assigned_user_id, created_at
-           ) values ($1, $2, 'assigned', 1, 0, $3, $4, now())`,
-          [batchId, code, targetWorkspaceId, targetUserId],
-        );
-        codes.push(code);
-      }
-
-      await client.query("commit");
-      return { codes };
+      return await work(manager, requireOperator(req));
     } catch (error) {
-      await client.query("rollback");
+      if (error instanceof HttpException) {
+        const body = error.getResponse();
+        if (
+          typeof body === "object" &&
+          "code" in body &&
+          body.code === "VOUCHER_STEP_UP_RECEIPT_MISSING"
+        )
+          throw voucherStepUpRequired(req);
+      }
       throw error;
-    } finally {
-      client.release();
     }
+  }
+
+  @Get("voucher-batches/:id/funding-sources")
+  @Header("Cache-Control", "no-store")
+  async cardFundingSources(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ) {
+    assertCanManagePromotion(req);
+    const batch = await readVoucherBatch(this.pool, id);
+    if (batch.kind !== "recharge_card" || !batch.tenantId) return [];
+    return new PgRechargeCardFunding(this.pool).sources(batch.tenantId);
+  }
+
+  @Get("voucher-batches/:id")
+  async voucherBatchDetail(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ) {
+    assertCanReadPromotion(req);
+    return readVoucherBatch(this.pool, id);
+  }
+
+  @Get("voucher-batches/:id/vouchers")
+  async voucherBatchInstances(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Query("page") page?: string,
+  ) {
+    assertCanReadPromotion(req);
+    return readVoucherInstances(this.pool, id, page);
+  }
+
+  @Get("voucher-batches/:id/events")
+  async voucherBatchEvents(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Query("page") page?: string,
+  ) {
+    assertCanReadPromotion(req);
+    return readVoucherEvents(this.pool, id, page);
+  }
+
+  @Get("voucher-operations/:key")
+  async voucherOperationReceipt(
+    @Req() req: Request & RequestContext,
+    @Param("key") key: string,
+    @Query("type") type: string,
+    @Res() response?: Response,
+  ) {
+    assertCanManagePromotion(req);
+    if (
+      !key?.trim() ||
+      key.length > 128 ||
+      ![
+        "batch_create",
+        "batch_configure",
+        "batch_review",
+        "batch_pause",
+        "batch_resume",
+        "batch_archive",
+        "batch_request_budget",
+        "batch_approve_budget",
+        "voucher_assign",
+        "voucher_issue",
+        "voucher_revoke",
+      ].includes(type)
+    )
+      throw new BadRequestException("回执查询参数非法");
+    const row = (
+      await this.pool.query(
+        'select id,batch_id as "batchId",operation_type as "operationType",result,created_at as "createdAt" from promotion.voucher_operations where actor_realm=\'operator\' and actor_id=$1 and operation_type=$2 and idempotency_key=$3',
+        [requireOperator(req), type, key.trim()],
+      )
+    ).rows[0];
+    // Explicit JSON preserves an absent receipt for strict JSON clients.
+    if (response) response.json(row ?? null);
+    return row ?? null;
   }
 
   @Get("usage-metering")
@@ -320,6 +271,69 @@ export class CommercialRouter {
     assertCanManageCommercial(req);
     const { rows } = await this.pool.query<PromotionBatchRow>(PROMOTIONS_SQL);
     return rows.map(mapPromotionBatchRow);
+  }
+
+  @Get("promotions/page")
+  async listPromotionsPage(
+    @Req() req: Request & RequestContext,
+    @Query("page") page = "1",
+    @Query("pageSize") size = "20",
+    @Query("status") status = "all",
+    @Query("type") type = "all",
+    @Query("q") q = "",
+  ) {
+    assertCanReadPromotion(req);
+    const current = Number(page),
+      pageSize = Number(size);
+    if (
+      !Number.isSafeInteger(current) ||
+      current < 1 ||
+      current > 1_000_000 ||
+      ![10, 20, 50, 100].includes(pageSize) ||
+      q.length > 200 ||
+      ![
+        "all",
+        "draft",
+        "active",
+        "scheduled",
+        "paused",
+        "expired",
+        "archived",
+      ].includes(status) ||
+      !["all", "discount", "coupon", "campaign"].includes(type)
+    )
+      throw new BadRequestException("分页或筛选参数非法");
+    const source = `with batches as (${PROMOTIONS_BASE_SQL}), listing as (select *,
+      case when status in ('draft','paused','archived') then status when valid_until<=now() then 'expired' when valid_from>now() then 'scheduled' else 'active' end display_status,
+      case when kind='discount' then 'discount' when kind in ('credit_voucher','recharge_card') then 'coupon' else 'campaign' end promotion_type from batches),
+      filtered as (select * from listing where ($1='all' or display_status=$1) and ($2='all' or promotion_type=$2)
+        and ($3='' or strpos(lower(concat_ws(' ',name,code_prefix,id::text,kind,effect::text,owner_name)),lower($3))>0))`;
+    const values = [status, type, q.trim()];
+    const [counts, items] = await Promise.all([
+      this.pool.query(
+        `${source} select count(*)::int total,count(*) filter(where display_status='active')::int active,
+        coalesce(sum(redemption_count),0)::int redemptions,coalesce(sum(tenant_count),0)::int tenants,
+        count(*) filter(where promotion_type='coupon')::int coupons from filtered`,
+        values,
+      ),
+      this.pool.query<PromotionBatchRow>(
+        `${source} select * from filtered order by created_at desc,id desc limit $4 offset $5`,
+        [...values, pageSize, (current - 1) * pageSize],
+      ),
+    ]);
+    return {
+      items: items.rows.map(mapPromotionBatchRow),
+      total: counts.rows[0].total as number,
+      page: current,
+      pageSize,
+      summary: counts.rows[0] as {
+        total: number;
+        active: number;
+        redemptions: number;
+        tenants: number;
+        coupons: number;
+      },
+    };
   }
 
   @Get("promotion-redemptions")
@@ -358,6 +372,15 @@ function assertCanManageCommercial(req: Request & RequestContext): void {
 }
 
 // 发券/发放 = 危 promotion:campaign.manage（product_321 §3 新码，TD-028 部分销号）。
+function assertCanReadPromotion(req: Request & RequestContext): void {
+  assertAnyCapability(req, [
+    "promotion:campaign.read",
+    "promotion:campaign.manage",
+    "commerce:billing.read",
+    "commerce:billing.manage",
+  ]);
+}
+
 function assertCanManagePromotion(req: Request & RequestContext): void {
   assertAnyCapability(req, ["promotion:campaign.manage"]);
 }
@@ -373,158 +396,6 @@ function requireOperator(req: Request & RequestContext): string {
     throw new UnauthorizedException("Invalid platform admin principal");
   }
   return id;
-}
-
-// 券码：{PREFIX-}{12位}，去混淆字符（0/O、1/I）统一大写（230 §5.3 归一化约定）。
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function voucherCode(prefix: string | null): string {
-  const raw = randomUUID().replace(/-/g, "");
-  let out = "";
-  for (let i = 0; i < 12; i += 1) {
-    const byte = Number.parseInt(raw.slice(i * 2, i * 2 + 2), 16);
-    out += CODE_ALPHABET[byte % CODE_ALPHABET.length];
-  }
-  return prefix ? `${prefix}${out}` : `VX-${out}`;
-}
-
-const GATE_FIELDS = ["applicable_plan_ids", "min_user_level"] as const;
-
-function normalizeCreateBatchBody(body: CreateVoucherBatchBody): {
-  kind: "discount" | "credit_voucher" | "invite";
-  name: string;
-  codePrefix: string | null;
-  effect: Record<string, unknown>;
-  totalCount: number;
-  perUserLimit: number;
-  validFrom: string;
-  validUntil: string;
-  tenantId: string | null;
-} {
-  if (!body || typeof body !== "object")
-    throw new BadRequestException("Request body is required");
-  if (
-    body.kind !== "discount" &&
-    body.kind !== "credit_voucher" &&
-    body.kind !== "invite"
-  )
-    throw new BadRequestException(
-      "kind 仅支持 discount / credit_voucher / invite（其余券型未启用）",
-    );
-  const name = (body.name ?? "").trim();
-  if (name.length < 2 || name.length > 128)
-    throw new BadRequestException("name 长度 2-128");
-  const codePrefix = body.codePrefix?.trim() || null;
-  if (codePrefix && !/^[A-Z0-9-]{2,16}$/.test(codePrefix))
-    throw new BadRequestException(
-      "codePrefix 仅限大写字母/数字/连字符，2-16 位",
-    );
-
-  const rawEffect = body.effect ?? {};
-  for (const field of GATE_FIELDS) {
-    if (field in rawEffect) {
-      throw new BadRequestException(
-        `${field} 门槛 V1 未实现，禁止配置（配置了也会被结算引擎过滤为不可用）`,
-      );
-    }
-  }
-  let effect: Record<string, unknown>;
-  if (body.kind === "invite") {
-    /* 订阅邀请（2026-09-22）：effect 只装「这张邀请解锁哪个套餐」。
-       **只解锁「能买」，不改变「要付钱」**——客户照常下单付款，与运营直接发订阅
-       （operator_grant）和兑换码（redemption）是三件事。
-
-       planCode 与 planVersionId 至少给一个：console 侧两条都认（按 planVersionId
-       精确到版本，或按 planCode 覆盖该套餐的所有版本）。套餐是否存在、是否真的
-       非公开，由调用方在落库前查库校验——在这里只做形状检查，不打库。 */
-    const planCode = String(
-      rawEffect["planCode"] ?? rawEffect["plan_code"] ?? "",
-    ).trim();
-    const planVersionId = String(
-      rawEffect["planVersionId"] ?? rawEffect["plan_version_id"] ?? "",
-    ).trim();
-    if (!planCode && !planVersionId)
-      throw new BadRequestException(
-        "invite 的 effect 必须给 planCode 或 planVersionId 之一（这张邀请解锁哪个套餐）",
-      );
-    const note = String(rawEffect["note"] ?? "").trim();
-    if (note.length > 200) throw new BadRequestException("note 最长 200 字");
-    effect = {
-      ...(planCode ? { planCode } : {}),
-      ...(planVersionId ? { planVersionId } : {}),
-      ...(note ? { note } : {}),
-    };
-  } else if (body.kind === "discount") {
-    const discountType =
-      rawEffect["discount_type"] ?? rawEffect["discountType"];
-    const value = Number(rawEffect["value"]);
-    const maxOff = rawEffect["max_off_cents"] ?? rawEffect["maxOffCents"];
-    if (discountType !== "percent" && discountType !== "fixed")
-      throw new BadRequestException("discount_type 必须是 percent / fixed");
-    if (discountType === "percent" && !(value > 0 && value <= 100))
-      throw new BadRequestException("percent 值域 (0,100]");
-    if (discountType === "fixed" && !(Number.isSafeInteger(value) && value > 0))
-      throw new BadRequestException("fixed 面额必须是正整数（分）");
-    if (
-      maxOff != null &&
-      !(Number.isSafeInteger(Number(maxOff)) && Number(maxOff) > 0)
-    )
-      throw new BadRequestException("max_off_cents 必须是正整数（分）");
-    effect = {
-      discount_type: discountType,
-      value,
-      ...(maxOff != null ? { max_off_cents: Number(maxOff) } : {}),
-    };
-  } else {
-    const amount = Number(
-      rawEffect["amount_cents"] ?? rawEffect["amountCents"],
-    );
-    if (!(Number.isSafeInteger(amount) && amount > 0))
-      throw new BadRequestException("amount_cents 必须是正整数（分）");
-    effect = { amount_cents: amount, currency: "CNY" };
-  }
-
-  const totalCount = Number(body.totalCount);
-  if (
-    !(
-      Number.isSafeInteger(totalCount) &&
-      totalCount >= 1 &&
-      totalCount <= 100_000
-    )
-  )
-    throw new BadRequestException("totalCount 取值 1-100000");
-  const perUserLimit = Number(body.perUserLimit ?? 1);
-  if (
-    !(
-      Number.isSafeInteger(perUserLimit) &&
-      perUserLimit >= 1 &&
-      perUserLimit <= 100
-    )
-  )
-    throw new BadRequestException("perUserLimit 取值 1-100");
-
-  const validFrom = new Date(body.validFrom ?? "");
-  const validUntil = new Date(body.validUntil ?? "");
-  if (Number.isNaN(validFrom.getTime()) || Number.isNaN(validUntil.getTime()))
-    throw new BadRequestException("validFrom / validUntil 必须是合法时间");
-  if (validUntil.getTime() <= validFrom.getTime())
-    throw new BadRequestException("validUntil 必须晚于 validFrom");
-
-  const tenantId = body.tenantId?.trim() || null;
-  if (tenantId && !UUID_RE.test(tenantId))
-    throw new BadRequestException("tenantId 非法");
-
-  return {
-    kind: body.kind,
-    name,
-    codePrefix,
-    effect,
-    totalCount,
-    perUserLimit,
-    validFrom: validFrom.toISOString(),
-    validUntil: validUntil.toISOString(),
-    tenantId,
-  };
 }
 
 // ── 公共工具 ────────────────────────────────────────────────────────────────
@@ -704,11 +575,12 @@ function derivePromotionStatus(
   validFrom: Date | string | null,
   validUntil: Date | string | null,
 ): PromotionOperationStatus {
-  if (status === "archived") return "expired";
+  if (status === "draft") return "draft";
+  if (status === "archived") return "archived";
   if (status === "paused") return "paused";
   const now = Date.now();
   if (validFrom && new Date(validFrom).getTime() > now) return "scheduled";
-  if (validUntil && new Date(validUntil).getTime() < now) return "expired";
+  if (validUntil && new Date(validUntil).getTime() <= now) return "expired";
   return "active";
 }
 
@@ -730,16 +602,33 @@ function faceLabel(kind: string, effect: unknown): string {
       ? `${base}（封顶 ¥${(maxOff / 100).toFixed(2)}）`
       : base;
   }
-  if (kind === "credit_voucher" || kind === "recharge_card") {
+  if (kind === "recharge_card")
+    return (
+      "本金 ¥" +
+      (Number(e.face_value_cents ?? 0) / 100).toFixed(2) +
+      " + 赠额 ¥" +
+      (Number(e.bonus_cents ?? 0) / 100).toFixed(2)
+    );
+  if (kind === "credit_voucher") {
     const amount = Number(e["amount_cents"] ?? e["face_value_cents"]);
     return Number.isFinite(amount) && amount > 0
       ? `¥${(amount / 100).toFixed(2)}`
       : "未配置";
   }
+  if (kind === "extension" || kind === "redemption") {
+    const days = e[kind === "extension" ? "extend_days" : "duration_days"];
+    return typeof days === "number" && Number.isSafeInteger(days) && days > 0
+      ? `${kind === "extension" ? "展期" : "兑换"} ${days} 天`
+      : "未配置";
+  }
   if (kind === "invite") {
     /* 邀请券没有面额，它的「面额」就是解锁哪个套餐——那是这一行唯一要紧的事实，
        退回「—」等于把它藏了。套餐码是可读码（arda-starter 这种），不是 uuid。 */
-    const plan = e["planCode"] ?? e["planVersionId"];
+    const plan =
+      e["plan_code"] ??
+      e["plan_version_id"] ??
+      e["planCode"] ??
+      e["planVersionId"];
     return typeof plan === "string" && plan ? `解锁 ${plan}` : "未配置";
   }
   return "—";
@@ -761,6 +650,17 @@ function mapPromotionBatchRow(
        campaign，分辨不出——而发放弹窗必须知道这是不是邀请券（邀请不许发给
        「租户全员」，那样两个 assigned_* 列都为 NULL，发出来就是死券）。 */
     kind: row.kind,
+    batchStatus: row.status as NonNullable<
+      PromotionOperationRecord["batchStatus"]
+    >,
+    tenantId: row.tenant_id,
+    totalCount,
+    issuedCount,
+    requiresCashFunding:
+      row.kind === "recharge_card" &&
+      row.effect !== null &&
+      typeof row.effect === "object" &&
+      Number((row.effect as Record<string, unknown>).face_value_cents) > 0,
     status: derivePromotionStatus(row.status, row.valid_from, row.valid_until),
     scopeLabel: row.tenant_id ? "定向租户" : "平台级",
     // TD-030: 面额随台账展示（此前只有 kind 标签）。
@@ -775,7 +675,7 @@ function mapPromotionBatchRow(
   };
 }
 
-const PROMOTIONS_SQL = `
+const PROMOTIONS_BASE_SQL = `
 select
   b.id,
   b.tenant_id,
@@ -789,6 +689,7 @@ select
   b.valid_until,
   b.status,
   b.updated_at,
+  b.created_at,
   o.display_name as owner_name,
   coalesce(r.redemption_count, 0) as redemption_count,
   coalesce(r.tenant_count, 0)     as tenant_count
@@ -802,9 +703,8 @@ left join lateral (
   join promotion.vouchers v on v.id = vr.voucher_id
   where v.batch_id = b.id
 ) r on true
-order by b.created_at desc
-limit 500
 `;
+const PROMOTIONS_SQL = `${PROMOTIONS_BASE_SQL} order by b.created_at desc,b.id desc limit 500`;
 
 interface PromotionBatchRow {
   id: string;
@@ -836,11 +736,11 @@ const BILL_STATUSES: ReadonlySet<BillingBillStatus> = new Set([
   "cancelled",
   "overdue",
 ]);
-function normalizeBillStatus(value: string | null): BillingBillStatus {
+function normalizeBillStatus(value: string | null): BillingBillStatus | null {
   if (value && BILL_STATUSES.has(value as BillingBillStatus)) {
     return value as BillingBillStatus;
   }
-  return "paid";
+  return null;
 }
 
 function mapPromotionRedemptionRow(
@@ -853,6 +753,10 @@ function mapPromotionRedemptionRow(
     redemptionNo: row.redemption_no,
     promotionCode: row.voucher_code,
     promotionName: row.batch_name,
+    kind: row.kind,
+    benefitLabel: faceLabel(row.kind, row.effect_snapshot),
+    walletTransactions: row.wallet_transactions ?? [],
+    subscriptionId: row.subscription_id,
     tenantId: row.tenant_id,
     tenantCode: row.tenant_code ?? "",
     tenantName: row.tenant_name ?? "",
@@ -860,9 +764,9 @@ function mapPromotionRedemptionRow(
     orderNo: row.order_no,
     billId: row.bill_id ?? "",
     billNo: row.bill_no ?? "",
-    billStatus: normalizeBillStatus(row.bill_status),
+    billStatus: row.bill_id ? normalizeBillStatus(row.bill_status) : null,
     servicePlanName: row.plan_name,
-    currency: "CNY",
+    currency: row.currency ?? "CNY",
     orderAmount: toNumber(row.total_amount),
     discountAmount: toNumber(row.discount_amount),
     payableAmount: toNumber(row.payable_amount),
@@ -879,6 +783,10 @@ const PROMOTION_REDEMPTIONS_SQL = `
 select
   rd.id,
   rd.redemption_no,
+  rd.kind,
+  rd.effect_snapshot,
+  array(select tx.transaction_no from billing.wallet_operations wo join billing.transactions tx on tx.id=wo.transaction_id where wo.id in (rd.principal_wallet_operation_id,rd.bonus_wallet_operation_id) order by tx.transaction_no) wallet_transactions,
+  rd.subscription_id,
   v.code                           as voucher_code,
   b.name                           as batch_name,
   rd.tenant_id,
@@ -892,6 +800,7 @@ select
   inv.total_amount,
   inv.discount_amount,
   inv.payable_amount,
+  inv.currency,
   pl.plan_name,
   rd.redeemed_at
 from promotion.voucher_redemptions rd
@@ -899,10 +808,12 @@ join promotion.vouchers v on v.id = rd.voucher_id
 join promotion.voucher_batches b on b.id = v.batch_id
 left join tenancy.tenants t on t.id = rd.tenant_id
 left join billing.invoice_items ii on ii.id = rd.invoice_item_id
-left join billing.invoices inv on inv.id = ii.bill_id
+left join billing.payments pay on pay.id = rd.payment_id
+left join promotion.voucher_reservations res on res.id = rd.reservation_id
+left join billing.invoices inv on inv.id = coalesce(ii.bill_id,pay.bill_id,res.invoice_id)
 left join metering.subscriptions sub on sub.id = rd.subscription_id
--- 订阅可读码 = 最近一次履约它的订单号（product_330；旧列 sub.order_no 停写待删）
-left join billing.orders cur on cur.id = sub.current_order_id
+-- A time benefit must never inherit an unrelated paid order from its subscription.
+left join billing.orders cur on cur.id = coalesce(rd.order_id,inv.order_id)
 left join product.plan_versions pv on pv.id = sub.plan_version_id
 left join product.plans pl on pl.id = pv.plan_id
 order by rd.redeemed_at desc
@@ -912,6 +823,10 @@ limit 500
 interface PromotionRedemptionRow {
   id: string;
   redemption_no: string;
+  wallet_transactions: string[];
+  kind: string;
+  effect_snapshot: unknown;
+  subscription_id: string | null;
   voucher_code: string;
   batch_name: string;
   tenant_id: string;
@@ -925,6 +840,7 @@ interface PromotionRedemptionRow {
   total_amount: string | number | null;
   discount_amount: string | number | null;
   payable_amount: string | number | null;
+  currency: string | null;
   plan_name: string | null;
   redeemed_at: Date | string | null;
 }

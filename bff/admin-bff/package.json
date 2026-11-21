@@ -42,7 +42,8 @@
     "express": "^4.22.1",
     "ioredis": "^5.0.0",
     "pg": "^8.16.3",
-    "reflect-metadata": "^0.2.0"
+    "reflect-metadata": "^0.2.0",
+    "@vxture/service-billing": "workspace:*"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.7",

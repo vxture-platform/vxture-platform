@@ -10,9 +10,9 @@ export interface TenantClosureSnapshot {
   currency: string;
   /** credits.balance,两位小数字符串。 */
   balance: string;
-  /** 付费余额 = min(balance, Σrecharge − Σrefund)(先消耗赠送)。 */
+  /** Proven principal remaining in the source ledger; legacy unknowns block closure. */
   paidBalance: string;
-  /** 赠送余额 = balance − 付费余额。 */
+  /** Remaining bonus sources, including expired amounts pending an expiry posting. */
   giftedBalance: string;
   /** 审核中,或已批准但尚未打款成功 / 失败的退款数。 */
   refundsInProgress: number;

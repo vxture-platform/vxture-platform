@@ -1,6 +1,6 @@
 {
   "note": "本文件由 check-internal-route-policy.mjs --update 生成，不要手改。它钉住的是「内部口令能进哪些路由」这个面；declaredUnbound 那一档曾是共享口令的真实半径（PR C 之后为 0，再出现即红）；actorBoundControllers 是挂着 ActorBindingGuard 的 controller，摘门不许无声。",
-  "routes": 13,
+  "routes": 14,
   "declaredUnbound": 0,
   "actorBoundControllers": [
     "account-admin-internal.router.ts",
@@ -19,6 +19,7 @@
     "operator-admin-internal.router.ts POST :id/reset-password risk=admin-action actor=token-bound",
     "operator-admin-internal.router.ts POST :id/sessions/revoke risk=admin-action actor=token-bound",
     "operator-sessions-internal.router.ts GET  risk=read actor=none",
+    "operator-stepup.router.ts POST internal/operator/stepup/consume risk=admin-action actor=proven",
     "operator-stepup.router.ts POST internal/operator/stepup/totp risk=credential-mint actor=proven"
   ]
 }

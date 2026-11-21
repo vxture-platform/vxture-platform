@@ -12,6 +12,8 @@
  * ProvisioningService here only enqueues — dispatch config is never
  * exercised because delivery dispatch runs in platform-api (D13), not here.
  */
+// ⚠️ 跨层引用: the application composes the domain wallet transaction port.
+import { PgWalletLedger } from "@vxture/service-billing";
 import { Logger, Provider } from "@nestjs/common";
 import { Pool } from "pg";
 import { MailService } from "@vxture/core-mail";
@@ -105,6 +107,7 @@ export const orderServiceProvider: Provider = {
       subscriptions,
       new PromotionService(new PgPromotionRepository(pool)),
     );
+    orders.setWalletSettlement(new PgWalletLedger(pool));
     orders.setCustomerNotifier(customerNotifier(pool, mail));
     return orders;
   },

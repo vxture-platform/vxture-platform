@@ -7,6 +7,10 @@
  * 对订阅行的改动只有"履约条款"（applySubscriptionTerms）——它由 OrderService 在订阅服务
  * 完成版本切换 / 建行 / 续期之后调用，把周期、实付、current_order_id 落到订阅上。
  */
+import {
+  settlementCents,
+  type WalletSettlementPort,
+} from "../types/wallet-settlement.types";
 import { randomUUID } from "node:crypto";
 import { ConflictException, Inject, Injectable } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
@@ -27,6 +31,14 @@ import type {
   RefundTransferChannel,
 } from "../types/order.types";
 import { maskBankAccount } from "../bank-account-mask";
+import {
+  readRefundSources,
+  prepareRefundCalculation,
+  insertRefundAllocations,
+  validateRefundAllocations,
+  type RefundCalculation,
+} from "./refund-settlement";
+import type { RefundSource } from "../money/refund-sources";
 
 interface OrderRow {
   id: string;
@@ -79,6 +91,8 @@ interface AutoRenewCandidateRow {
 }
 
 interface RefundRow {
+  bill_id: string;
+  pay_record_id: string;
   id: string;
   tenant_id: string;
   order_id: string | null;
@@ -179,6 +193,7 @@ function isUniqueViolation(
 export interface RefundBasis {
   /** Actual wallet debit; voucher value must never become refundable wallet funds. */
   balancePaidAmount?: number;
+  sources?: RefundSource[];
   /** 同工作区×产品、履约时间更早的已履约/已退款订单数（>0 = 不是首次购买） */
   earlierFulfilledCount: number;
   /** 消耗性配额已用比 [0,1]（无池 0） */
@@ -270,7 +285,74 @@ const OPEN_STATUSES: readonly OrderStatus[] = [
 
 @Injectable()
 export class PgOrderRepository {
+  /**
+   * Check effect ownership before a refund recovery attempt.
+   * @param orderId - Reversed order.
+   * @param subscriptionId - Subscription receiving the rollback.
+   * @returns Whether the subscription still points at the original order.
+   */
+  async isCurrentSubscriptionOrder(
+    orderId: string,
+    subscriptionId: string,
+  ): Promise<boolean> {
+    return !!(
+      await this.pool.query(
+        "select id from metering.subscriptions where id=$1 and current_order_id=$2",
+        [subscriptionId, orderId],
+      )
+    ).rows[0];
+  }
+
+  /**
+   * Find reversed effects requiring recovery without moving money again.
+   * @param limit - Maximum orders per recovery pass.
+   * @returns Reversed order IDs whose current subscription is still live.
+   */
+  async findRefundRecoveryOrders(limit = 100): Promise<string[]> {
+    return (
+      await this.pool.query<{ id: string }>(
+        `select o.id from billing.orders o join metering.subscriptions s on s.id=o.subscription_id
+      where o.status='refunded' and s.current_order_id=o.id and s.status not in ('cancelled','expired') order by o.closed_at,o.id limit $1`,
+        [limit],
+      )
+    ).rows.map((r) => r.id);
+  }
+
+  /**
+   * Close a fully reversed noncash order without manufacturing a cash refund.
+   * @param client - Order transaction holding the effect and source locks.
+   * @param orderId - Reversed source order.
+   * @param actor - Actual cancellation executor.
+   * @returns Resolves after the explicit noncash completion event is recorded.
+   */
+  async markNonCashReversedTx(
+    client: PoolClient,
+    orderId: string,
+    actor: OrderActor,
+  ): Promise<void> {
+    await client.query(
+      "update billing.orders set status='refunded',closed_at=now(),close_reason='noncash_reversal',updated_at=now() where id=$1 and status='fulfilled'",
+      [orderId],
+    );
+    await this.insertEventTx(client, {
+      orderId,
+      eventType: "noncash_reversed",
+      fromStatus: "fulfilled",
+      toStatus: "refunded",
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      remark: "服务已撤销，无现金退款；卡券按原政策处理。",
+      clientIp: actor.clientIp ?? null,
+    });
+  }
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
+
+  private walletSettlement: WalletSettlementPort | null = null;
+
+  /** Inject the source wallet from the application composition root. */
+  setWalletSettlement(port: WalletSettlementPort | null): void {
+    this.walletSettlement = port;
+  }
 
   async getById(id: string): Promise<OrderRecord | null> {
     const res = await this.pool.query<OrderRow>(
@@ -294,8 +376,9 @@ export class PgOrderRepository {
   async findOpenOrderForProduct(
     workspaceId: string,
     productCode: string,
+    client?: PoolClient,
   ): Promise<OrderRecord | null> {
-    const res = await this.pool.query<OrderRow>(
+    const res = await (client ?? this.pool).query<OrderRow>(
       `select o.* from billing.orders o
          join product.products p on p.id = o.product_id
         where o.workspace_id = $1 and p.product_code = $2
@@ -308,14 +391,24 @@ export class PgOrderRepository {
   }
 
   /**
-   * 下单（product_330 §3）：orders(pending_payment) + invoices(unpaid, order_id) +
-   * invoice_items(subscription_fee) + order_events(created)，一个事务。**不建订阅行。**
-   * 在途订单部分唯一索引撞上 → 409。
+   * Create an order, invoice, line items and creation event atomically.
+   * @param input - Verified purchase terms; no subscription is created yet.
+   * @param transaction - Optional caller-owned transaction; never committed or released here.
+   * @returns The new order and invoice identifiers.
+   * @throws {ConflictException} When a held subscription or open order occupies the slot.
    */
-  async createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
-    const client = await this.pool.connect();
+  async createOrder(
+    input: CreateOrderInput,
+    transaction?: PoolClient,
+  ): Promise<CreateOrderResult> {
+    const client = transaction ?? (await this.pool.connect());
     try {
-      await client.query("begin");
+      if (!transaction) await client.query("begin");
+      // Share the workspace acquisition lock with direct voucher subscriptions.
+      await client.query(
+        "select id from tenancy.workspaces where id=$1 for no key update",
+        [input.workspaceId],
+      );
       await this.assertNoOtherSubscription(
         input.workspaceId,
         input.planVersionId,
@@ -459,13 +552,13 @@ export class PgOrderRepository {
         remark: JSON.stringify({ intent: input.intent, price: input.price }),
       });
 
-      await client.query("commit");
+      if (!transaction) await client.query("commit");
       return { order: this.mapOrder(orderRow), invoiceId, billNo };
     } catch (err) {
-      await client.query("rollback");
+      if (!transaction) await client.query("rollback");
       throw err;
     } finally {
-      client.release();
+      if (!transaction) client.release();
     }
   }
 
@@ -644,6 +737,7 @@ export class PgOrderRepository {
   async resolveRenewTarget(
     fromPlanVersionId: string,
     toPlanVersionId: string,
+    client?: PoolClient,
   ): Promise<{
     samePlan: boolean;
     sameProduct: boolean;
@@ -653,7 +747,7 @@ export class PgOrderRepository {
     fromTier: string | null;
     toTier: string | null;
   } | null> {
-    const res = await this.pool.query<{
+    const res = await (client ?? this.pool).query<{
       same_plan: boolean;
       same_product: boolean;
       to_is_current: boolean;
@@ -858,8 +952,9 @@ export class PgOrderRepository {
    */
   async getProrationBasis(
     subscriptionId: string,
+    client?: PoolClient,
   ): Promise<ProrationBasis | null> {
-    const res = await this.pool.query<{
+    const res = await (client ?? this.pool).query<{
       paid_amount: string | null;
       pay_amount: string | null;
       start_at: Date;
@@ -911,64 +1006,68 @@ export class PgOrderRepository {
     };
   }
 
-  /**
-   * 折抵溢出进预付款余额（product_330 §4.1 leftover）：credits 池 += leftover + grant 流水；
-   * 以 transactions.related_no = order_no 幂等（履约重跑不重复入账）。
-   */
+  /** Grant a separate, non-cash source once, using the locked persisted order. */
   async grantLeftoverToPrepaid(
     order: OrderRecord,
     actor: OrderActor,
   ): Promise<boolean> {
-    const leftover = Number(order.leftoverAmount);
-    if (!(leftover > 0)) return false;
     const client = await this.pool.connect();
     try {
       await client.query("begin");
-      const dup = await client.query(
-        `select 1 from billing.transactions
-          where related_no = $1 and trade_type = 'grant' limit 1`,
-        [order.orderNo],
-      );
-      if (dup.rows[0]) {
-        await client.query("rollback");
+      const current = (
+        await client.query<OrderRow>(
+          "select * from billing.orders where id=$1 for update",
+          [order.id],
+        )
+      ).rows[0];
+      if (!current || current.tenant_id !== order.tenantId)
+        throw new ConflictException("折抵订单归属不匹配");
+      const cents = settlementCents(current.leftover_amount);
+      if (!cents) {
+        await client.query("commit");
         return false;
       }
-      const pool = await client.query<{ balance: string }>(
-        `insert into billing.credits (tenant_id, currency, balance, total_granted, version, created_at, updated_at)
-         values ($1, $2, $3, $3, 1, now(), now())
-         on conflict (tenant_id) do update set
-           balance = billing.credits.balance + excluded.balance,
-           total_granted = billing.credits.total_granted + excluded.total_granted,
-           version = billing.credits.version + 1,
-           updated_at = now()
-         returning balance`,
-        [order.tenantId, order.currency, leftover],
+      if (
+        current.intent !== "upgrade" ||
+        !["paid", "fulfilled"].includes(current.status)
+      )
+        throw new ConflictException("只有已付款升级订单可以发放折抵结余");
+      if (!this.walletSettlement)
+        throw new ConflictException("余额来源账本未接入");
+      const key = "order-leftover:" + current.id;
+      const prior = (
+        await client.query<{ amount: string }>(
+          "select l.amount::text from billing.wallet_operations o join billing.credits c on c.id=o.credit_id join billing.wallet_lots l on l.operation_id=o.id where c.tenant_id=$1 and c.currency=$2 and o.idempotency_key=$3 and o.action='bonus' and l.kind='bonus'",
+          [current.tenant_id, current.currency, key],
+        )
+      ).rows[0];
+      if (prior) {
+        if (settlementCents(prior.amount) !== cents)
+          throw new ConflictException("原折抵来源金额不匹配");
+        await client.query("commit");
+        return false;
+      }
+      const legacy = await client.query(
+        "select id from billing.transactions where tenant_id=$1 and related_no=$2 and trade_type='grant' limit 1",
+        [current.tenant_id, current.order_no],
       );
-      const after = Number(pool.rows[0]!.balance);
-      await client.query(
-        `insert into billing.transactions (
-           tenant_id, bill_id, transaction_no, trade_type, source_method,
-           amount, currency, balance_before, balance_after, trade_status,
-           related_no, remark, actor_type, actor_id
-         ) values ($1, null, $2, 'grant', null, $3, $4, $5, $6, 'success', $7, $8, $9, $10)`,
-        [
-          order.tenantId,
-          visibleCode("TXN"),
-          leftover,
-          order.currency,
-          Math.round((after - leftover) * 100) / 100,
-          after,
-          order.orderNo,
-          `upgrade proration leftover (order ${order.orderNo})`,
-          actor.actorType,
-          actor.actorId,
-        ],
+      if (legacy.rows.length)
+        throw new ConflictException("历史折抵来源待核对，不能重复发放");
+      await this.walletSettlement.postInTransaction(
+        client,
+        {
+          tenantId: current.tenant_id,
+          currency: current.currency,
+          actorType: actor.actorType,
+          actorId: actor.actorId ?? current.tenant_id,
+        },
+        { action: "bonus", amountCents: cents, idempotencyKey: key },
       );
       await client.query("commit");
       return true;
-    } catch (err) {
+    } catch (error) {
       await client.query("rollback");
-      throw err;
+      throw error;
     } finally {
       client.release();
     }
@@ -1093,6 +1192,7 @@ export class PgOrderRepository {
       ...(r.balance_paid_amount != null
         ? { balancePaidAmount: Number(r.balance_paid_amount) }
         : {}),
+      sources: await readRefundSources(this.pool, orderId),
       earlierFulfilledCount: Number(r.earlier_fulfilled),
       usageRatio: limit > 0 ? Number(r.usage_used ?? 0) / limit : 0,
       consumableShare: Number.isFinite(share as number) ? share : null,
@@ -1147,10 +1247,35 @@ export class PgOrderRepository {
      * 调用方（console-bff 的 refund-request）判；这里只落列。运营发起转账前可改正。
      */
     recipient?: RefundRecipient | null;
+    costPolicy?: { alpha: number; usage: number };
   }): Promise<RefundRecordView> {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+      const calculation = await prepareRefundCalculation(
+        client,
+        input.order.id,
+        Math.round(Number(input.amount ?? input.order.payableAmount) * 100),
+        input.costPolicy?.alpha ?? 0,
+        input.costPolicy?.usage ?? 0,
+      );
+      if (
+        ![...calculation.cash, ...(calculation.wallet ?? [])].some(
+          (s) => s.id === input.payRecordId,
+        ) ||
+        !(
+          await client.query(
+            "select p.id from billing.payments p join billing.invoices i on i.id=p.bill_id where p.id=$1 and i.id=$2 and i.order_id=$3 and i.tenant_id=$4 and i.deleted_at is null",
+            [
+              input.payRecordId,
+              input.invoiceId,
+              input.order.id,
+              input.order.tenantId,
+            ],
+          )
+        ).rows[0]
+      )
+        throw new ConflictException("退款来源与账单不一致");
       const res = await client
         .query<RefundRow>(
           `insert into billing.refunds (
@@ -1158,9 +1283,9 @@ export class PgOrderRepository {
              refund_amount, currency, refund_reason, refund_type,
              audit_status, refund_status, created_by_type, created_by_id,
              recipient_account_name, recipient_bank_name, recipient_bank_account,
-             created_at, updated_at
+             created_at, updated_at, calculation_snapshot
            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $10,
-                     'pending', 'pending', $11, $9, $12, $13, $14, now(), now())
+                     'pending', 'pending', $11, $9, $12, $13, $14, now(), now(), $15::jsonb)
            returning *`,
           [
             input.order.tenantId,
@@ -1177,6 +1302,7 @@ export class PgOrderRepository {
             input.recipient?.accountName ?? null,
             input.recipient?.bankName ?? null,
             input.recipient?.bankAccount ?? null,
+            JSON.stringify(calculation),
           ],
         )
         .catch((err: unknown) => {
@@ -1186,6 +1312,7 @@ export class PgOrderRepository {
           }
           throw err;
         });
+      await insertRefundAllocations(client, res.rows[0]!.id, calculation);
       await this.insertEventTx(client, {
         orderId: input.order.id,
         eventType: "refund_requested",
@@ -1218,6 +1345,16 @@ export class PgOrderRepository {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+      await client.query(
+        "select id from billing.orders where id=$1 for update",
+        [input.order.id],
+      );
+      if (input.decision === "approved")
+        await validateRefundAllocations(
+          client,
+          input.refund.id,
+          input.order.id,
+        );
       const res = await client.query<RefundRow>(
         `update billing.refunds
             set audit_status = $2, audit_remark = $3, auditor_id = $4, audit_at = now(), updated_at = now()
@@ -1227,6 +1364,11 @@ export class PgOrderRepository {
       );
       const row = res.rows[0];
       if (!row) throw new ConflictException("退款申请不是待审核状态");
+      if (input.decision === "rejected")
+        await client.query(
+          "update billing.refund_allocations set status='released',updated_at=now() where refund_id=$1 and status='reserved'",
+          [input.refund.id],
+        );
       await this.insertEventTx(client, {
         orderId: input.order.id,
         eventType:
@@ -1275,6 +1417,26 @@ export class PgOrderRepository {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+      await client.query(
+        "select id from billing.orders where id=$1 for update",
+        [input.order.id],
+      );
+      const source = await client.query(
+        `select r.id from billing.refunds r join billing.orders o on o.id=r.order_id
+         join billing.invoices i on i.id=r.bill_id and i.order_id=o.id
+         join billing.payments p on p.id=r.pay_record_id and p.bill_id=i.id
+         where r.id=$1 and o.id=$2 and r.tenant_id=o.tenant_id and p.tenant_id=o.tenant_id and i.tenant_id=o.tenant_id
+           and r.currency=o.currency and p.currency=o.currency and i.currency=o.currency
+           and p.pay_source in ('online','offline') and p.pay_status='paid'
+           and r.refund_amount>0
+           and not exists(select from billing.payments b join billing.invoices bi on bi.id=b.bill_id
+             where bi.order_id=o.id and b.pay_status='paid' and b.pay_source not in ('online','offline','voucher'))
+         for update of r`,
+        [input.refund.id, input.order.id],
+      );
+      if (!source.rows.length)
+        throw new ConflictException("原付款来源不能发起现金退款");
+      await validateRefundAllocations(client, input.refund.id, input.order.id);
       const res = await client
         .query<RefundRow>(
           `update billing.refunds
@@ -1386,6 +1548,12 @@ export class PgOrderRepository {
     refund: RefundRecordView;
     order: OrderRecord;
     actor: OrderActor;
+    afterSettlement?: (
+      client: PoolClient,
+      calculation: RefundCalculation,
+      refundedCashCents: number,
+      refundedWalletCents: number,
+    ) => Promise<void>;
   }): Promise<{ refund: RefundRecordView; order: OrderRecord }> {
     const client = await this.pool.connect();
     try {
@@ -1399,88 +1567,180 @@ export class PgOrderRepository {
       if (ord.status !== "fulfilled") {
         throw new ConflictException("只有已履约的订单可以退款");
       }
+      if (ord.tenant_id !== input.order.tenantId)
+        throw new ConflictException("退款订单归属不匹配");
+      const current = (
+        await client.query<
+          RefundRow & { calculation_snapshot: RefundCalculation | null }
+        >("select * from billing.refunds where id=$1 for update", [
+          input.refund.id,
+        ])
+      ).rows[0];
+      if (
+        !current ||
+        current.order_id !== ord.id ||
+        current.tenant_id !== ord.tenant_id ||
+        current.currency !== ord.currency
+      )
+        throw new ConflictException("退款单归属或币种不匹配");
       const balancePaid = await this.isBalancePaidOrder(ord.id, client);
-      const amount = Number(input.refund.amount);
-      const pool = await client.query<{ balance: string }>(
-        `select balance from billing.credits where tenant_id = $1 for update`,
-        [ord.tenant_id],
+      if (
+        current.audit_status !== "approved" ||
+        !(
+          current.refund_status === "processing" ||
+          (balancePaid && current.refund_status === "pending")
+        )
+      )
+        throw new ConflictException("退款单不是已审核可执行状态");
+      const amountCents = settlementCents(current.refund_amount);
+      if (!amountCents) throw new ConflictException("退款金额必须大于零");
+      // Freeze all payment evidence before taking the wallet lock.
+      await client.query(
+        "select id from billing.invoices where order_id=$1 order by id for update",
+        [ord.id],
       );
-      const balance = Number(pool.rows[0]?.balance ?? 0);
-      if (balancePaid) {
-        const paid = await client.query<{ amount: string }>(
-          `select coalesce(sum(p.paid_amount),0)::text as amount from billing.payments p
-           join billing.invoices i on i.id=p.bill_id
-           where i.order_id=$1 and p.pay_source='balance' and p.pay_status='paid'`,
+      const legs = (
+        await client.query<{
+          id: string;
+          bill_id: string;
+          pay_source: string;
+          paid_amount: string;
+          currency: string;
+          tenant_id: string;
+          invoice_tenant_id: string;
+          invoice_currency: string;
+          invoice_deleted_at: Date | null;
+          consumption_id: string | null;
+          debit: string | null;
+        }>(
+          `select p.id,p.bill_id,p.pay_source,p.paid_amount::text,p.currency,p.tenant_id,o.id consumption_id,
+          i.tenant_id invoice_tenant_id,i.currency invoice_currency,i.deleted_at invoice_deleted_at,
+          (select (-sum(e.amount))::text from billing.wallet_entries e where e.operation_id=o.id and e.entry_type='consume') debit
+        from billing.payments p join billing.invoices i on i.id=p.bill_id
+        left join billing.transactions t on t.id=p.transaction_id and t.bill_id=i.id and t.tenant_id=p.tenant_id
+          and t.currency=p.currency and t.trade_type='consume' and t.trade_status='success' and t.amount=-p.paid_amount
+        left join billing.wallet_operations o on o.transaction_id=t.id and o.action='consume'
+          and o.credit_id=(select id from billing.credits where tenant_id=p.tenant_id and currency=p.currency)
+        where i.order_id=$1 and p.pay_status='paid'
+        order by p.id for update of p`,
           [ord.id],
-        );
-        if (
-          !(amount > 0) ||
-          amount > Number(paid.rows[0]?.amount ?? 0) ||
-          input.refund.currency !== ord.currency
-        ) {
-          throw new ConflictException("退款金额或币种超出原余额付款范围");
-        }
-        const credited = await client.query<{ balance: string }>(
-          `update billing.credits set balance = balance + $2::numeric,
-            total_consumed = greatest(total_consumed - $2::numeric, 0),
-            version = version + 1, updated_at = now()
-           where tenant_id = $1 and currency = $3 returning balance::text`,
-          [ord.tenant_id, input.refund.amount, input.refund.currency],
-        );
-        if (!credited.rows[0])
-          throw new ConflictException("退款余额账户或币种不匹配");
-      }
-      const txn = await client.query<{ id: string }>(
-        `insert into billing.transactions (
-           tenant_id, bill_id, transaction_no, trade_type, source_method,
-           amount, currency, balance_before, balance_after, trade_status,
-           related_no, remark, actor_type, actor_id, client_ip
-         ) values ($1, $2, $3, 'refund', null, $4, $5, $6, $12, 'success', $7, $8, $9, $10, $11)
-         returning id`,
-        [
-          ord.tenant_id,
-          null,
-          visibleCode("TXN"),
-          balancePaid ? amount : -amount,
-          ord.currency,
-          balance,
-          input.refund.refundNo,
-          `refund of order ${ord.order_no}`,
-          input.actor.actorType,
-          input.actor.actorId,
-          input.actor.clientIp ?? null,
-          balancePaid ? (balance + amount).toFixed(2) : balance.toFixed(2),
-        ],
+        )
+      ).rows;
+      if (
+        !legs.length ||
+        legs.some(
+          (p) =>
+            p.tenant_id !== ord.tenant_id ||
+            p.currency !== ord.currency ||
+            p.invoice_tenant_id !== ord.tenant_id ||
+            p.invoice_currency !== ord.currency ||
+            p.invoice_deleted_at !== null ||
+            !["balance", "online", "offline", "voucher"].includes(p.pay_source),
+        )
+      )
+        throw new ConflictException("原付款来源无法核实");
+      if (!balancePaid && legs.some((p) => p.pay_source === "balance"))
+        throw new ConflictException("混合余额付款不能转为现金退款");
+      const source = legs.find(
+        (p) => p.id === current.pay_record_id && p.bill_id === current.bill_id,
       );
-      const leftover = Number(ord.leftover_amount);
-      if (leftover > 0) {
-        // 折抵溢出当初进了预付池，退款把它冲回（余额可为负——运营对账处理）。
-        const after = await client.query<{ balance: string }>(
-          `update billing.credits
-              set balance = balance - $2, version = version + 1, updated_at = now()
-            where tenant_id = $1
-            returning balance`,
-          [ord.tenant_id, leftover],
+      if (!source) throw new ConflictException("退款单未绑定原付款");
+      if (!balancePaid || current.calculation_snapshot)
+        await validateRefundAllocations(client, current.id, ord.id);
+      if (input.afterSettlement && !current.calculation_snapshot)
+        throw new ConflictException("退款来源计算凭据缺失，不能自动补券");
+      let transactionId: string;
+      if (balancePaid) {
+        const balanceLegs = legs.filter((p) => p.pay_source === "balance");
+        if (
+          balanceLegs.length !== 1 ||
+          source !== balanceLegs[0] ||
+          !source.consumption_id ||
+          source.debit === null ||
+          settlementCents(source.debit) !==
+            settlementCents(source.paid_amount) ||
+          amountCents > settlementCents(source.paid_amount)
+        )
+          throw new ConflictException("原余额付款范围或来源无法核实");
+        if (!this.walletSettlement)
+          throw new ConflictException("余额来源账本未接入");
+        const receipt = await this.walletSettlement.postInTransaction(
+          client,
+          {
+            tenantId: ord.tenant_id,
+            currency: ord.currency,
+            actorType: input.actor.actorType,
+            actorId: input.actor.actorId ?? ord.tenant_id,
+          },
+          {
+            action: "restore",
+            amountCents,
+            consumptionId: source.consumption_id,
+            invoiceId: source.bill_id,
+            idempotencyKey: "order-refund:" + current.id,
+          },
         );
-        const bal = Number(after.rows[0]?.balance ?? balance - leftover);
-        await client.query(
-          `insert into billing.transactions (
-             tenant_id, bill_id, transaction_no, trade_type, source_method,
-             amount, currency, balance_before, balance_after, trade_status,
-             related_no, remark, actor_type, actor_id
-           ) values ($1, null, $2, 'adjust', null, $3, $4, $5, $6, 'success', $7, $8, $9, $10)`,
+        transactionId = receipt.transactionId;
+      } else {
+        if (
+          !["online", "offline"].includes(source.pay_source) ||
+          current.transfer_channel === "balance"
+        )
+          throw new ConflictException("该来源不能执行现金退款");
+        const wallet = (
+          await client.query<{ balance: string }>(
+            "select balance::text from billing.credits where tenant_id=$1 for update",
+            [ord.tenant_id],
+          )
+        ).rows[0];
+        const balance = wallet?.balance ?? "0.00";
+        const txn = await client.query<{ id: string }>(
+          `insert into billing.transactions(tenant_id,bill_id,transaction_no,trade_type,amount,currency,balance_before,balance_after,trade_status,related_no,remark,actor_type,actor_id,client_ip)
+           values($1,$2,$3,'refund',-$4::numeric,$5,$6,$6,'success',$7,$8,$9,$10,$11) returning id`,
           [
             ord.tenant_id,
+            current.bill_id,
             visibleCode("TXN"),
-            -leftover,
+            current.refund_amount,
             ord.currency,
-            bal + leftover,
-            bal,
-            input.refund.refundNo,
-            `reverse upgrade proration leftover (order ${ord.order_no})`,
+            balance,
+            current.refund_no,
+            "refund of order " + ord.order_no,
             input.actor.actorType,
             input.actor.actorId,
+            input.actor.clientIp ?? null,
           ],
+        );
+        transactionId = txn.rows[0]!.id;
+      }
+      const leftover = settlementCents(ord.leftover_amount);
+      if (leftover) {
+        if (!this.walletSettlement)
+          throw new ConflictException("余额来源账本未接入");
+        const original = (
+          await client.query<{ lot_id: string; amount: string }>(
+            `select l.id lot_id,l.amount::text from billing.wallet_operations o join billing.credits c on c.id=o.credit_id
+           join billing.wallet_lots l on l.operation_id=o.id where c.tenant_id=$1 and c.currency=$2
+             and o.idempotency_key=$3 and o.action='bonus' and l.kind='bonus'`,
+            [ord.tenant_id, ord.currency, "order-leftover:" + ord.id],
+          )
+        ).rows[0];
+        if (!original || settlementCents(original.amount) !== leftover)
+          throw new ConflictException("原折抵赠额来源无法核实，不能自动冲回");
+        await this.walletSettlement.postInTransaction(
+          client,
+          {
+            tenantId: ord.tenant_id,
+            currency: ord.currency,
+            actorType: input.actor.actorType,
+            actorId: input.actor.actorId ?? ord.tenant_id,
+          },
+          {
+            action: "reclaim",
+            lotId: original.lot_id,
+            amountCents: leftover,
+            idempotencyKey: "order-leftover-refund:" + current.id,
+          },
         );
       }
       const refundRow = await client.query<RefundRow>(
@@ -1491,7 +1751,7 @@ export class PgOrderRepository {
                 transfer_initiated_by = case when $3::boolean then $4::uuid else transfer_initiated_by end
           where id = $1 and audit_status = 'approved' and (refund_status = 'processing' or (refund_status = 'pending' and $3::boolean))
           returning *`,
-        [input.refund.id, txn.rows[0]!.id, balancePaid, input.actor.actorId],
+        [current.id, transactionId, balancePaid, input.actor.actorId],
       );
       const refund = refundRow.rows[0];
       if (!refund) throw new ConflictException("退款单不是转账处理中状态");
@@ -1511,6 +1771,17 @@ export class PgOrderRepository {
         remark: input.actor.remark ?? `refund ${refund.refund_no}`,
         clientIp: input.actor.clientIp ?? null,
       });
+      await client.query(
+        "update billing.refund_allocations set status='succeeded',updated_at=now() where refund_id=$1 and status='reserved'",
+        [current.id],
+      );
+      if (input.afterSettlement && current.calculation_snapshot)
+        await input.afterSettlement(
+          client,
+          current.calculation_snapshot,
+          balancePaid ? 0 : amountCents,
+          balancePaid ? amountCents : 0,
+        );
       await client.query("commit");
       return {
         refund: mapRefund(refund),
@@ -1545,6 +1816,10 @@ export class PgOrderRepository {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+      await client.query(
+        "select id from billing.orders where id=$1 for update",
+        [input.order.id],
+      );
       const res = await client.query<RefundRow>(
         `update billing.refunds
             set refund_status = 'failed', updated_at = now()
@@ -1555,6 +1830,10 @@ export class PgOrderRepository {
       );
       const row = res.rows[0];
       if (!row) throw new ConflictException("退款单不是已审核待执行状态");
+      await client.query(
+        "update billing.refund_allocations set status='released',updated_at=now() where refund_id=$1 and status='reserved'",
+        [input.refund.id],
+      );
       const failed = mapRefund(row);
       await this.insertEventTx(client, {
         orderId: input.order.id,
@@ -1718,6 +1997,7 @@ export class PgOrderRepository {
     actor: OrderActor,
     kind: "cancelled" | "expired",
     lifecycleId?: string,
+    beforeClose?: (client: PoolClient, invoice: OrderInvoice) => Promise<void>,
   ): Promise<OrderRecord> {
     const client = await this.pool.connect();
     try {
@@ -1764,6 +2044,7 @@ export class PgOrderRepository {
             "付款信息已提交，等待确认中，暂不能取消（请先由运营退回付款信息）",
           );
         }
+        await beforeClose?.(client, invoice);
         await client.query(
           `update billing.invoice_items set deleted_at = now(), updated_at = now()
             where bill_id = $1 and item_type = 'discount' and deleted_at is null`,

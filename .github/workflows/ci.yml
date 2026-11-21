@@ -9,17 +9,9 @@ on:
     branches:
       - main
 
-# 显式声明而不是吃仓库默认（2026-08-28 加）。
-#
-# `packages: read` 是 fork PR 唯一能装上 @vxture/design-* 的前提：fork 拿不到
-# secrets，`secrets.NODE_AUTH_TOKEN` 求值成空串，setup-node-pnpm 的
-# `inputs.node-auth-token || github.token` 因此落到 `github.token`——而那个 token
-# 能不能读包，由本节说了算。三个设计包已于同日改 public，当天在 Actions 里实测
-# `github.token` 读到三个包全部 HTTP 200。
-#
-# 不写这一节也可能碰巧能跑（取决于仓库的 default workflow permissions 设成了什么），
-# 但那是"碰巧"：谁在设置页改一下默认值，fork PR 就会静默地装不上包，而报错落在
-# preflight 而不是这里。显式写死，让判据留在代码里。
+# Public design packages accept the short-lived workflow token.
+# Keep package access read-only and independent of an expiring repository PAT.
+# The shared setup action still verifies registry access before installation.
 permissions:
   contents: read
   packages: read
@@ -38,17 +30,14 @@ jobs:
     #   WARN Issue while reading ".npmrc". Failed to replace env in config
     # 一次 run 几十条，真警告会被淹掉。设在 job 层比逐步骤传更省，也更难漏。
     env:
-      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+      NODE_AUTH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v6
 
       - uses: ./.github/actions/setup-node-pnpm
         with:
-          # 跨仓装包必须用组织级 NODE_AUTH_TOKEN，不能靠 job 的 GITHUB_TOKEN：
-          # 后者按**仓库**授权，而 @vxture/design-* 自 2026-08-21 起从
-          # vxture/vxture-design 发布，本仓的 token 读不到 → ERR_PNPM_FETCH_403
-          # （403 Forbidden 而非 401：有 token 但无权，最容易误判成「没配 token」）。
-          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
+          # Public packages use the job token with the declared read-only permission.
+          node-auth-token: ${{ github.token }}
 
       - name: Check formatting
         run: pnpm format:check
@@ -93,7 +82,7 @@ jobs:
     #   WARN Issue while reading ".npmrc". Failed to replace env in config
     # 一次 run 几十条，真警告会被淹掉。设在 job 层比逐步骤传更省，也更难漏。
     env:
-      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+      NODE_AUTH_TOKEN: ${{ github.token }}
     outputs:
       docs_only: ${{ steps.changes.outputs.docs_only }}
       # 本次变更影响的镜像集（= 构建目标）；build/test 据此只处理受影响组件。
@@ -183,11 +172,8 @@ jobs:
 
       - uses: ./.github/actions/setup-node-pnpm
         with:
-          # 跨仓装包必须用组织级 NODE_AUTH_TOKEN，不能靠 job 的 GITHUB_TOKEN：
-          # 后者按**仓库**授权，而 @vxture/design-* 自 2026-08-21 起从
-          # vxture/vxture-design 发布，本仓的 token 读不到 → ERR_PNPM_FETCH_403
-          # （403 Forbidden 而非 401：有 token 但无权，最容易误判成「没配 token」）。
-          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
+          # Public packages use the job token with the declared read-only permission.
+          node-auth-token: ${{ github.token }}
         if: steps.changes.outputs.docs_only != 'true'
 
       - name: Build shared & core packages
@@ -623,7 +609,7 @@ jobs:
     #   WARN Issue while reading ".npmrc". Failed to replace env in config
     # 一次 run 几十条，真警告会被淹掉。设在 job 层比逐步骤传更省，也更难漏。
     env:
-      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+      NODE_AUTH_TOKEN: ${{ github.token }}
     needs: [check]
     # TD-024: auth-bff's RedisService.onModuleInit() awaits a real connection and
     # fails closed by design (it is the central session store) — its boot-smoke
@@ -648,11 +634,8 @@ jobs:
 
       - uses: ./.github/actions/setup-node-pnpm
         with:
-          # 跨仓装包必须用组织级 NODE_AUTH_TOKEN，不能靠 job 的 GITHUB_TOKEN：
-          # 后者按**仓库**授权，而 @vxture/design-* 自 2026-08-21 起从
-          # vxture/vxture-design 发布，本仓的 token 读不到 → ERR_PNPM_FETCH_403
-          # （403 Forbidden 而非 401：有 token 但无权，最容易误判成「没配 token」）。
-          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
+          # Public packages use the job token with the declared read-only permission.
+          node-auth-token: ${{ github.token }}
         if: needs.check.outputs.docs_only != 'true'
 
       - name: Restore backend build (deps dist + prisma clients)
@@ -759,7 +742,7 @@ jobs:
     #   WARN Issue while reading ".npmrc". Failed to replace env in config
     # 一次 run 几十条，真警告会被淹掉。设在 job 层比逐步骤传更省，也更难漏。
     env:
-      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+      NODE_AUTH_TOKEN: ${{ github.token }}
     needs: [check]
     steps:
       - name: Docs-only test gate
@@ -773,11 +756,8 @@ jobs:
 
       - uses: ./.github/actions/setup-node-pnpm
         with:
-          # 跨仓装包必须用组织级 NODE_AUTH_TOKEN，不能靠 job 的 GITHUB_TOKEN：
-          # 后者按**仓库**授权，而 @vxture/design-* 自 2026-08-21 起从
-          # vxture/vxture-design 发布，本仓的 token 读不到 → ERR_PNPM_FETCH_403
-          # （403 Forbidden 而非 401：有 token 但无权，最容易误判成「没配 token」）。
-          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
+          # Public packages use the job token with the declared read-only permission.
+          node-auth-token: ${{ github.token }}
         if: needs.check.outputs.docs_only != 'true'
 
       - name: Restore backend build (deps dist + prisma clients)
@@ -850,5 +830,7 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
         with:
           skipSignatureVerification: false
+          # Wait for the actual quality result instead of only submitting a scan.
+          args: -Dsonar.qualitygate.wait=true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

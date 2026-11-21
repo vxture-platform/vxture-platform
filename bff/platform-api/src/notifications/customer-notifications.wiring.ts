@@ -12,6 +12,8 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import type { Pool } from "pg";
 import { MailService } from "@vxture/core-mail";
+// ⚠️ 跨层引用: the application composes the domain wallet transaction port.
+import { PgWalletLedger } from "@vxture/service-billing";
 import { NotificationPreferencesService } from "@vxture/service-account";
 import {
   NotificationDispatcher,
@@ -57,6 +59,7 @@ export class CustomerNotificationsWiring implements OnModuleInit {
   }
 
   onModuleInit(): void {
+    this.orders.setWalletSettlement(new PgWalletLedger(this.pool));
     this.orders.setCustomerNotifier(this.dispatcher);
     this.subscriptions.setCustomerNotifier(this.dispatcher);
     this.addons.setCustomerNotifier(this.dispatcher);

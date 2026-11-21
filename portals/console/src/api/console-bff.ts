@@ -1165,6 +1165,8 @@ export type OrderState =
   | "pending_payment";
 
 export interface MyOrder {
+  /** A noncash reversal preserves payment history without asserting a cash refund. */
+  noncashReversed?: boolean;
   orderId: string;
   orderNo: string;
   billNo: string | null;
@@ -1651,6 +1653,8 @@ export async function fetchUpgradeQuote(params: {
 }
 
 export async function createSubscriptionOrder(body: {
+  /** Reuse for retries of the same purchase confirmation. */
+  idempotencyKey?: string;
   productCode: string;
   planVersionId: string;
   cycleUnit: "month" | "year";
@@ -2585,6 +2589,8 @@ export async function setSubscriptionAutoRenew(
 // ============================================================================
 
 export interface ConsoleVoucher {
+  bonusAmount?: string;
+  bonusExpiresInDays?: number | null;
   id: string;
   code: string;
   kind: string;
@@ -2593,6 +2599,17 @@ export interface ConsoleVoucher {
   discountValue?: number;
   maxOff?: string | null;
   amount?: string;
+  /** Optional additions allow a rolling upgrade from the legacy BFF. */
+  currency?: string;
+  availabilityStatus?:
+    | ConsoleVoucher["status"]
+    | "not_started"
+    | "paused"
+    | "archived"
+    | "unavailable";
+  validFrom?: string;
+  durationDays?: number;
+  extendDays?: number;
   status: "available" | "reserved" | "redeemed" | "expired" | "revoked";
   usedCount: number;
   maxUses: number;
@@ -2601,6 +2618,11 @@ export interface ConsoleVoucher {
   redemptionNo: string | null;
   /** 挂单可视码(BFF 反查:核销行 ∨ 支付凭据里的结算快照);没挂单为 null。 */
   orderNo: string | null;
+  holderScope?: "user" | "workspace" | "tenant";
+  holderLabel?: string;
+  claimedAt?: string | null;
+  returnPolicy?: "none" | "full_reversal_only";
+  unavailableReason?: string | null;
 }
 
 export async function fetchVouchers(): Promise<ConsoleVoucher[]> {
@@ -3172,4 +3194,279 @@ export async function uploadCustomerPortalAsset(
 export function customerPortalAssetUrl(_scope: string, hash: string): string {
   const path = "/api/customer-portal";
   return `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${path}/assets/${encodeURIComponent(hash)}`;
+}
+
+export interface ConsoleVoucherPage {
+  items: ConsoleVoucher[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: {
+    total: number;
+    available: number;
+    redeemed: number;
+    expiringSoon: number;
+  };
+}
+
+export interface ConsoleVoucherClaimPreview {
+  recharge?: { principal: string; bonus: string };
+  code: string;
+  batchName: string;
+  kind: string;
+  effect: Record<string, unknown>;
+  expiresAt: string;
+  claimUntil: string;
+  useValidDays: number | null;
+  returnPolicy: "none" | "full_reversal_only";
+  tenantName: string;
+  workspaceName: string;
+}
+
+/** Read a complete server-filtered page. @param filters - Page, search, state and ordering. @returns Scoped ledger metrics and rows. */
+export function fetchVoucherPage(filters: {
+  page: number;
+  pageSize: number;
+  status: string;
+  query: string;
+  sort?: string;
+  direction?: string;
+}): Promise<ConsoleVoucherPage> {
+  return readJsonStrict(
+    `/api/promotion/vouchers/page?${new URLSearchParams(Object.entries(filters).map(([key, value]) => [key, String(value)]))}`,
+  );
+}
+
+/**
+ * Send credentials only in a noncacheable body without reflecting server errors.
+ * @param path - Preview or claim operation.
+ * @param body - Confidential credential and optional confirmation.
+ * @returns The operation result.
+ * @throws ConsoleBffError when transport or the operation fails.
+ */
+async function voucherClaimRequest<T>(path: string, body: object): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/promotion/${path}`,
+      {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+  } catch {
+    // A transport failure is an unknown outcome, never a reason to resend automatically.
+    throw new ConsoleBffError("unavailable", 503);
+  }
+  if (!response.ok) {
+    const message =
+      response.status === 429
+        ? "rate_limited"
+        : response.status === 503
+          ? "unavailable"
+          : "invalid";
+    throw new ConsoleBffError(message, response.status);
+  }
+  return response.json() as Promise<T>;
+}
+
+/**
+ * Preview without consuming.
+ * @param secret - Case-sensitive one-time credential.
+ * @param target - Explicit user or workspace ownership.
+ * @returns Effect and binding context.
+ */
+export function previewVoucherClaim(
+  secret: string,
+  target: "user" | "workspace" = "user",
+): Promise<ConsoleVoucherClaimPreview> {
+  return voucherClaimRequest("claims/preview", { secret, target });
+}
+
+/** Confirm explicit ownership. @param command - Credential, target and stable retry key. @returns The claimed visible voucher identity. */
+export function claimVoucher(command: {
+  secret: string;
+  target: "user" | "workspace";
+  idempotencyKey: string;
+}): Promise<{ voucherId: string; code: string; expiresAt: string }> {
+  return voucherClaimRequest("claims", command);
+}
+
+/** Recover a successful claim without resending its credential. @param idempotencyKey - Original confirmation identity. @returns The result in the current context, or null when absent. */
+export function fetchVoucherClaimResult(
+  idempotencyKey: string,
+): Promise<{ voucherId: string; code: string; expiresAt: string } | null> {
+  return readJsonStrict(
+    `/api/promotion/claims/result?${new URLSearchParams({ idempotencyKey })}`,
+  );
+}
+
+export interface SubscriptionVoucherPreview {
+  code: string;
+  productName: string;
+  planName: string;
+  versionNo: number;
+  durationDays: number;
+  tenantName: string;
+  workspaceName: string;
+  fundingSource: "operator_grant";
+  autoRenew: false;
+  grants: Array<{
+    productName: string;
+    role: string;
+    tier: string | null;
+    quota: Record<string, unknown>;
+    features: string[];
+  }>;
+}
+
+export interface SubscriptionVoucherResult {
+  subscriptionId: string;
+  redemptionNo: string;
+  startAt: string;
+  endAt: string;
+  code: string;
+  productName: string;
+  planName: string;
+  versionNo: number;
+  durationDays: number;
+}
+
+/** Preview a fixed subscription grant. @param voucherId - Selected owned instance. @returns Effect and current destination. */
+export function previewSubscriptionRedemption(
+  voucherId: string,
+): Promise<SubscriptionVoucherPreview> {
+  return voucherClaimRequest("redemptions/preview", { voucherId });
+}
+
+/** Confirm subscription redemption. @param command - Voucher identity and stable retry key. @returns Committed service dates and visible evidence. */
+export function redeemSubscriptionVoucher(command: {
+  voucherId: string;
+  idempotencyKey: string;
+}): Promise<SubscriptionVoucherResult> {
+  return voucherClaimRequest("redemptions", command);
+}
+
+// ============================================================================
+// Subscription extension confirmation
+// ============================================================================
+export interface SubscriptionExtensionTarget {
+  subscriptionId: string;
+  planVersionId: string;
+  productName: string;
+  planName: string;
+  versionNo: number;
+  previousEndAt: string;
+  endAt: string;
+}
+
+export interface SubscriptionExtensionPreview {
+  code: string;
+  tenantName: string;
+  workspaceName: string;
+  extendDays: number;
+  targets: SubscriptionExtensionTarget[];
+}
+
+export interface SubscriptionExtensionResult extends Omit<
+  SubscriptionExtensionTarget,
+  "planVersionId"
+> {
+  code: string;
+  redemptionNo: string;
+  extendDays: number;
+}
+
+/** Preview eligible subscriptions and dates. @param voucherId - Owned extension voucher. @returns Current eligible targets. */
+export function previewSubscriptionExtension(
+  voucherId: string,
+): Promise<SubscriptionExtensionPreview> {
+  return voucherClaimRequest("extensions/preview", { voucherId });
+}
+
+/** Confirm a previewed term extension. @param command - Stable request and displayed baseline. @returns Committed dates and receipt. */
+export function extendSubscriptionVoucher(command: {
+  voucherId: string;
+  subscriptionId: string;
+  expectedPlanVersionId: string;
+  expectedEndAt: string;
+  idempotencyKey: string;
+}): Promise<SubscriptionExtensionResult> {
+  return voucherClaimRequest("extensions", command);
+}
+
+/** Recover a term extension after an uncertain reply. @param idempotencyKey - Original request identity. @returns Scoped committed receipt or null. */
+export function fetchSubscriptionExtensionResult(
+  idempotencyKey: string,
+): Promise<SubscriptionExtensionResult | null> {
+  return readJsonStrict(
+    `/api/promotion/extensions/result?${new URLSearchParams({ idempotencyKey })}`,
+  );
+}
+
+// ============================================================================
+// Recharge card confirmation and recoverable receipt
+// ============================================================================
+export interface RechargeCardPreview {
+  code: string;
+  confirmation: string;
+  tenantName: string;
+  workspaceName: string;
+  principal: string;
+  bonus: string;
+  bonusExpiresInDays: number | null;
+  currency: string;
+  balance: string;
+}
+
+export interface RechargeCardResult {
+  code: string;
+  redemptionNo: string;
+  principal: string;
+  bonus: string;
+  bonusExpiresAt: string | null;
+  balance: string;
+  currency: string;
+  transactions: string[];
+}
+
+/** Preview owned card effects. @param voucherId - Selected card. @returns Confirmable principal and gift. */
+export function previewRechargeCard(
+  voucherId: string,
+): Promise<RechargeCardPreview> {
+  return voucherClaimRequest("recharges/preview", { voucherId });
+}
+
+/** Confirm fixed terms with a stable retry key. @param command - Preview confirmation. @returns Committed wallet receipt. */
+export function redeemRechargeCard(command: {
+  voucherId: string;
+  confirmation: string;
+  idempotencyKey: string;
+}): Promise<RechargeCardResult> {
+  return voucherClaimRequest("recharges", command);
+}
+
+/** Recover an uncertain outcome. @param idempotencyKey - Original request identity. @returns Scoped receipt or null. */
+export function fetchRechargeCardResult(
+  idempotencyKey: string,
+): Promise<RechargeCardResult | null> {
+  return readJsonStrict(
+    "/api/promotion/recharges/result?" +
+      new URLSearchParams({ idempotencyKey }),
+  );
+}
+
+/** Recover an uncertain subscription redemption in the current scope.
+ * @param idempotencyKey - Original confirmation identity.
+ * @returns A committed receipt or null when no matching receipt exists.
+ */
+export function fetchSubscriptionRedemptionResult(
+  idempotencyKey: string,
+): Promise<SubscriptionVoucherResult | null> {
+  return readJsonStrict(
+    `/api/promotion/redemptions/result?${new URLSearchParams({ idempotencyKey })}`,
+  );
 }

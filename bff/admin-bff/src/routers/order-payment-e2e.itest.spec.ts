@@ -1,21 +1,17 @@
 /**
- * order-payment-e2e.itest.spec.ts - product_321 §8 验收走查（活库集成，product_330 P1-b2 订单实体版）。
+ * order-payment-e2e.itest.spec.ts - Legacy order regression on a batch-owned database.
  * @package @vxture/bff-admin
- *
- * Run:  ORDER_PAYMENT_E2E=1 DATABASE_URL=postgresql://... pnpm test
- *
- * 覆盖 §8 中可在活库/服务/路由层执行的机制项（1-2,3 部分,4-7,9-14 部分）：
- * 真 Postgres、真事务、真行锁——服务与路由按 module-less 方式装配（与
- * commerce-services.provider / orders-write-paths.spec 同款），跳过 HTTP 层的
- * session/step-up 仪式（那两项 + webhook 送达 arda + 浏览器动线 = 生产走查项）。
- *
- * P1-b2 起：下单只建 billing.orders（不建订阅行），履约（fulfill）才建订阅；
- * 订单态看 billing.orders.status，订单事件看 billing.order_events。
+ * @layer Application
+ * @category test
+ * @author AI-Generated
+ * @date 2026-11-20
+ * Only voucher-admin.mjs supplies the isolated target and run marker.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import { Pool } from "pg";
 import type { Request } from "express";
+import { randomUUID } from "node:crypto";
 import {
   OrderService,
   PgOrderRepository,
@@ -40,15 +36,17 @@ import { CommercialRouter } from "./commercial.router";
 import type { RequestContext } from "../types/console.types";
 
 const RUN = process.env.ORDER_PAYMENT_E2E === "1";
-const DB =
-  process.env.DATABASE_URL ??
-  "postgresql://postgres:e2e@localhost:55432/vxture";
+const DB = process.env.VOUCHER_ADMIN_OWNED_DATABASE_URL ?? "";
+const RUN_ID = process.env.VOUCHER_ADMIN_OWNED_RUN_ID ?? "";
 
 const OPERATOR = "11111111-1111-4111-8111-111111111111";
 
-function req(capabilities: string[]): Request & RequestContext {
+function req(
+  capabilities: string[],
+  operatorId = OPERATOR,
+): Request & RequestContext {
   return {
-    user: { id: OPERATOR },
+    user: { id: operatorId },
     capabilities,
     ip: "127.0.0.1",
     headers: {},
@@ -59,7 +57,7 @@ function req(capabilities: string[]): Request & RequestContext {
 const CAPS_SETTLE = ["commerce:order.read", "commerce:payment.settle"];
 const CAPS_PROMO = ["promotion:campaign.manage"];
 
-describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
+describe.runIf(RUN)("product_321 isolated order regression", () => {
   let pool: Pool;
   let orderService: OrderService;
   let subscriptionsService: SubscriptionService;
@@ -72,6 +70,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
   let tenantId: string;
   let planVersionId: string;
   let customerNotifier: NotificationDispatcher;
+  let workspaceRoleId: string;
 
   const CONFIRM = (paidAmount: number) => ({
     paidAmount,
@@ -87,6 +86,10 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       `insert into tenancy.workspaces (tenant_id, name, is_default)
        values ($1, $2, false) returning id`,
       [tenantId, `e2e-${Date.now()}-${Math.random().toFixed(6)}`],
+    );
+    await pool.query(
+      "insert into tenancy.workspace_memberships(tenant_id,workspace_id,user_id,role_id,role_scope) values($1,$2,$3,$4,'workspace')",
+      [tenantId, ws.rows[0]!.id, userId, workspaceRoleId],
     );
     return ws.rows[0]!.id;
   }
@@ -111,6 +114,8 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     effect: Record<string, unknown>,
   ): Promise<{ batchId: string; voucherId: string }> {
     const { batchId } = await commercial.createVoucherBatch(req(CAPS_PROMO), {
+      idempotencyKey: randomUUID(),
+      reason: "e2e batch",
       kind,
       name: `e2e ${kind} ${Date.now()}-${Math.random().toFixed(6)}`,
       effect,
@@ -120,7 +125,21 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       validUntil: new Date(Date.now() + 86_400_000).toISOString(),
       tenantId,
     });
+    await commercial.actOnVoucherBatch(
+      req(CAPS_PROMO, "22222222-2222-4222-8222-222222222222"),
+      batchId,
+      {
+        action: "review",
+        expectedRevision: (
+          await commercial.voucherBatchDetail(req(CAPS_PROMO), batchId)
+        ).revision,
+        idempotencyKey: randomUUID(),
+        reason: "e2e review",
+      },
+    );
     await commercial.assignVouchers(req(CAPS_PROMO), {
+      idempotencyKey: randomUUID(),
+      reason: "e2e assignment",
       batchId,
       count: 1,
       targetUserId: userId,
@@ -204,7 +223,24 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
   }
 
   beforeAll(async () => {
-    pool = new Pool({ connectionString: DB });
+    const target = new URL(DB);
+    if (
+      target.protocol !== "postgresql:" ||
+      target.hostname !== "127.0.0.1" ||
+      !target.port ||
+      target.pathname !== "/postgres" ||
+      !/^[a-f0-9-]{36}$/.test(RUN_ID)
+    )
+      throw new Error("Only the batch-owned loopback database is permitted");
+    pool = new Pool({
+      connectionString: DB,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 20000,
+    });
+    const marker = await pool.query<{ id: string }>(
+      "select id from public.codex_voucher_run",
+    );
+    expect(marker.rows).toEqual([{ id: RUN_ID }]);
     const provisioning = new ProvisioningService(
       new PgProvisioningRepository(pool),
       {
@@ -258,6 +294,16 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       [userId],
     );
     tenantId = tenant.rows[0]!.id;
+    const tenantRoleId = randomUUID();
+    workspaceRoleId = randomUUID();
+    await pool.query(
+      "insert into access.roles(id,role_code,scope) values($1::uuid,$1::text,'tenant'),($2::uuid,$2::text,'workspace')",
+      [tenantRoleId, workspaceRoleId],
+    );
+    await pool.query(
+      "insert into tenancy.tenant_memberships(tenant_id,user_id,role_id,role_scope) values($1,$2,$3,'tenant')",
+      [tenantId, userId, tenantRoleId],
+    );
     // default workspace（租户不变式）；订单各用独立工作空间（mkWorkspace）
     await pool.query(
       `insert into tenancy.workspaces (tenant_id, name, is_default)
@@ -652,7 +698,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
         where pl.plan_code = 'arda-free' limit 1`,
     );
     const freeVersion = freePv.rows[0]?.id;
-    if (!freeVersion) return; // seed without a free tier: skip silently
+    if (!freeVersion) throw new Error("Isolated free tier fixture missing");
     const free = await orderService.createOrder({
       tenantId,
       workspaceId: ws,
@@ -735,7 +781,8 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       ).rows[0]?.id;
     const starter = await versionOf("arda-starter");
     const business = await versionOf("arda-business");
-    if (!starter || !business) return; // seed without the ladder: skip silently
+    if (!starter || !business)
+      throw new Error("Isolated upgrade tier fixtures missing");
 
     const ws = await mkWorkspace();
     const first = await orderService.createOrder({
@@ -839,10 +886,25 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     });
     expect(approved.refund?.auditStatus).toBe("approved");
 
+    // Approval does not prove a transfer; settlement must reject a skipped step.
+    await expect(
+      orders.executeRefund(req(CAPS_SETTLE), orderId, {
+        reason: "e2e transfer not initiated",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    const transferring = await orderService.initiateRefundTransfer(
+      req1.id,
+      { channel: "alipay", reference: `E2E-${randomUUID()}` },
+      { actorType: "operator", actorId: OPERATOR },
+    );
+    expect(transferring.refundStatus).toBe("processing");
+    expect(transferring.transferAttempt).toBe(1);
+    expect(transferring.amount).toBe("1200.00");
+
     const done = await orders.executeRefund(req(CAPS_SETTLE), orderId, {
       reason: "e2e paid back via alipay",
     });
-    expect(done.orderStatus).toBe("closed");
+    expect(done.orderStatus).toBe("refunded");
     expect(done.refund?.refundStatus).toBe("success");
     const after = await orderFacts(orderId);
     expect(after.orderStatus).toBe("refunded");
@@ -929,7 +991,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     expect(hist.rows.length).toBe(1);
   }, 60_000);
 
-  it("§8.20 客户通知（P2-g）：履约 → order.fulfilled 站内 + 账本；退款三阶段各一条；重复履约不重复通知", async () => {
+  it("§8.20 客户通知（P2-g）：付款申报与履约各一条；退款四阶段各一条；重复履约不重复通知", async () => {
     const orderId = await mkOrder(300);
     await declare(orderId);
     await confirm(orderId, 300);
@@ -942,21 +1004,43 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
         where reference_type = 'order' and reference_id = $1 order by created_at`,
       [orderId],
     );
-    expect(inbox.rows.map((r) => r.template_code)).toEqual(["order.fulfilled"]);
-    expect(inbox.rows[0]!.link).toBe(`/subscribe/pay/${orderId}`);
-    expect(inbox.rows[0]!.read_at).toBeNull();
+    expect(inbox.rows.map((r) => r.template_code)).toEqual([
+      "order.payment_declared",
+      "order.fulfilled",
+    ]);
+    for (const message of inbox.rows) {
+      expect(message.link).toBe(`/subscribe/pay/${orderId}`);
+      expect(message.read_at).toBeNull();
+    }
     const logs = await pool.query<{
+      template_code: string;
       channel: string;
       status: string;
       provider_message_id: string | null;
     }>(
-      `select channel, status, provider_message_id from support.notification_logs
-        where reference_type = 'order' and reference_id = $1 order by channel`,
+      `select template_code, channel, status, provider_message_id from support.notification_logs
+        where reference_type = 'order' and reference_id = $1 order by template_code, channel`,
       [orderId],
     );
     expect(logs.rows).toEqual([
-      { channel: "inapp", status: "delivered", provider_message_id: null },
-      { channel: "sms", status: "sent", provider_message_id: "BIZ-e2e" },
+      {
+        template_code: "order.fulfilled",
+        channel: "inapp",
+        status: "delivered",
+        provider_message_id: null,
+      },
+      {
+        template_code: "order.fulfilled",
+        channel: "sms",
+        status: "sent",
+        provider_message_id: "BIZ-e2e",
+      },
+      {
+        template_code: "order.payment_declared",
+        channel: "inapp",
+        status: "delivered",
+        provider_message_id: null,
+      },
     ]);
 
     // 幂等履约（已 fulfilled 直接返回）不再通知
@@ -965,9 +1049,9 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       `select 1 from support.inbox_messages where reference_type = 'order' and reference_id = $1`,
       [orderId],
     );
-    expect(again.rows.length).toBe(1);
+    expect(again.rows.length).toBe(2);
 
-    // 退款：申请 / 通过 / 完成 各一条（按 refund:阶段 去重）
+    // Each refund stage has one receipt, including the actual transfer initiation.
     const req1 = await orderService.requestRefund(orderId, {
       userId,
       reason: "e2e notify",
@@ -976,6 +1060,12 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       decision: "approved",
       remark: "e2e approve",
     });
+    const transferring = await orderService.initiateRefundTransfer(
+      req1.id,
+      { channel: "alipay", reference: `E2E-${randomUUID()}` },
+      { actorType: "operator", actorId: OPERATOR },
+    );
+    expect(transferring.refundStatus).toBe("processing");
     await orders.executeRefund(req(CAPS_SETTLE), orderId, {
       reason: "e2e paid back",
     });
@@ -986,8 +1076,9 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     );
     expect(refundInbox.rows.map((r) => r.template_code)).toEqual([
       "refund.requested",
-      "refund.approved",
-      "refund.completed",
+      "refund.approved_original_channel",
+      "refund.transfer_initiated",
+      "refund.completed_original_channel",
     ]);
   }, 60_000);
 
@@ -1034,6 +1125,8 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     // total_count=10, 1 already assigned → 10 more over-issues.
     await expect(
       commercial.assignVouchers(req(CAPS_PROMO), {
+        idempotencyKey: randomUUID(),
+        reason: "e2e assignment",
         batchId,
         count: 10,
         targetUserId: userId,
@@ -1042,6 +1135,8 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
     await expect(
       commercial.createVoucherBatch(req(CAPS_PROMO), {
+        idempotencyKey: randomUUID(),
+        reason: "e2e batch",
         kind: "discount",
         name: "e2e gated",
         effect: {
@@ -1086,7 +1181,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
         where pl.plan_code = 'arda-free' limit 1`,
     );
     const freeVersion = freePv.rows[0]?.id;
-    if (!freeVersion) return; // seed without a free tier: skip silently
+    if (!freeVersion) throw new Error("Isolated free tier fixture missing");
     const ws = await mkWorkspace();
     const free = await orderService.createOrder({
       tenantId,
