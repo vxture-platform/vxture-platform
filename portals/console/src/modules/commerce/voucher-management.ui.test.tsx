@@ -5,6 +5,7 @@
  * @category test
  * @author AI-Generated
  * @date 2026-11-20
+ * @vitest-environment jsdom
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -582,6 +583,7 @@ beforeEach(() => {
     orderId: "order",
     status: "pending_payment",
   });
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "fetch",
     vi.fn(() => {
