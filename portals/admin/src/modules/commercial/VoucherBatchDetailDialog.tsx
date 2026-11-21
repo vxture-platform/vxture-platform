@@ -8,6 +8,9 @@
  * @date 2026-11-20
  */
 import { useEffect, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import { useVoucherLabels } from "@/modules/shared/enum-labels";
+import { formatDateTime } from "@vxture-platform/shared";
 import {
   ActionButton,
   ConfirmDestructive,
@@ -47,53 +50,58 @@ import {
 // ===========================================================================
 // Human-readable lifecycle and audit labels
 // ===========================================================================
-const labels: Record<string, string> = {
-  draft: "待审核",
-  active: "已启用",
-  paused: "已暂停",
-  archived: "已归档",
-  issued: "待领取",
-  assigned: "已发放",
-  reserved: "已占用",
-  redeemed: "已核销",
-  expired: "已过期",
-  revoked: "已撤回",
-  discount: "折扣券",
-  credit_voucher: "代金券",
-  invite: "邀请券",
-  redemption: "订阅兑换券",
-  extension: "展期券",
-  recharge_card: "充值卡",
-  batch_created: "创建草稿",
-  batch_configure: "修改草稿",
-  batch_review: "审核启用",
-  batch_pause: "暂停批次",
-  batch_resume: "恢复批次",
-  batch_archive: "归档批次",
-  batch_request_budget: "申请增额",
-  batch_approve_budget: "批准增额",
-  voucher_assigned: "定向发放",
-  voucher_issued: "生成领取凭证",
-  voucher_claimed: "客户领取",
-  voucher_revoked: "撤回券",
-  refund_replacement: "退款返券",
-  compensation_batch_prepared: "准备补偿批次",
-};
-function effectLabel(detail: VoucherBatchDetail) {
+function effectLabel(
+  detail: VoucherBatchDetail,
+  tShared: ReturnType<typeof useTranslations>,
+) {
   const effect = detail.effect;
   if (detail.kind === "credit_voucher")
-    return `面额 ¥${(Number(effect.amount_cents ?? effect.amountCents) / 100).toFixed(2)}`;
+    return tShared("voucherManagement.detail.faceValue", {
+      amount: (Number(effect.amount_cents ?? effect.amountCents) / 100).toFixed(
+        2,
+      ),
+    });
   if (detail.kind === "discount")
     return effect.discount_type === "percent"
-      ? `立减 ${effect.value}%${effect.max_off_cents ? `，封顶 ¥${Number(effect.max_off_cents) / 100}` : ""}`
-      : `立减 ¥${Number(effect.value) / 100}`;
+      ? tShared("voucherManagement.detail.percent", {
+          percent: String(effect.value),
+          cap: effect.max_off_cents
+            ? tShared("voucherManagement.detail.cap", {
+                amount: Number(effect.max_off_cents) / 100,
+              })
+            : "",
+        })
+      : tShared("voucherManagement.detail.fixed", {
+          amount: Number(effect.value) / 100,
+        });
   if (detail.kind === "invite")
-    return `解锁套餐 ${effect.plan_code ?? effect.planCode ?? effect.plan_version_id ?? effect.planVersionId}`;
+    return tShared("voucherManagement.detail.unlockPlan", {
+      plan: String(
+        effect.plan_code ??
+          effect.planCode ??
+          effect.plan_version_id ??
+          effect.planVersionId,
+      ),
+    });
   if (detail.kind === "extension")
-    return `从原到期日延长 ${effect.extend_days ?? "—"} 天 · 主产品：${Array.isArray(effect.applicable_product_codes) ? effect.applicable_product_codes.join("、") : "全部合格产品"} · 不重置配额`;
+    return tShared("voucherManagement.detail.extension", {
+      days: String(effect.extend_days ?? "—"),
+      products: Array.isArray(effect.applicable_product_codes)
+        ? effect.applicable_product_codes.join(
+            tShared("voucherManagement.common.separator"),
+          )
+        : tShared("voucherManagement.detail.allProducts"),
+    });
   if (detail.kind === "redemption")
-    return `运营赠送 · 兑换 ${effect.duration_days ?? "—"} 天新订阅`;
-  return `充值本金 ¥${Number(effect.face_value_cents ?? 0) / 100}，赠额 ¥${Number(effect.bonus_cents ?? 0) / 100} · 本金须有真实收款；赠额单独入账`;
+    return tShared("voucherManagement.detail.redemption", {
+      days: String(effect.duration_days ?? "—"),
+    });
+  if (detail.kind === "recharge_card")
+    return tShared("voucherManagement.detail.recharge", {
+      principal: Number(effect.face_value_cents ?? 0) / 100,
+      bonus: Number(effect.bonus_cents ?? 0) / 100,
+    });
+  return tShared("enums.voucherUnknown.kind");
 }
 function Pager({
   page,
@@ -104,6 +112,7 @@ function Pager({
   total: number;
   onChange: (page: number) => void;
 }) {
+  const tShared = useTranslations();
   return (
     <div className="flex items-center gap-3">
       <ActionButton
@@ -113,10 +122,14 @@ function Pager({
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
       >
-        上一页
+        {tShared("voucherManagement.detail.previous")}
       </ActionButton>
       <span>
-        {page} / {Math.max(1, Math.ceil(total / 20))} 页 · 共 {total} 条
+        {tShared("voucherManagement.detail.page", {
+          page,
+          pages: Math.max(1, Math.ceil(total / 20)),
+          total,
+        })}
       </span>
       <ActionButton
         icon="check"
@@ -125,7 +138,7 @@ function Pager({
         disabled={page * 20 >= total}
         onClick={() => onChange(page + 1)}
       >
-        下一页
+        {tShared("voucherManagement.detail.next")}
       </ActionButton>
     </div>
   );
@@ -145,6 +158,9 @@ function VoucherBatchDetailContent({
 }) {
   const { session } = useAdminSession();
   const { runWithStepUp } = useStepUp();
+  const locale = useLocale();
+  const tShared = useTranslations();
+  const labels = useVoucherLabels();
   const [detail, setDetail] = useState<VoucherBatchDetail | null>(null);
   const [instances, setInstances] =
     useState<VoucherPage<VoucherInstance> | null>(null);
@@ -227,12 +243,16 @@ function VoucherBatchDetailContent({
       })
       .catch((e) => {
         if (alive)
-          setError(e instanceof Error ? e.message : "批次详情读取失败");
+          setError(
+            e instanceof Error
+              ? e.message
+              : tShared("voucherManagement.detail.loadFailed"),
+          );
       });
     return () => {
       alive = false;
     };
-  }, [id, page, eventPage, reload]);
+  }, [id, page, eventPage, reload, tShared]);
   function requestKey(payload: object) {
     const signature = JSON.stringify(payload);
     if (key.current.signature !== signature)
@@ -267,7 +287,9 @@ function VoucherBatchDetailContent({
             !!voucherId ||
             ("action" in payload &&
               ["pause", "archive"].includes(payload.action)),
-          submitLabel: voucherId ? "验证并撤回" : "验证并继续",
+          submitLabel: voucherId
+            ? tShared("voucherManagement.detail.verifyRevoke")
+            : tShared("voucherManagement.detail.verifyContinue"),
         },
       );
       if (!live.current) return;
@@ -279,7 +301,9 @@ function VoucherBatchDetailContent({
     } catch (e) {
       if (live.current && !isStepUpCancelled(e))
         setError(
-          e instanceof Error ? e.message : "操作失败，请使用相同参数重试。",
+          e instanceof Error
+            ? e.message
+            : tShared("voucherManagement.detail.operationFailed"),
         );
     } finally {
       running.current = false;
@@ -293,23 +317,20 @@ function VoucherBatchDetailContent({
       ...(action === "review" ? { expectedRevision: detail?.revision } : {}),
       ...extra,
     } as Omit<VoucherBatchAction, "idempotencyKey">;
-    const verbs: Record<string, string> = {
-      review: "审核启用",
-      pause: "暂停",
-      resume: "恢复",
-      archive: "归档停用",
-      request_budget: "申请增额",
-      approve_budget: "批准增额",
-    };
     setConfirmation({
-      verb: verbs[action] ?? "确认操作",
-      target: `批次 ${detail?.name ?? id}`,
+      verb: labels.action(action),
+      target: tShared("voucherManagement.detail.batchTarget", {
+        name: detail?.name ?? id,
+      }),
       consequence:
         action === "archive"
-          ? "此批次将停止新发放和使用，已占用订单保留原有快照。归档后不能恢复。"
+          ? tShared("voucherManagement.detail.archiveConsequence")
           : action === "pause"
-            ? "此批次将暂停新发放和使用，已占用订单保留原有快照。"
-            : `将按当前参数执行${verbs[action]}，理由：${reason.trim()}。`,
+            ? tShared("voucherManagement.detail.pauseConsequence")
+            : tShared("voucherManagement.detail.actionConsequence", {
+                action: labels.action(action),
+                reason: reason.trim(),
+              }),
       execute: () => run(payload),
     });
   }
@@ -336,14 +357,17 @@ function VoucherBatchDetailContent({
           if (!live.current) throw new StepUpCancelledError();
           return issueVoucherCredentials(id, command);
         },
-        { danger: true, submitLabel: "验证并发行" },
+        {
+          danger: true,
+          submitLabel: tShared("voucherManagement.detail.verifyIssue"),
+        },
       );
       if (!live.current) return;
       setCredentials(result.replayed ? [] : result.credentials);
       setIssueNotice(
         result.replayed
-          ? "本请求已成功发行；领取凭证不会重复返回。若首次响应遗失，请撤回对应实例后重新发行。"
-          : "请立即复制并妥善交付领取凭证。关闭此窗口后无法再次查看；普通列表、导出及操作历史均不包含领取凭证。",
+          ? tShared("voucherManagement.detail.replayed")
+          : tShared("voucherManagement.detail.credentialNotice"),
       );
       key.current = { signature: "", value: "" };
       setReason("");
@@ -354,7 +378,7 @@ function VoucherBatchDetailContent({
         setError(
           e instanceof Error
             ? e.message
-            : "领取凭证生成失败，请使用相同参数重试。",
+            : tShared("voucherManagement.detail.issueFailed"),
         );
     } finally {
       running.current = false;
@@ -418,9 +442,9 @@ function VoucherBatchDetailContent({
       <DialogForm
         open
         size="lg"
-        title={detail?.name ?? "批次详情"}
-        description="审核、发行预算、实例去向与操作历史"
-        submitLabel="关闭"
+        title={detail?.name ?? tShared("voucherManagement.detail.title")}
+        description={tShared("voucherManagement.detail.description")}
+        submitLabel={tShared("voucherManagement.detail.close")}
         submitting={busy}
         onOpenChange={(open) => {
           if (!open && !busy) close();
@@ -437,62 +461,87 @@ function VoucherBatchDetailContent({
             </p>
           ) : null}
           {!detail ? (
-            <p>正在读取批次…</p>
+            <p>{tShared("voucherManagement.detail.loading")}</p>
           ) : (
             <>
               <p>
-                {labels[detail.kind] ?? detail.kind} · {labels[detail.status]} ·{" "}
-                {effectLabel(detail)}
+                {labels.kind(detail.kind)} · {labels.batchStatus(detail.status)}{" "}
+                · {effectLabel(detail, tShared)}
               </p>
               <p>
                 {detail.tenantId
-                  ? `限定租户 ${detail.tenantId}`
-                  : "平台批次，发放时绑定目标租户"}
+                  ? tShared("voucherManagement.detail.tenantScope", {
+                      tenant: detail.tenantId,
+                    })
+                  : tShared("voucherManagement.detail.platformScope")}
               </p>
               <p>
-                已发行 {detail.issuedCount} / {detail.totalCount} · 已领{" "}
-                {detail.claimedCount} · 占用 {detail.reservedCount} · 核销{" "}
-                {detail.redeemedCount} · 过期 {detail.expiredCount} · 撤回{" "}
-                {detail.revokedCount}
+                {tShared("voucherManagement.detail.counts", {
+                  issued: detail.issuedCount,
+                  total: detail.totalCount,
+                  claimed: detail.claimedCount,
+                  reserved: detail.reservedCount,
+                  redeemed: detail.redeemedCount,
+                  expired: detail.expiredCount,
+                  revoked: detail.revokedCount,
+                })}
               </p>
               <p>
-                有效期：{new Date(detail.validFrom).toLocaleString()} —{" "}
-                {new Date(detail.validUntil).toLocaleString()}
+                {tShared("voucherManagement.detail.validity", {
+                  from: formatDateTime(detail.validFrom, locale),
+                  until: formatDateTime(detail.validUntil, locale),
+                })}
               </p>
               <p>
-                领取截止：
-                {new Date(
-                  detail.claimUntil ?? detail.validUntil,
-                ).toLocaleString()}{" "}
-                · 领取后期限：
-                {detail.useValidDays
-                  ? `${detail.useValidDays} 天`
-                  : "沿用批次截止"}
+                {tShared("voucherManagement.detail.claimDeadline", {
+                  until: formatDateTime(
+                    detail.claimUntil ?? detail.validUntil,
+                    locale,
+                  ),
+                  term: detail.useValidDays
+                    ? tShared("voucherManagement.detail.days", {
+                        days: detail.useValidDays,
+                      })
+                    : tShared("voucherManagement.detail.batchDeadline"),
+                })}
               </p>
               <p>
-                累计上限：每用户 {detail.perUserLimit} / 每工作空间{" "}
-                {detail.perWorkspaceLimit ?? "不限"} / 每租户{" "}
-                {detail.perTenantLimit ?? "不限"}
+                {tShared("voucherManagement.detail.limits", {
+                  user: detail.perUserLimit ?? 1,
+                  workspace:
+                    detail.perWorkspaceLimit ??
+                    tShared("voucherManagement.detail.unlimited"),
+                  tenant:
+                    detail.perTenantLimit ??
+                    tShared("voucherManagement.detail.unlimited"),
+                })}
               </p>
               <p>
-                返券政策：
-                {detail.returnPolicy === "full_reversal_only"
-                  ? "完整撤销后恢复剩余价值，沿用原有效期"
-                  : "不自动返券"}
+                {tShared("voucherManagement.detail.returnPolicy", {
+                  policy:
+                    detail.returnPolicy === "full_reversal_only"
+                      ? tShared("voucherManagement.detail.fullReturn")
+                      : tShared("voucherManagement.detail.noReturn"),
+                })}
               </p>
               <p>
-                审核：
-                {detail.reviewedAt
-                  ? `${detail.reviewedBy} · ${new Date(detail.reviewedAt).toLocaleString()}`
-                  : detail.status === "draft"
-                    ? "等待另一位运营审核"
-                    : "历史启用批次"}{" "}
-                · {detail.frozenAt ? "首次发行后经济配置已冻结" : "尚未发行"}
+                {tShared("voucherManagement.detail.review", {
+                  review: detail.reviewedAt
+                    ? detail.reviewedBy +
+                      " · " +
+                      formatDateTime(detail.reviewedAt, locale)
+                    : detail.status === "draft"
+                      ? tShared("voucherManagement.detail.awaitingReview")
+                      : tShared("voucherManagement.detail.legacyActive"),
+                  freeze: detail.frozenAt
+                    ? tShared("voucherManagement.detail.frozen")
+                    : tShared("voucherManagement.detail.notIssued"),
+                })}
               </p>
               {canWrite && detail.status !== "archived" ? (
                 <>
                   <Label htmlFor="vbd-reason">
-                    操作理由（审核、状态、增额、撤券共用）
+                    {tShared("voucherManagement.detail.reason")}
                   </Label>
                   <Input
                     id="vbd-reason"
@@ -511,7 +560,7 @@ function VoucherBatchDetailContent({
                             disabled={busy}
                             onClick={() => setEditing(true)}
                           >
-                            修改草稿
+                            {tShared("voucherManagement.detail.edit")}
                           </ActionButton>
                         ) : (
                           <ActionButton
@@ -526,7 +575,7 @@ function VoucherBatchDetailContent({
                             }
                             onClick={() => act("review")}
                           >
-                            审核启用
+                            {tShared("voucherManagement.detail.reviewActivate")}
                           </ActionButton>
                         )}
                       </>
@@ -539,7 +588,7 @@ function VoucherBatchDetailContent({
                         disabled={disabled}
                         onClick={() => act("pause")}
                       >
-                        暂停新发放与使用
+                        {tShared("voucherManagement.detail.pause")}
                       </ActionButton>
                     ) : null}
                     {detail.status === "paused" ? (
@@ -550,7 +599,7 @@ function VoucherBatchDetailContent({
                         disabled={disabled || expired}
                         onClick={() => act("resume")}
                       >
-                        恢复批次
+                        {tShared("voucherManagement.detail.resume")}
                       </ActionButton>
                     ) : null}
                     <ActionButton
@@ -560,16 +609,18 @@ function VoucherBatchDetailContent({
                       disabled={disabled}
                       onClick={() => act("archive")}
                     >
-                      归档停用
+                      {tShared("voucherManagement.detail.archive")}
                     </ActionButton>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    暂停和归档保留原有占用，已申报订单仍按快照确认；撤回占用券请先处理订单。
+                    {tShared("voucherManagement.detail.reservationNotice")}
                   </p>
                   {detail.status !== "draft" ? (
                     <>
                       <Label htmlFor="vbd-budget">
-                        申请增加发行总量（当前 {detail.totalCount}）
+                        {tShared("voucherManagement.detail.budgetLabel", {
+                          total: detail.totalCount,
+                        })}
                       </Label>
                       <Input
                         id="vbd-budget"
@@ -590,13 +641,16 @@ function VoucherBatchDetailContent({
                           act("request_budget", { totalCount: Number(total) })
                         }
                       >
-                        提交增额申请
+                        {tShared("voucherManagement.detail.requestBudget")}
                       </ActionButton>
                       {detail.pendingBudgetRequests.map((item) => (
                         <div key={item.id}>
                           <p>
-                            申请总量 {item.totalCount} · {item.reason} · 申请人{" "}
-                            {item.requestedBy}
+                            {tShared("voucherManagement.detail.budgetRequest", {
+                              total: item.totalCount,
+                              reason: item.reason,
+                              operator: item.requestedBy,
+                            })}
                           </p>
                           <ActionButton
                             variant="outline"
@@ -611,7 +665,7 @@ function VoucherBatchDetailContent({
                               })
                             }
                           >
-                            由其他运营批准
+                            {tShared("voucherManagement.detail.approveOther")}
                           </ActionButton>
                         </div>
                       ))}
@@ -623,33 +677,43 @@ function VoucherBatchDetailContent({
                 <>
                   {paidCard ? (
                     <>
-                      <Label htmlFor="vbd-card-source">已确认销售收款</Label>
+                      <Label htmlFor="vbd-card-source">
+                        {tShared("voucherManagement.detail.confirmedReceipt")}
+                      </Label>
                       <NativeSelect
                         id="vbd-card-source"
                         value={fundingPaymentId}
                         disabled={busy}
                         onChange={(e) => setFundingPaymentId(e.target.value)}
                       >
-                        <option value="">请选择真实收款</option>
+                        <option value="">
+                          {tShared("voucherManagement.detail.selectReceipt")}
+                        </option>
                         {fundingSources
                           ?.filter((p) => Number(p.availableAmount) > 0)
                           .map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.paymentNo} · 可分配 ¥{p.availableAmount}
+                              {tShared(
+                                "voucherManagement.detail.receiptCapacity",
+                                {
+                                  payment: p.paymentNo,
+                                  amount: p.availableAmount,
+                                },
+                              )}
                             </option>
                           ))}
                       </NativeSelect>
                       {fundingError ? (
                         <p role="alert">
-                          收款来源读取失败，请重新打开详情重试。
+                          {tShared("voucherManagement.detail.receiptFailed")}
                         </p>
                       ) : fundingSources?.length === 0 ? (
-                        <p>暂无合格独立销售收款，请先完成销售收款确认。</p>
+                        <p>{tShared("voucherManagement.detail.noReceipt")}</p>
                       ) : null}
                     </>
                   ) : null}
                   <Label htmlFor="vbd-issue-count">
-                    生成待领取券数量（最多 200，占用发行额度）
+                    {tShared("voucherManagement.detail.issueCount")}
                   </Label>
                   <Input
                     id="vbd-issue-count"
@@ -681,14 +745,27 @@ function VoucherBatchDetailContent({
                     }
                     onClick={() =>
                       setConfirmation({
-                        verb: "生成领取凭证",
-                        target: `批次 ${detail.name}`,
-                        consequence: `将发行 ${issueCount} 张券并占用额度${paidCard ? "及已选销售收款" : ""}。凭据仅本次展示，请立即妥善交付。`,
+                        verb: tShared("voucherManagement.detail.issue"),
+                        target: tShared(
+                          "voucherManagement.detail.batchTarget",
+                          { name: detail.name },
+                        ),
+                        consequence: tShared(
+                          "voucherManagement.detail.issueConsequence",
+                          {
+                            count: issueCount,
+                            funding: paidCard
+                              ? tShared(
+                                  "voucherManagement.detail.selectedReceipt",
+                                )
+                              : "",
+                          },
+                        ),
                         execute: issue,
                       })
                     }
                   >
-                    生成领取凭证
+                    {tShared("voucherManagement.detail.issue")}
                   </ActionButton>
                 </>
               ) : null}
@@ -711,46 +788,68 @@ function VoucherBatchDetailContent({
                       void navigator.clipboard
                         .writeText(item.secret)
                         .catch(() =>
-                          setError("复制失败，请手动选中领取凭证复制。"),
+                          setError(
+                            tShared("voucherManagement.detail.copyFailed"),
+                          ),
                         )
                     }
                   >
-                    复制领取凭证
+                    {tShared("voucherManagement.detail.copy")}
                   </ActionButton>
                 </div>
               ))}
-              <h3 className="font-medium">券实例</h3>
+              <h3 className="font-medium">
+                {tShared("voucherManagement.detail.instances")}
+              </h3>
               {instances?.items.map((item) => (
                 <div key={item.id} className="rounded-md border p-3 text-sm">
                   <p>
-                    {item.code} · {labels[item.status] ?? item.status}
+                    {item.code} · {labels.status(item.status)}
                     {item.status === "assigned" &&
                     Date.parse(item.expiresAt) <= Date.now()
-                      ? "（已过有效期）"
+                      ? tShared("voucherManagement.detail.pastExpiry")
                       : ""}
                   </p>
                   <p>
-                    租户 {item.tenantId ?? "历史未绑定"} ·{" "}
-                    {item.userId
-                      ? `用户 ${item.userId}`
-                      : item.workspaceId
-                        ? `工作空间 ${item.workspaceId}`
-                        : item.status === "issued"
-                          ? "等待客户领取"
-                          : "租户共享"}
+                    {tShared("voucherManagement.detail.instanceOwner", {
+                      tenant:
+                        item.tenantId ??
+                        tShared("voucherManagement.detail.legacyUnbound"),
+                      owner: item.userId
+                        ? tShared("voucherManagement.detail.userOwner", {
+                            user: item.userId,
+                          })
+                        : item.workspaceId
+                          ? tShared("voucherManagement.detail.workspaceOwner", {
+                              workspace: item.workspaceId,
+                            })
+                          : item.status === "issued"
+                            ? tShared("voucherManagement.detail.awaitingClaim")
+                            : tShared("voucherManagement.detail.tenantShared"),
+                    })}
                   </p>
                   {item.reservedOrderId ? (
-                    <a href={`/orders/${item.reservedOrderId}`}>查看占用订单</a>
+                    <a href={`/orders/${item.reservedOrderId}`}>
+                      {tShared("voucherManagement.detail.reservedOrder")}
+                    </a>
                   ) : null}
                   {item.redeemedOrderId ? (
                     <a href={`/orders/${item.redeemedOrderId}`}>
-                      查看核销订单 · {item.redemptionNo}
+                      {tShared("voucherManagement.detail.redeemedOrder", {
+                        number: item.redemptionNo ?? "—",
+                      })}
                     </a>
                   ) : null}
-                  {item.paymentId ? <p>券支付记录 {item.paymentId}</p> : null}
+                  {item.paymentId ? (
+                    <p>
+                      {tShared("voucherManagement.detail.voucherPayment", {
+                        payment: item.paymentId,
+                      })}
+                    </p>
+                  ) : null}
                   {item.subscriptionId ? (
                     <a href={`/subscriptions/${item.subscriptionId}`}>
-                      查看订阅
+                      {tShared("voucherManagement.detail.subscription")}
                       {!item.redeemedOrderId && item.redemptionNo
                         ? ` · ${item.redemptionNo}`
                         : ""}
@@ -758,20 +857,17 @@ function VoucherBatchDetailContent({
                   ) : null}
                   {item.fundingPaymentNo ? (
                     <span>
-                      {" "}
-                      · 销售收款 {item.fundingPaymentNo}（
-                      {item.fundingStatus === "transferred"
-                        ? "已入钱包"
-                        : item.fundingStatus === "released"
-                          ? "已释放"
-                          : "已冻结"}
-                      ）
+                      {tShared("voucherManagement.detail.fundingReceipt", {
+                        number: item.fundingPaymentNo,
+                        status: labels.funding(item.fundingStatus ?? ""),
+                      })}
                     </span>
                   ) : null}
                   {item.walletTransactions?.length ? (
                     <span>
-                      {" "}
-                      · 钱包流水 {item.walletTransactions.join(" · ")}
+                      {tShared("voucherManagement.detail.walletEntries", {
+                        entries: item.walletTransactions.join(" · "),
+                      })}
                     </span>
                   ) : null}
                   {canWrite &&
@@ -784,15 +880,19 @@ function VoucherBatchDetailContent({
                       onClick={() => {
                         const payload = { reason };
                         setConfirmation({
-                          verb: "撤回",
-                          target: `券 ${item.code}`,
-                          consequence:
-                            "撤回后客户不能再领取或使用此券，已过期和撤回不恢复累计限额。",
+                          verb: tShared("voucherManagement.detail.revoke"),
+                          target: tShared(
+                            "voucherManagement.detail.voucherTarget",
+                            { code: item.code },
+                          ),
+                          consequence: tShared(
+                            "voucherManagement.detail.revokeConsequence",
+                          ),
                           execute: () => run(payload, item.id),
                         });
                       }}
                     >
-                      撤回此券
+                      {tShared("voucherManagement.detail.revokeVoucher")}
                     </ActionButton>
                   ) : null}
                 </div>
@@ -800,17 +900,28 @@ function VoucherBatchDetailContent({
               {instances ? (
                 <Pager page={page} total={instances.total} onChange={setPage} />
               ) : null}
-              <h3 className="font-medium">操作历史</h3>
+              <h3 className="font-medium">
+                {tShared("voucherManagement.detail.history")}
+              </h3>
               {events?.items.map((event) => (
                 <div key={event.id} className="rounded-md border p-3 text-sm">
                   <p>
-                    {labels[event.eventType] ?? event.eventType} ·{" "}
-                    {event.actorName} ·{" "}
-                    {new Date(event.createdAt).toLocaleString()}
+                    {labels.event(event.eventType)} · {event.actorName} ·{" "}
+                    {formatDateTime(event.createdAt, locale)}
                   </p>
                   <p>{event.reason ?? "—"}</p>
-                  <p>操作编号 {event.operationId}</p>
-                  {event.voucherId ? <p>券实例 {event.voucherId}</p> : null}
+                  <p>
+                    {tShared("voucherManagement.detail.operationNumber", {
+                      number: event.operationId,
+                    })}
+                  </p>
+                  {event.voucherId ? (
+                    <p>
+                      {tShared("voucherManagement.detail.eventVoucher", {
+                        voucher: event.voucherId,
+                      })}
+                    </p>
+                  ) : null}
                 </div>
               ))}
               {events ? (

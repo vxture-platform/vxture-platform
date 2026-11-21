@@ -50,6 +50,8 @@ import type {
   UserKycStatus,
 } from "@vxture-platform/shared";
 import type {
+  PromotionOperationStatus,
+  PromotionOperationType,
   BillingBillType,
   OrderOperationStatus,
   ProductCapabilityStatus,
@@ -57,6 +59,12 @@ import type {
   SubscriptionOperationCycle,
   SubscriptionOperationQuotaRisk,
 } from "@/entities/console";
+
+import type {
+  VoucherBatchConfiguration,
+  VoucherBatchDetail,
+  VoucherBatchAction,
+} from "@/api/voucher-management.types";
 
 /**
  * 订阅状态的界面文案。
@@ -398,4 +406,118 @@ export function useTicketPriorityLabels(): Record<TicketPriority, string> {
     p2: t("p2"),
     p3: t("p3"),
   } satisfies Record<TicketPriority, string>;
+}
+
+/** Translate the existing promotionStatus read-model contract. @returns Exhaustive localized labels. */
+export function usePromotionStatusLabels(): Record<
+  PromotionOperationStatus,
+  string
+> {
+  const tShared = useTranslations();
+  return {
+    draft: tShared("enums.promotionStatus.draft"),
+    archived: tShared("enums.promotionStatus.archived"),
+    scheduled: tShared("enums.promotionStatus.scheduled"),
+    expired: tShared("enums.promotionStatus.expired"),
+    paused: tShared("enums.promotionStatus.paused"),
+    active: tShared("enums.promotionStatus.active"),
+  } satisfies Record<PromotionOperationStatus, string>;
+}
+
+/** Translate the existing promotionType read-model contract. @returns Exhaustive localized labels. */
+export function usePromotionTypeLabels(): Record<
+  PromotionOperationType,
+  string
+> {
+  const tShared = useTranslations();
+  return {
+    discount: tShared("enums.promotionType.discount"),
+    coupon: tShared("enums.promotionType.coupon"),
+    campaign: tShared("enums.promotionType.campaign"),
+  } satisfies Record<PromotionOperationType, string>;
+}
+
+// ============================================================================
+// Voucher contracts and explicitly known audit values; unknown values stay neutral.
+// ============================================================================
+/** Translate known voucher values without interpreting unknown events as successful states. @returns Localized lookup functions with neutral fallbacks. */
+export function useVoucherLabels() {
+  const tShared = useTranslations();
+  const voucherKind = {
+    discount: tShared("enums.voucherKind.discount"),
+    credit_voucher: tShared("enums.voucherKind.credit_voucher"),
+    invite: tShared("enums.voucherKind.invite"),
+    redemption: tShared("enums.voucherKind.redemption"),
+    extension: tShared("enums.voucherKind.extension"),
+    recharge_card: tShared("enums.voucherKind.recharge_card"),
+  } satisfies Record<VoucherBatchConfiguration["kind"], string>;
+  const voucherBatchStatus = {
+    draft: tShared("enums.voucherBatchStatus.draft"),
+    active: tShared("enums.voucherBatchStatus.active"),
+    paused: tShared("enums.voucherBatchStatus.paused"),
+    archived: tShared("enums.voucherBatchStatus.archived"),
+  } satisfies Record<VoucherBatchDetail["status"], string>;
+  const voucherStatus = {
+    issued: tShared("enums.voucherStatus.issued"),
+    assigned: tShared("enums.voucherStatus.assigned"),
+    reserved: tShared("enums.voucherStatus.reserved"),
+    redeemed: tShared("enums.voucherStatus.redeemed"),
+    expired: tShared("enums.voucherStatus.expired"),
+    revoked: tShared("enums.voucherStatus.revoked"),
+  };
+  const voucherEvent = {
+    batch_created: tShared("enums.voucherEvent.batch_created"),
+    batch_configure: tShared("enums.voucherEvent.batch_configure"),
+    batch_review: tShared("enums.voucherEvent.batch_review"),
+    batch_pause: tShared("enums.voucherEvent.batch_pause"),
+    batch_resume: tShared("enums.voucherEvent.batch_resume"),
+    batch_archive: tShared("enums.voucherEvent.batch_archive"),
+    batch_request_budget: tShared("enums.voucherEvent.batch_request_budget"),
+    batch_approve_budget: tShared("enums.voucherEvent.batch_approve_budget"),
+    voucher_assigned: tShared("enums.voucherEvent.voucher_assigned"),
+    voucher_issued: tShared("enums.voucherEvent.voucher_issued"),
+    voucher_claimed: tShared("enums.voucherEvent.voucher_claimed"),
+    voucher_revoked: tShared("enums.voucherEvent.voucher_revoked"),
+    refund_replacement: tShared("enums.voucherEvent.refund_replacement"),
+    compensation_batch_prepared: tShared(
+      "enums.voucherEvent.compensation_batch_prepared",
+    ),
+  };
+  const voucherAction = {
+    configure: tShared("enums.voucherAction.configure"),
+    review: tShared("enums.voucherAction.review"),
+    pause: tShared("enums.voucherAction.pause"),
+    resume: tShared("enums.voucherAction.resume"),
+    archive: tShared("enums.voucherAction.archive"),
+    request_budget: tShared("enums.voucherAction.request_budget"),
+    approve_budget: tShared("enums.voucherAction.approve_budget"),
+  } satisfies Record<VoucherBatchAction["action"], string>;
+  const voucherFunding = {
+    transferred: tShared("enums.voucherFunding.transferred"),
+    released: tShared("enums.voucherFunding.released"),
+    reserved: tShared("enums.voucherFunding.reserved"),
+  };
+  function lookup(
+    labels: Readonly<Record<string, string>>,
+    value: string,
+    fallback: string,
+  ): string {
+    return Object.hasOwn(labels, value)
+      ? (labels[value] ?? fallback)
+      : fallback;
+  }
+  return {
+    kind: (value: string) =>
+      lookup(voucherKind, value, tShared("enums.voucherUnknown.kind")),
+    batchStatus: (value: string) =>
+      lookup(voucherBatchStatus, value, tShared("enums.voucherUnknown.status")),
+    status: (value: string) =>
+      lookup(voucherStatus, value, tShared("enums.voucherUnknown.status")),
+    event: (value: string) =>
+      lookup(voucherEvent, value, tShared("enums.voucherUnknown.event")),
+    action: (value: string) =>
+      lookup(voucherAction, value, tShared("enums.voucherUnknown.action")),
+    funding: (value: string) =>
+      lookup(voucherFunding, value, tShared("enums.voucherUnknown.status")),
+  };
 }

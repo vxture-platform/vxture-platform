@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import {
+  usePromotionStatusLabels,
+  usePromotionTypeLabels,
+} from "@/modules/shared/enum-labels";
 import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
@@ -50,21 +54,6 @@ import { Tag, type PageSize } from "./CommercialUtils";
 type StatusFilter = "all" | PromotionOperationStatus;
 type TypeFilter = "all" | PromotionOperationType;
 
-function statusLabel(status: PromotionOperationStatus) {
-  if (status === "draft") return "待审核";
-  if (status === "archived") return "已归档";
-  if (status === "scheduled") return "待开始";
-  if (status === "expired") return "已结束";
-  if (status === "paused") return "已暂停";
-  return "生效中";
-}
-
-function typeLabel(type: PromotionOperationType) {
-  if (type === "discount") return "套餐折扣";
-  if (type === "coupon") return "优惠码";
-  return "活动";
-}
-
 function statusTone(status: PromotionOperationStatus) {
   if (status === "active") return "normal";
   if (status === "draft") return "warning";
@@ -78,25 +67,57 @@ function statusTone(status: PromotionOperationStatus) {
    没有任何运行时上下文，而列里的日期要按界面语言排。 */
 function promotionCsvColumns(
   locale: string,
+  tShared: ReturnType<typeof useTranslations>,
+  statusLabels: Record<PromotionOperationStatus, string>,
+  typeLabels: Record<PromotionOperationType, string>,
 ): CsvColumn<PromotionOperationRecord>[] {
   return [
-    { label: "优惠编号", value: (record) => record.promotionCode },
-    { label: "优惠名称", value: (record) => record.promotionName },
-    { label: "类型", value: (record) => typeLabel(record.promotionType) },
-    { label: "状态", value: (record) => statusLabel(record.status) },
-    { label: "适用范围", value: (record) => record.scopeLabel },
-    { label: "优惠", value: (record) => record.discountLabel },
-    { label: "核销次数", value: (record) => record.redemptionCount },
-    { label: "租户数", value: (record) => record.tenantCount },
-    { label: "负责人", value: (record) => record.ownerName },
     {
-      label: "开始时间",
+      label: tShared("voucherManagement.promotions.promotionCode"),
+      value: (record) => record.promotionCode,
+    },
+    {
+      label: tShared("voucherManagement.promotions.promotionName"),
+      value: (record) => record.promotionName,
+    },
+    {
+      label: tShared("voucherManagement.promotions.type"),
+      value: (record) => typeLabels[record.promotionType],
+    },
+    {
+      label: tShared("voucherManagement.promotions.status"),
+      value: (record) => statusLabels[record.status],
+    },
+    {
+      label: tShared("voucherManagement.promotions.scope"),
+      value: (record) => record.scopeLabel,
+    },
+    {
+      label: tShared("voucherManagement.promotions.benefit"),
+      value: (record) => record.discountLabel,
+    },
+    {
+      label: tShared("voucherManagement.promotions.redemptions"),
+      value: (record) => record.redemptionCount,
+    },
+    {
+      label: tShared("voucherManagement.promotions.tenants"),
+      value: (record) => record.tenantCount,
+    },
+    {
+      label: tShared("voucherManagement.promotions.owner"),
+      value: (record) => record.ownerName,
+    },
+    {
+      label: tShared("voucherManagement.promotions.startsAt"),
       value: (record) => formatDate(record.startsAt, locale),
     },
     {
-      label: "结束时间",
+      label: tShared("voucherManagement.promotions.endsAt"),
       value: (record) =>
-        record.endsAt ? formatDate(record.endsAt, locale) : "长期",
+        record.endsAt
+          ? formatDate(record.endsAt, locale)
+          : tShared("voucherManagement.promotions.ongoing"),
     },
   ];
 }
@@ -109,6 +130,7 @@ function PromotionActionsMenu({
   record: PromotionOperationRecord;
 }) {
   const router = useRouter();
+  const tShared = useTranslations();
 
   return (
     <div
@@ -116,23 +138,25 @@ function PromotionActionsMenu({
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
-        label={`${record.promotionName} 操作`}
+        label={tShared("voucherManagement.promotions.actions", {
+          name: record.promotionName,
+        })}
         items={[
           {
             id: "detail",
-            label: "批次详情与管理",
+            label: tShared("voucherManagement.promotions.manage"),
             icon: "list",
             onSelect: () => onDetail(record),
           },
           {
             id: "redemptions",
-            label: "查看核销",
+            label: tShared("voucherManagement.promotions.viewRedemptions"),
             icon: "check",
             onSelect: () => router.push("/promotion-redemptions"),
           },
           {
             id: "service-plans",
-            label: "服务套餐",
+            label: tShared("voucherManagement.promotions.servicePlans"),
             icon: "star",
             onSelect: () => router.push("/service-plans"),
           },
@@ -144,6 +168,8 @@ function PromotionActionsMenu({
 
 /** 这一页的标已经是 DS `Tag`，不带业务色类，与批 4 无关。 */
 function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
+  const statusLabels = usePromotionStatusLabels();
+  const typeLabels = usePromotionTypeLabels();
   const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
@@ -151,19 +177,19 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
   return [
     {
       id: "promotion",
-      header: "优惠活动",
+      header: tShared("voucherManagement.promotions.promotion"),
       cell: (record) => (
         <TableTitleCell
           icon="target"
           title={record.promotionName}
-          description={`${record.promotionCode} · ${typeLabel(record.promotionType)}`}
+          description={`${record.promotionCode} · ${typeLabels[record.promotionType]}`}
           onTitleClick={() => router.push("/promotion-redemptions")}
         />
       ),
     },
     {
       id: "scope",
-      header: "适用范围",
+      header: tShared("voucherManagement.promotions.scope"),
       cell: (record) => (
         <span className="inline-flex flex-col items-center gap-2xs">
           {<Badge variant="outline">{record.scopeLabel}</Badge>}
@@ -175,24 +201,28 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
     },
     {
       id: "discount",
-      header: "优惠",
+      header: tShared("voucherManagement.promotions.benefit"),
       align: "center",
       cell: (record) => (
         <TableTitleCell
           layout="stacked"
           title={record.discountLabel}
-          description={typeLabel(record.promotionType)}
+          description={typeLabels[record.promotionType]}
         />
       ),
     },
     {
       id: "redemption",
-      header: "核销",
+      header: tShared("voucherManagement.promotions.redemption"),
       align: "numeric",
       cell: (record) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatNumber(record.redemptionCount)}
-          <span className="text-body-sm text-muted-foreground">{`${formatNumber(record.tenantCount)} 租户`}</span>
+          <span className="text-body-sm text-muted-foreground">
+            {tShared("voucherManagement.promotions.tenantCount", {
+              count: formatNumber(record.tenantCount),
+            })}
+          </span>
         </span>
       ),
     },
@@ -204,7 +234,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
         <span className="inline-flex flex-col items-center gap-2xs">
           {
             <Tag tone={statusTone(record.status)}>
-              {statusLabel(record.status)}
+              {statusLabels[record.status]}
             </Tag>
           }
           <span className="text-body-sm text-muted-foreground">
@@ -215,14 +245,16 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
     },
     {
       id: "time",
-      header: "时间",
+      header: tShared("voucherManagement.promotions.time"),
       align: "center",
       cell: (record) => (
         <TableTitleCell
           layout="stacked"
           title={formatDate(record.startsAt, locale)}
           description={
-            record.endsAt ? formatDate(record.endsAt, locale) : "长期"
+            record.endsAt
+              ? formatDate(record.endsAt, locale)
+              : tShared("voucherManagement.promotions.ongoing")
           }
         />
       ),
@@ -231,6 +263,8 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
 }
 
 export function PromotionsPage() {
+  const statusLabels = usePromotionStatusLabels();
+  const typeLabels = usePromotionTypeLabels();
   const { session } = useAdminSession();
   const canWrite =
     session.isAuthenticated &&
@@ -300,7 +334,9 @@ export function PromotionsPage() {
             coupons: 0,
           });
           setLoadError(
-            error instanceof Error ? error.message : "优惠数据读取失败",
+            error instanceof Error
+              ? error.message
+              : tShared("voucherManagement.promotions.loadFailed"),
           );
         }
       })
@@ -310,7 +346,15 @@ export function PromotionsPage() {
     return () => {
       active = false;
     };
-  }, [reloadNonce, currentPage, pageSize, statusFilter, typeFilter, query]);
+  }, [
+    reloadNonce,
+    currentPage,
+    pageSize,
+    statusFilter,
+    typeFilter,
+    query,
+    tShared,
+  ]);
 
   const identity = JSON.stringify([
     session.isAuthenticated,
@@ -357,7 +401,9 @@ export function PromotionsPage() {
       )
         return;
       setWriteError(
-        error instanceof Error ? error.message : "批次创建失败，请稍后重试。",
+        error instanceof Error
+          ? error.message
+          : tShared("voucherManagement.promotions.createFailed"),
       );
     } finally {
       writeInFlight.current = false;
@@ -396,7 +442,9 @@ export function PromotionsPage() {
       )
         return;
       setWriteError(
-        error instanceof Error ? error.message : "券码发放失败，请稍后重试。",
+        error instanceof Error
+          ? error.message
+          : tShared("voucherManagement.promotions.assignFailed"),
       );
     } finally {
       writeInFlight.current = false;
@@ -431,7 +479,7 @@ export function PromotionsPage() {
   function handleExportSelected() {
     exportRowsToCsv(
       "promotions-export",
-      promotionCsvColumns(locale),
+      promotionCsvColumns(locale, tShared, statusLabels, typeLabels),
       selectedRecords,
     );
   }
@@ -439,7 +487,7 @@ export function PromotionsPage() {
   function handleExportAll() {
     exportRowsToCsv(
       "promotions-export",
-      promotionCsvColumns(locale),
+      promotionCsvColumns(locale, tShared, statusLabels, typeLabels),
       filteredRecords,
     );
   }
@@ -455,9 +503,9 @@ export function PromotionsPage() {
         header={
           <PageHeader
             icon="sparkles"
-            eyebrow="产品体系"
-            title="营销优惠"
-            description="管理卡券批次的草稿审核、发行预算、定向发放与审计历史。首次发行后经济配置冻结。"
+            eyebrow={tShared("voucherManagement.promotions.eyebrow")}
+            title={tShared("voucherManagement.promotions.title")}
+            description={tShared("voucherManagement.promotions.description")}
           />
         }
         summary={
@@ -465,41 +513,51 @@ export function PromotionsPage() {
             {" "}
             <MetricGrid
               loading={loading}
-              aria-label="营销优惠统计"
+              aria-label={tShared("voucherManagement.promotions.statistics")}
               items={[
                 {
                   id: "promotions",
-                  help: "当前筛选条件下的优惠活动数。",
+                  help: tShared("voucherManagement.promotions.promotionHelp"),
                   icon: "sparkles",
-                  label: "优惠活动",
+                  label: tShared("voucherManagement.promotions.promotion"),
                   value: formatNumber(summary.total),
-                  tags: [`生效 ${formatNumber(activeCount)}`],
+                  tags: [
+                    tShared("voucherManagement.promotions.activeCount", {
+                      count: formatNumber(activeCount),
+                    }),
+                  ],
                 },
                 {
                   id: "redemptions",
-                  help: "这些活动的核销次数合计。",
+                  help: tShared("voucherManagement.promotions.redemptionHelp"),
                   icon: "check",
-                  label: "核销次数",
+                  label: tShared("voucherManagement.promotions.redemptions"),
                   value: formatNumber(redemptionCount),
-                  tags: [`筛选 ${formatNumber(summary.total)}`],
+                  tags: [
+                    tShared("voucherManagement.promotions.filteredCount", {
+                      count: formatNumber(summary.total),
+                    }),
+                  ],
                   tone: "success",
                 },
                 {
                   id: "tenant-reach",
-                  help: "这些活动覆盖的租户数合计（按活动累加，非去重）。",
+                  help: tShared("voucherManagement.promotions.tenantHelp"),
                   icon: "chart-bar",
-                  label: "覆盖租户",
+                  label: tShared("voucherManagement.promotions.tenantReach"),
                   value: formatNumber(tenantReach),
-                  tags: ["已核销租户数"],
+                  tags: [
+                    tShared("voucherManagement.promotions.redeemingTenants"),
+                  ],
                   tone: "success",
                 },
                 {
                   id: "pending-config",
-                  help: "券类活动数（promotionType = coupon）。",
+                  help: tShared("voucherManagement.promotions.couponHelp"),
                   icon: "clock",
-                  label: "券类活动",
+                  label: tShared("voucherManagement.promotions.coupons"),
                   value: formatNumber(summary.coupons),
-                  tags: ["优惠码"],
+                  tags: [tShared("voucherManagement.promotions.couponCode")],
                   tone: "warning",
                 },
               ]}
@@ -512,14 +570,16 @@ export function PromotionsPage() {
             onViewChange={() => {}}
             cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(summary.total)}
-            aria-label="营销优惠筛选"
+            aria-label={tShared("voucherManagement.promotions.filters")}
             search={
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索优惠、套餐、负责人"
+                placeholder={tShared(
+                  "voucherManagement.promotions.searchPlaceholder",
+                )}
                 className="min-w-media-2xl grow basis-0 max-w-panel-sm"
-                aria-label="搜索优惠"
+                aria-label={tShared("voucherManagement.promotions.search")}
               />
             }
             onReset={handleReset}
@@ -531,7 +591,7 @@ export function PromotionsPage() {
                   onClick={handleExportAll}
                   disabled={filteredRecords.length === 0}
                 >
-                  导出本页
+                  {tShared("voucherManagement.promotions.exportPage")}
                 </ActionButton>
                 <ActionButton
                   variant="outline"
@@ -542,7 +602,7 @@ export function PromotionsPage() {
                     setCreateOpen(true);
                   }}
                 >
-                  新建优惠
+                  {tShared("voucherManagement.promotions.create")}
                 </ActionButton>
                 <ActionButton
                   variant="outline"
@@ -556,10 +616,12 @@ export function PromotionsPage() {
                   }
                   title={
                     selectedRecords[0]?.requiresCashFunding
-                      ? "本金卡请打开批次详情，从真实销售收款生成领取凭证"
+                      ? tShared("voucherManagement.promotions.fundedCardHint")
                       : selectedRecords.length === 1
                         ? undefined
-                        : "勾选一个批次后可发放券码"
+                        : tShared(
+                            "voucherManagement.promotions.selectBatchHint",
+                          )
                   }
                   onClick={() => {
                     const target = selectedRecords[0];
@@ -569,7 +631,7 @@ export function PromotionsPage() {
                     setAssignTarget(target);
                   }}
                 >
-                  发放券码
+                  {tShared("voucherManagement.promotions.assign")}
                 </ActionButton>
               </>
             }
@@ -581,15 +643,17 @@ export function PromotionsPage() {
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
                 }
-                aria-label="优惠状态"
+                aria-label={tShared(
+                  "voucherManagement.promotions.statusFilter",
+                )}
               >
                 <option value="all">{tShared("filters.allStates")}</option>
-                <option value="draft">待审核</option>
-                <option value="archived">已归档</option>
-                <option value="active">生效中</option>
-                <option value="scheduled">待开始</option>
-                <option value="paused">已暂停</option>
-                <option value="expired">已结束</option>
+                <option value="draft">{statusLabels.draft}</option>
+                <option value="archived">{statusLabels.archived}</option>
+                <option value="active">{statusLabels.active}</option>
+                <option value="scheduled">{statusLabels.scheduled}</option>
+                <option value="paused">{statusLabels.paused}</option>
+                <option value="expired">{statusLabels.expired}</option>
               </NativeSelect>
               <NativeSelect
                 wrapperClassName="w-fit basis-media-xl"
@@ -597,12 +661,12 @@ export function PromotionsPage() {
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)
                 }
-                aria-label="优惠类型"
+                aria-label={tShared("voucherManagement.promotions.typeFilter")}
               >
                 <option value="all">{tShared("filters.allKinds")}</option>
-                <option value="discount">套餐折扣</option>
-                <option value="coupon">优惠码</option>
-                <option value="campaign">活动</option>
+                <option value="discount">{typeLabels.discount}</option>
+                <option value="coupon">{typeLabels.coupon}</option>
+                <option value="campaign">{typeLabels.campaign}</option>
               </NativeSelect>
             </>
           </FilterBar>
@@ -626,7 +690,7 @@ export function PromotionsPage() {
         table={
           <section
             className="grid min-w-0 max-w-full gap-xs"
-            aria-label="营销优惠清单"
+            aria-label={tShared("voucherManagement.promotions.list")}
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             <DataTable
@@ -646,9 +710,14 @@ export function PromotionsPage() {
               )}
               empty={
                 <EmptyState
-                  title={loadError ? "优惠数据读取失败" : "没有匹配的优惠"}
+                  title={
+                    loadError
+                      ? tShared("voucherManagement.promotions.loadFailed")
+                      : tShared("voucherManagement.promotions.empty")
+                  }
                   description={
-                    loadError ?? "清空筛选条件后可查看全部优惠活动。"
+                    loadError ??
+                    tShared("voucherManagement.promotions.emptyHint")
                   }
                   action={
                     <ActionButton

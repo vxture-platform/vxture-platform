@@ -66,7 +66,6 @@ const BASELINE = new Map([
   ["modules/billing/BillingPage.tsx", 3],
   ["modules/billing/InvoiceReceiptActionDialog.tsx", 10],
   ["modules/billing/OfflineInvoiceDialog.tsx", 15],
-  ["modules/commercial/PromotionsPage.tsx", 7],
   ["modules/commercial/UsageMeteringPage.tsx", 4],
   ["modules/invoices/InvoicesPage.tsx", 17],
   ["modules/orders/OrderOfflinePaymentDialog.tsx", 4],

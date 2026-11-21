@@ -33,7 +33,9 @@ export type CreateBatchPayload = VoucherBatchConfiguration &
 
 function localDate(value: string) {
   const date = new Date(value);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  // Date inputs need a machine value in the browser zone, never a display string.
+  const timezoneOffset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 10);
 }
 
 function useCommandIdentity() {
@@ -111,7 +113,11 @@ export function CreateVoucherBatchDialog({
                 .filter((v) => v.status === "published" && v.isLocked)
                 .map((v) => ({
                   id: v.id,
-                  label: `${plan.planName}（${plan.planCode}）· V${v.versionNo}`,
+                  label: tShared("voucherManagement.draft.planVersionLabel", {
+                    name: plan.planName,
+                    code: plan.planCode,
+                    version: v.versionNo,
+                  }),
                 })),
             ),
         );
@@ -123,7 +129,7 @@ export function CreateVoucherBatchDialog({
     return () => {
       alive = false;
     };
-  }, [kind]);
+  }, [kind, tShared]);
 
   useEffect(() => {
     if (kind !== "invite" || invitable !== null) return;
@@ -361,19 +367,27 @@ export function CreateVoucherBatchDialog({
     <DialogForm
       open
       size="lg"
-      title={initial ? "修改批次草稿" : "新建优惠批次"}
+      title={
+        initial
+          ? tShared("voucherManagement.draft.editTitle")
+          : tShared("voucherManagement.draft.createTitle")
+      }
       description={
         kind === "recharge_card"
-          ? "本金与赠额分别进入租户钱包；本金卡发行须绑定真实销售收款，赠额可设置核销后的有效期限。"
+          ? tShared("voucherManagement.draft.rechargeDescription")
           : kind === "extension"
-            ? "仅从合格订阅原到期日延长整数天；不改档位、不重置配额、不增加可退现金，核销后不自动返券。"
+            ? tShared("voucherManagement.draft.extensionDescription")
             : kind === "redemption"
-              ? "运营赠送固定版本、固定天数的新订阅；不产生收款记录，不支持续订、升级或已订阅产品。"
+              ? tShared("voucherManagement.draft.redemptionDescription")
               : kind === "invite"
-                ? "邀请券解锁的是「能买」：非公开套餐平时不出现在客户的套餐列表里，持券的人才看得见、买得到，价格照原价、照常付款。"
-                : "折扣券在计价时减免、代金券在结算时抵扣；发放后客户在付款页可勾选使用。"
+                ? tShared("voucherManagement.draft.inviteDescription")
+                : tShared("voucherManagement.draft.discountDescription")
       }
-      submitLabel={initial ? "保存草稿" : "创建草稿"}
+      submitLabel={
+        initial
+          ? tShared("voucherManagement.draft.save")
+          : tShared("voucherManagement.draft.create")
+      }
       cancelLabel={tShared("actions.cancel")}
       submitting={busy}
       submitDisabled={!canSubmit}
@@ -391,44 +405,64 @@ export function CreateVoucherBatchDialog({
       }}
     >
       <fieldset disabled={busy} className="contents">
-        <Label htmlFor="vb-kind">券型</Label>
+        <Label htmlFor="vb-kind">
+          {tShared("voucherManagement.draft.kind")}
+        </Label>
         <NativeSelect
           id="vb-kind"
           value={kind}
           onChange={(e) => setKind(e.target.value as typeof kind)}
         >
-          <option value="discount">折扣券（购买减价）</option>
-          <option value="credit_voucher">代金券（抵扣应付）</option>
-          <option value="invite">邀请券（解锁非公开套餐）</option>
-          <option value="redemption">订阅兑换券（运营赠送）</option>
-          <option value="recharge_card">充值卡（本金与赠额分账）</option>
-          <option value="extension">展期券（延长已有订阅）</option>
+          <option value="discount">
+            {tShared("voucherManagement.draft.discountKind")}
+          </option>
+          <option value="credit_voucher">
+            {tShared("voucherManagement.draft.creditKind")}
+          </option>
+          <option value="invite">
+            {tShared("voucherManagement.draft.inviteKind")}
+          </option>
+          <option value="redemption">
+            {tShared("voucherManagement.draft.redemptionKind")}
+          </option>
+          <option value="recharge_card">
+            {tShared("voucherManagement.draft.rechargeKind")}
+          </option>
+          <option value="extension">
+            {tShared("voucherManagement.draft.extensionKind")}
+          </option>
         </NativeSelect>
 
-        <Label htmlFor="vb-name">批次名称</Label>
+        <Label htmlFor="vb-name">
+          {tShared("voucherManagement.draft.name")}
+        </Label>
         <Input
           id="vb-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="如：2026 新客 8 折"
+          placeholder={tShared("voucherManagement.draft.namePlaceholder")}
         />
 
         {kind === "redemption" ? (
           <>
-            <Label htmlFor="vb-version">兑换哪个已发布套餐版本</Label>
+            <Label htmlFor="vb-version">
+              {tShared("voucherManagement.draft.version")}
+            </Label>
             {redemptionVersions === null ? (
-              <p>读取已发布版本…</p>
+              <p>{tShared("voucherManagement.draft.loadingVersions")}</p>
             ) : (
               <NativeSelect
                 id="vb-version"
                 value={planVersionId}
                 onChange={(e) => setPlanVersionId(e.target.value)}
               >
-                <option value="">请选择已发布且冻结的版本</option>
+                <option value="">
+                  {tShared("voucherManagement.draft.selectVersion")}
+                </option>
                 {planVersionId &&
                 !redemptionVersions.some((v) => v.id === planVersionId) ? (
                   <option value={planVersionId}>
-                    当前绑定版本（请核对目录状态与权限）
+                    {tShared("voucherManagement.draft.currentVersion")}
                   </option>
                 ) : null}
                 {redemptionVersions.map((v) => (
@@ -439,15 +473,13 @@ export function CreateVoucherBatchDialog({
               </NativeSelect>
             )}
             {redemptionVersions?.length === 0 ? (
-              <p>
-                没有可选版本；请先在产品套餐中发布并冻结版本，并确认目录读取权限。
-              </p>
+              <p>{tShared("voucherManagement.draft.noVersions")}</p>
             ) : null}
           </>
         ) : kind === "invite" ? (
           <>
             <Label htmlFor="vb-version">
-              精确套餐版本 ID（选填；填写后仅适用于此版本）
+              {tShared("voucherManagement.draft.exactVersion")}
             </Label>
             <Input
               id="vb-version"
@@ -459,15 +491,18 @@ export function CreateVoucherBatchDialog({
         ) : null}
         {kind === "invite" ? (
           <>
-            <Label htmlFor="vb-plan">解锁哪个套餐</Label>
+            <Label htmlFor="vb-plan">
+              {tShared("voucherManagement.draft.plan")}
+            </Label>
             {invitable === null ? (
-              <p className="text-sm text-muted-foreground">读取套餐清单…</p>
+              <p className="text-sm text-muted-foreground">
+                {tShared("voucherManagement.draft.loadingPlans")}
+              </p>
             ) : invitable.length === 0 ? (
               /* 空下拉会被当成「坏了」。没有可邀请的套餐是个确定的状态，
                直接说清楚去哪儿改——这个开关在产品套餐页的套餐卡菜单里。 */
               <p className="text-sm text-muted-foreground">
-                目前没有邀请订阅的套餐。先在「产品套餐 → 选产品」里把某一档改为
-                邀请订阅，再回来发券。
+                {tShared("voucherManagement.draft.noPlans")}
               </p>
             ) : (
               <NativeSelect
@@ -475,7 +510,9 @@ export function CreateVoucherBatchDialog({
                 value={planCode}
                 onChange={(e) => setPlanCode(e.target.value)}
               >
-                <option value="">仅按精确版本定位</option>
+                <option value="">
+                  {tShared("voucherManagement.draft.exactOnly")}
+                </option>
                 {invitable.map((plan) => (
                   <option key={plan.planCode} value={plan.planCode}>
                     {plan.planName}（{plan.planCode}）
@@ -487,7 +524,7 @@ export function CreateVoucherBatchDialog({
         ) : kind === "recharge_card" ? (
           <>
             <Label htmlFor="vb-principal">
-              每张本金（元；无收款赠送请填 0）
+              {tShared("voucherManagement.draft.principal")}
             </Label>
             <Input
               id="vb-principal"
@@ -495,7 +532,9 @@ export function CreateVoucherBatchDialog({
               inputMode="decimal"
               onChange={(e) => setPrincipalYuan(e.target.value)}
             />
-            <Label htmlFor="vb-bonus">每张赠额（元）</Label>
+            <Label htmlFor="vb-bonus">
+              {tShared("voucherManagement.draft.bonus")}
+            </Label>
             <Input
               id="vb-bonus"
               value={bonusYuan}
@@ -503,7 +542,7 @@ export function CreateVoucherBatchDialog({
               onChange={(e) => setBonusYuan(e.target.value)}
             />
             <Label htmlFor="vb-bonus-days">
-              赠额有效天数（从核销起；留空为长期）
+              {tShared("voucherManagement.draft.bonusDays")}
             </Label>
             <Input
               id="vb-bonus-days"
@@ -512,12 +551,14 @@ export function CreateVoucherBatchDialog({
               onChange={(e) => setBonusDays(e.target.value)}
             />
             <p className="text-sm text-muted-foreground">
-              本金卡必须绑定销售租户，发行时选择该租户真实已结清的独立销售收款。本金与赠额分别进入租户钱包。
+              {tShared("voucherManagement.draft.fundingNotice")}
             </p>
           </>
         ) : kind === "extension" ? (
           <>
-            <Label htmlFor="vb-days">展期天数（1–3650）</Label>
+            <Label htmlFor="vb-days">
+              {tShared("voucherManagement.draft.extendDays")}
+            </Label>
             <Input
               id="vb-days"
               type="number"
@@ -527,7 +568,9 @@ export function CreateVoucherBatchDialog({
               value={durationDays}
               onChange={(e) => setDurationDays(e.target.value)}
             />
-            <Label htmlFor="vb-products">适用主产品码（选填，逗号分隔）</Label>
+            <Label htmlFor="vb-products">
+              {tShared("voucherManagement.draft.products")}
+            </Label>
             <Input
               id="vb-products"
               value={productCodes}
@@ -535,12 +578,14 @@ export function CreateVoucherBatchDialog({
               placeholder="arda, karda"
             />
             <p className="text-sm text-muted-foreground">
-              留空适用于全部合格主产品；按订阅的主产品匹配，不按附赠组件匹配。仅支持有到期日的在用、临期、宽限中订阅；试用、暂停、已到期终止和永久订阅不可使用，有在途订单时须先处理订单。
+              {tShared("voucherManagement.draft.extensionNotice")}
             </p>
           </>
         ) : kind === "redemption" ? (
           <>
-            <Label htmlFor="vb-days">订阅有效天数（1–3650）</Label>
+            <Label htmlFor="vb-days">
+              {tShared("voucherManagement.draft.subscriptionDays")}
+            </Label>
             <Input
               id="vb-days"
               type="number"
@@ -550,12 +595,14 @@ export function CreateVoucherBatchDialog({
               onChange={(e) => setDurationDays(e.target.value)}
             />
             <p className="text-sm text-muted-foreground">
-              资金来源：运营赠送。领取凭证有效期与兑换后的订阅服务期分别计算；服务期从兑换成功时开始，自动续费关闭。
+              {tShared("voucherManagement.draft.grantNotice")}
             </p>
           </>
         ) : kind === "discount" ? (
           <>
-            <Label htmlFor="vb-dtype">折扣方式</Label>
+            <Label htmlFor="vb-dtype">
+              {tShared("voucherManagement.draft.discountMode")}
+            </Label>
             <NativeSelect
               id="vb-dtype"
               value={discountType}
@@ -563,11 +610,17 @@ export function CreateVoucherBatchDialog({
                 setDiscountType(e.target.value as typeof discountType)
               }
             >
-              <option value="percent">按比例（%）</option>
-              <option value="fixed">按金额（元）</option>
+              <option value="percent">
+                {tShared("voucherManagement.draft.percentMode")}
+              </option>
+              <option value="fixed">
+                {tShared("voucherManagement.draft.fixedMode")}
+              </option>
             </NativeSelect>
             <Label htmlFor="vb-value">
-              {discountType === "percent" ? "立减比例（%）" : "立减金额（元）"}
+              {discountType === "percent"
+                ? tShared("voucherManagement.draft.percent")
+                : tShared("voucherManagement.draft.fixed")}
             </Label>
             <Input
               id="vb-value"
@@ -575,18 +628,22 @@ export function CreateVoucherBatchDialog({
               onChange={(e) => setValue(e.target.value)}
               inputMode="decimal"
             />
-            <Label htmlFor="vb-maxoff">封顶金额（元，选填）</Label>
+            <Label htmlFor="vb-maxoff">
+              {tShared("voucherManagement.draft.cap")}
+            </Label>
             <Input
               id="vb-maxoff"
               value={maxOffYuan}
               onChange={(e) => setMaxOffYuan(e.target.value)}
               inputMode="decimal"
-              placeholder="不填 = 不封顶"
+              placeholder={tShared("voucherManagement.draft.noCap")}
             />
           </>
         ) : (
           <>
-            <Label htmlFor="vb-amount">面额（元）</Label>
+            <Label htmlFor="vb-amount">
+              {tShared("voucherManagement.draft.faceValue")}
+            </Label>
             <Input
               id="vb-amount"
               value={amountYuan}
@@ -597,7 +654,9 @@ export function CreateVoucherBatchDialog({
         )}
 
         <Label htmlFor="vb-total">
-          {kind === "invite" ? "邀请份数" : "发行量"}
+          {kind === "invite"
+            ? tShared("voucherManagement.draft.invitationCount")
+            : tShared("voucherManagement.draft.total")}
         </Label>
         <Input
           id="vb-total"
@@ -605,60 +664,74 @@ export function CreateVoucherBatchDialog({
           onChange={(e) => setTotalCount(e.target.value)}
           inputMode="numeric"
         />
-        <Label htmlFor="vb-limit">每用户上限</Label>
+        <Label htmlFor="vb-limit">
+          {tShared("voucherManagement.draft.perUser")}
+        </Label>
         <Input
           id="vb-limit"
           value={perUserLimit}
           onChange={(e) => setPerUserLimit(e.target.value)}
           inputMode="numeric"
         />
-        <Label htmlFor="vb-from">生效日期</Label>
+        <Label htmlFor="vb-from">
+          {tShared("voucherManagement.draft.validFrom")}
+        </Label>
         <Input
           id="vb-from"
           type="date"
           value={validFrom}
           onChange={(e) => setValidFrom(e.target.value)}
         />
-        <Label htmlFor="vb-until">失效日期</Label>
+        <Label htmlFor="vb-until">
+          {tShared("voucherManagement.draft.validUntil")}
+        </Label>
         <Input
           id="vb-until"
           type="date"
           value={validUntil}
           onChange={(e) => setValidUntil(e.target.value)}
         />
-        <Label htmlFor="vb-prefix">券码前缀（选填，大写/数字）</Label>
+        <Label htmlFor="vb-prefix">
+          {tShared("voucherManagement.draft.prefix")}
+        </Label>
         <Input
           id="vb-prefix"
           value={codePrefix}
           onChange={(e) => setCodePrefix(e.target.value.toUpperCase())}
-          placeholder="如 VX26-"
+          placeholder={tShared("voucherManagement.draft.prefixPlaceholder")}
         />
         <Label htmlFor="vb-tenant">
           {kind === "recharge_card" && Number(principalYuan) > 0
-            ? "本金卡销售租户 ID（必填）"
-            : "定向租户 ID（选填；不填 = 平台级）"}
+            ? tShared("voucherManagement.draft.salesTenant")
+            : tShared("voucherManagement.draft.tenant")}
         </Label>
         <Input
           id="vb-tenant"
           value={tenantId}
           onChange={(e) => setTenantId(e.target.value)}
-          placeholder="tenant uuid"
+          placeholder={tShared("voucherManagement.draft.tenantPlaceholder")}
         />
-        <Label htmlFor="vb-ws-limit">每工作空间累计上限（选填）</Label>
+        <Label htmlFor="vb-ws-limit">
+          {tShared("voucherManagement.draft.workspaceLimit")}
+        </Label>
         <Input
           id="vb-ws-limit"
           value={perWorkspaceLimit}
           onChange={(e) => setPerWorkspaceLimit(e.target.value)}
           inputMode="numeric"
         />
-        <Label htmlFor="vb-tenant-limit">每租户累计上限（选填）</Label>
+        <Label htmlFor="vb-tenant-limit">
+          {tShared("voucherManagement.draft.tenantLimit")}
+        </Label>
         <Input
           id="vb-tenant-limit"
           value={perTenantLimit}
           onChange={(e) => setPerTenantLimit(e.target.value)}
           inputMode="numeric"
         />
-        <Label htmlFor="vb-claim">发放 / 领取截止日（选填）</Label>
+        <Label htmlFor="vb-claim">
+          {tShared("voucherManagement.draft.claimUntil")}
+        </Label>
         <Input
           id="vb-claim"
           type="date"
@@ -666,7 +739,7 @@ export function CreateVoucherBatchDialog({
           onChange={(e) => setClaimUntil(e.target.value)}
         />
         <Label htmlFor="vb-use-days">
-          领取后有效天数（选填，不超过批次截止日）
+          {tShared("voucherManagement.draft.useDays")}
         </Label>
         <Input
           id="vb-use-days"
@@ -678,7 +751,9 @@ export function CreateVoucherBatchDialog({
           kind,
         ) ? (
           <>
-            <Label htmlFor="vb-return">退款返券政策</Label>
+            <Label htmlFor="vb-return">
+              {tShared("voucherManagement.draft.returnPolicy")}
+            </Label>
             <NativeSelect
               id="vb-return"
               value={returnPolicy}
@@ -686,14 +761,18 @@ export function CreateVoucherBatchDialog({
                 setReturnPolicy(e.target.value as typeof returnPolicy)
               }
             >
-              <option value="none">不自动返券</option>
+              <option value="none">
+                {tShared("voucherManagement.draft.noReturn")}
+              </option>
               <option value="full_reversal_only">
-                服务完整撤销并退足政策可退现金后，返还剩余券价值
+                {tShared("voucherManagement.draft.fullReturn")}
               </option>
             </NativeSelect>
           </>
         ) : null}
-        <Label htmlFor="vb-reason">配置理由</Label>
+        <Label htmlFor="vb-reason">
+          {tShared("voucherManagement.draft.reason")}
+        </Label>
         <Input
           id="vb-reason"
           value={reason}
@@ -701,7 +780,7 @@ export function CreateVoucherBatchDialog({
           maxLength={500}
         />
         <p className="text-sm text-muted-foreground">
-          保存后由另一位运营审核启用；首次发行后经济配置冻结。撤销和过期不恢复累计限额。
+          {tShared("voucherManagement.draft.reviewNotice")}
         </p>
         {error ? <p className="text-sm text-vx-danger">{error}</p> : null}
       </fieldset>
@@ -732,6 +811,7 @@ export function AssignVouchersDialog({
     targetWorkspaceId?: string;
   }) => void;
 }) {
+  const tShared = useTranslations();
   const requestKey = useCommandIdentity();
   const submitting = useRef(false);
   const [reason, setReason] = useState("");
@@ -742,6 +822,7 @@ export function AssignVouchersDialog({
   );
   const [targetId, setTargetId] = useState("");
 
+  // Preserve the server read-model marker; translated labels never decide eligibility.
   const platformScoped = batch.scopeLabel === "平台级";
   /*
    * 邀请券不许发给「租户全员」：那样两个 assigned_* 列都是 NULL，而客户侧的邀请
@@ -761,16 +842,22 @@ export function AssignVouchersDialog({
     <DialogForm
       open
       size="sm"
-      title="发放券码"
+      title={tShared("voucherManagement.draft.assignTitle")}
       description={
         batch.requiresCashFunding
-          ? "本金充值卡请在批次详情中选择真实已确认销售收款，生成领取凭证后交付客户。"
+          ? tShared("voucherManagement.draft.assignFunding")
           : inviteKind
-            ? `批次：${batch.promotionName}（${batch.discountLabel}）。邀请券必须定向到具体用户或工作空间——收到的人才能在订阅页看到这一档并自助下单，价格照原价。`
-            : `批次：${batch.promotionName}（${batch.discountLabel}）。平台级批次必须定向到用户或工作空间；租户批次可选「租户全员」。`
+            ? tShared("voucherManagement.draft.assignInvite", {
+                name: batch.promotionName,
+                benefit: batch.discountLabel,
+              })
+            : tShared("voucherManagement.draft.assignDescription", {
+                name: batch.promotionName,
+                benefit: batch.discountLabel,
+              })
       }
-      submitLabel="发放"
-      cancelLabel="关闭"
+      submitLabel={tShared("voucherManagement.draft.assign")}
+      cancelLabel={tShared("voucherManagement.draft.close")}
       submitting={busy}
       submitDisabled={!canSubmit || assignedCodes !== null}
       onOpenChange={(open) => {
@@ -802,42 +889,56 @@ export function AssignVouchersDialog({
       }}
     >
       <fieldset disabled={busy} className="contents">
-        <Label htmlFor="va-count">发放数量</Label>
+        <Label htmlFor="va-count">
+          {tShared("voucherManagement.draft.count")}
+        </Label>
         <Input
           id="va-count"
           value={count}
           onChange={(e) => setCount(e.target.value)}
           inputMode="numeric"
         />
-        <Label htmlFor="va-target-kind">发放目标</Label>
+        <Label htmlFor="va-target-kind">
+          {tShared("voucherManagement.draft.target")}
+        </Label>
         <NativeSelect
           id="va-target-kind"
           value={targetKind}
           onChange={(e) => setTargetKind(e.target.value as typeof targetKind)}
         >
-          <option value="user">指定用户</option>
-          <option value="workspace">指定工作空间</option>
+          <option value="user">
+            {tShared("voucherManagement.draft.user")}
+          </option>
+          <option value="workspace">
+            {tShared("voucherManagement.draft.workspace")}
+          </option>
           <option value="tenant" disabled={!tenantWideAllowed}>
-            {inviteKind ? "租户全员（邀请券不适用）" : "租户全员（仅租户批次）"}
+            {inviteKind
+              ? tShared("voucherManagement.draft.noTenantInvite")
+              : tShared("voucherManagement.draft.allTenant")}
           </option>
         </NativeSelect>
         {targetKind !== "tenant" ? (
           <>
             <Label htmlFor="va-target">
-              {targetKind === "user" ? "用户 ID" : "工作空间 ID"}
+              {targetKind === "user"
+                ? tShared("voucherManagement.draft.userId")
+                : tShared("voucherManagement.draft.workspaceId")}
             </Label>
             <Input
               id="va-target"
               value={targetId}
               onChange={(e) => setTargetId(e.target.value)}
-              placeholder="uuid"
+              placeholder={tShared(
+                "voucherManagement.draft.identifierPlaceholder",
+              )}
             />
           </>
         ) : null}
         {platformScoped ? (
           <>
             <Label htmlFor="va-tenant">
-              目标租户 ID（用户券必填，工作空间券可自动确定）
+              {tShared("voucherManagement.draft.targetTenant")}
             </Label>
             <Input
               id="va-tenant"
@@ -846,7 +947,9 @@ export function AssignVouchersDialog({
             />
           </>
         ) : null}
-        <Label htmlFor="va-reason">发放理由</Label>
+        <Label htmlFor="va-reason">
+          {tShared("voucherManagement.draft.assignReason")}
+        </Label>
         <Input
           id="va-reason"
           value={reason}
@@ -855,8 +958,12 @@ export function AssignVouchersDialog({
         />
         {assignedCodes ? (
           <>
-            <Label>已发放券码（请复制留存）</Label>
-            <p className="text-sm">{assignedCodes.join("、")}</p>
+            <Label>{tShared("voucherManagement.draft.codes")}</Label>
+            <p className="text-sm">
+              {assignedCodes.join(
+                tShared("voucherManagement.common.separator"),
+              )}
+            </p>
           </>
         ) : null}
         {error ? <p className="text-sm text-vx-danger">{error}</p> : null}

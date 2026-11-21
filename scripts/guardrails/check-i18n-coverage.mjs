@@ -568,7 +568,8 @@ const BASELINE = {
   //   的列名、提示、toast 都是 inline zh-CN。**刻意不单独抽 t()**：admin 整体仍 inline
   //   zh-CN（同页 ModelPlatformPage 自己上百条写死），只抽这一区会造半中半英；归 admin
   //   外壳 i18n 专项时整段一起抽。
-  admin: 2289,
+  // Voucher pages now use catalogs: 2450 -> 2118 actual literals; retain only measured debt.
+  admin: 2118,
   // 2026-09-17 2271 → 2279（+8）：接入检查抽屉新增「端到端链路痕迹」一项——它把开通 /
   // 权益 / 用量 / 回调投递四段的平台侧痕迹合起来呈现，供操作员判断 `acceptance` 该不该
   // 勾（**不写回检查单**：登录那一段没有台账，五缺一，按 core-utils 的 launch-checklist
