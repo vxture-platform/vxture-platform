@@ -25,6 +25,50 @@ const base: BatchConfiguration = {
 // Economic configuration boundaries
 // ===========================================================================
 describe("batch configuration boundaries", () => {
+  it("keeps product scopes canonical across input order without mutating requests", () => {
+    const codes = Object.freeze([
+      "z",
+      "karda",
+      "_internal",
+      "2",
+      "Arda",
+      "arda",
+      "-feature",
+      "0",
+      "a",
+      "Z",
+      "10",
+    ]);
+    const original = JSON.stringify(codes);
+    const expected = {
+      effect_version: 1,
+      currency: "CNY",
+      extend_days: 30,
+      applicable_product_codes: [
+        "-feature",
+        "0",
+        "10",
+        "2",
+        "Arda",
+        "Z",
+        "_internal",
+        "a",
+        "arda",
+        "karda",
+        "z",
+      ],
+    };
+    for (const scopeCodes of [codes, [...codes].reverse()]) {
+      expect(
+        normalizeBatch({
+          ...base,
+          kind: "extension",
+          effect: { extend_days: 30, applicable_product_codes: scopeCodes },
+        }).effect,
+      ).toEqual(expected);
+    }
+    expect(JSON.stringify(codes)).toBe(original);
+  });
   it("accepts bounded extensions and rejects unsupported or ambiguous scopes", () => {
     expect(
       normalizeBatch({

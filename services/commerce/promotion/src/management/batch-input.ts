@@ -376,6 +376,14 @@ export function parseExtensionEffect(raw: Record<string, unknown>) {
     extend_days: count(raw.extend_days, "extend_days", 3650),
     ...(codes === undefined
       ? {}
-      : { applicable_product_codes: [...(codes as string[])].sort() }),
+      : {
+          // Preserve code-unit ordering across locales and historical snapshots.
+          applicable_product_codes: [...(codes as string[])].sort(
+            (left, right) => {
+              if (left === right) return 0;
+              return left < right ? -1 : 1;
+            },
+          ),
+        }),
   };
 }
