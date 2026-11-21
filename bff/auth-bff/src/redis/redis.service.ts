@@ -353,6 +353,188 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   // ============================================================================
+  // Shared operator step-up failures and one-time TOTP exchange
+  // ============================================================================
+
+  private operatorStepUpKey(operatorId: string): string {
+    const owner = createHash("sha256")
+      .update(operatorId.toLowerCase())
+      .digest("hex");
+    return `${this.prefix}operator:stepup:budget:${owner}`;
+  }
+
+  /**
+   * Reserve one of five failure/in-flight slots in a fixed fifteen-minute window.
+   * @param operatorId - Canonical authenticated operator identity, shared across RPs.
+   * @returns A unique reservation or the remaining lockout in seconds.
+   * @throws {ServiceUnavailableException} When the shared protection cannot be verified.
+   */
+  async reserveOperatorStepUpAttempt(
+    operatorId: string,
+  ): Promise<{ attemptId: string | null; retryAfter: number }> {
+    const attemptId = randomUUID();
+    try {
+      const result: unknown = await this.requireReadyClient().eval(
+        `
+local count = tonumber(redis.call('HGET', KEYS[1], 'attempts') or '0')
+local ttl = redis.call('PTTL', KEYS[1])
+if not count or count < 0 or count ~= math.floor(count) or ttl == -1 or ttl > 900000 then return {-1, 0} end
+if count >= 5 then return {0, math.max(1, math.ceil(ttl / 1000))} end
+redis.call('HSET', KEYS[1], 'attempts', count + 1, 'pending:' .. ARGV[1], '1')
+if ttl == -2 then redis.call('EXPIRE', KEYS[1], 900) end
+return {1, 0}`,
+        1,
+        this.operatorStepUpKey(operatorId),
+        attemptId,
+      );
+      if (
+        !Array.isArray(result) ||
+        result.length !== 2 ||
+        (result[0] !== 0 && result[0] !== 1) ||
+        typeof result[1] !== "number" ||
+        !Number.isSafeInteger(result[1]) ||
+        result[1] < 0 ||
+        result[1] > 900 ||
+        (result[0] === 0 && result[1] === 0)
+      )
+        throw new Error("Invalid shared step-up budget");
+      return {
+        attemptId: result[0] === 1 ? attemptId : null,
+        retryAfter: result[1],
+      };
+    } catch {
+      throw new ServiceUnavailableException("operator_stepup_unavailable");
+    }
+  }
+
+  /**
+   * Finish exactly one reservation without resetting other failures or extending TTL.
+   * @param operatorId - Reservation owner.
+   * @param attemptId - Unique reservation identity.
+   * @param success - Release this slot only after successful verification and replay protection.
+   * @returns Whether this still-live reservation was completed once.
+   * @throws {ServiceUnavailableException} When completion cannot be confirmed.
+   */
+  async finishOperatorStepUpAttempt(
+    operatorId: string,
+    attemptId: string,
+    success: boolean,
+  ): Promise<boolean> {
+    try {
+      const result: unknown = await this.requireReadyClient().eval(
+        `
+local ttl = redis.call('PTTL', KEYS[1])
+if ttl == -2 then return 0 end
+local count = tonumber(redis.call('HGET', KEYS[1], 'attempts') or '')
+if ttl <= 0 or ttl > 900000 or not count or count < 1 or count ~= math.floor(count) then return -1 end
+if redis.call('HGET', KEYS[1], 'pending:' .. ARGV[1]) ~= '1' then return 0 end
+redis.call('HDEL', KEYS[1], 'pending:' .. ARGV[1])
+if ARGV[2] == '1' then
+  local remaining = redis.call('HINCRBY', KEYS[1], 'attempts', -1)
+  if remaining == 0 then redis.call('DEL', KEYS[1]) end
+end
+return 1`,
+        1,
+        this.operatorStepUpKey(operatorId),
+        attemptId,
+        success ? "1" : "0",
+      );
+      if (result !== 0 && result !== 1)
+        throw new Error("Invalid step-up completion");
+      return result === 1;
+    } catch {
+      throw new ServiceUnavailableException("operator_stepup_unavailable");
+    }
+  }
+
+  /**
+   * Consume an HMAC fingerprint once for the entire accepted +/-30s TOTP window.
+   * @param digest - Domain-separated operator/code HMAC; never a plaintext code.
+   * @returns Whether this is the first successful exchange of this code.
+   * @throws {ServiceUnavailableException} When replay protection cannot be confirmed.
+   */
+  async consumeOperatorStepUpTotp(digest: string): Promise<boolean> {
+    if (!/^[a-f0-9]{64}$/.test(digest))
+      throw new ServiceUnavailableException("operator_stepup_unavailable");
+    try {
+      const result = await this.requireReadyClient().set(
+        `${this.prefix}operator:stepup:used:${digest}`,
+        "1",
+        "EX",
+        90,
+        "NX",
+      );
+      if (result !== null && result !== "OK")
+        throw new Error("Invalid step-up replay receipt");
+      return result === "OK";
+    } catch {
+      throw new ServiceUnavailableException("operator_stepup_unavailable");
+    }
+  }
+
+  /**
+   * Register a positive authorization before returning an action-bound token.
+   * @param id - Signed token identifier.
+   * @param binding - Digest of operator, audience, session and request.
+   * @returns Nothing; collisions and missing persistence reject issuance.
+   * @throws {ServiceUnavailableException} When registration cannot be confirmed.
+   */
+  async storeOperatorStepUpAction(id: string, binding: string): Promise<void> {
+    try {
+      if (!/^[a-f0-9-]{36}$/.test(id) || !/^[a-f0-9]{64}$/.test(binding))
+        throw new Error("Invalid action binding");
+      const saved = await this.requireReadyClient().set(
+        `${this.prefix}operator:stepup:action:${id}`,
+        `issued:${binding}`,
+        "EX",
+        300,
+        "NX",
+      );
+      if (saved !== "OK") throw new Error("Action registration failed");
+    } catch {
+      throw new ServiceUnavailableException("operator_stepup_unavailable");
+    }
+  }
+
+  /**
+   * Consume one authorization, retaining a receipt-only state for exact retries.
+   * @param id - Verified signed token identifier.
+   * @param binding - Expected digest from verified claims and the caller's session.
+   * @returns Execute once, receipt replay only, or null for an unavailable grant.
+   * @throws {ServiceUnavailableException} When the shared result cannot be confirmed.
+   */
+  async consumeOperatorStepUpAction(
+    id: string,
+    binding: string,
+  ): Promise<"execute" | "replay" | null> {
+    try {
+      if (!/^[a-f0-9-]{36}$/.test(id) || !/^[a-f0-9]{64}$/.test(binding))
+        throw new Error("Invalid action binding");
+      const result: unknown = await this.requireReadyClient().eval(
+        `
+local ttl = redis.call('PTTL', KEYS[1])
+if ttl <= 0 or ttl > 300000 then return 0 end
+local value = redis.call('GET', KEYS[1])
+if value == 'issued:' .. ARGV[1] then
+  redis.call('SET', KEYS[1], 'used:' .. ARGV[1], 'KEEPTTL')
+  return 1
+end
+if value == 'used:' .. ARGV[1] then return 2 end
+return 0`,
+        1,
+        `${this.prefix}operator:stepup:action:${id}`,
+        binding,
+      );
+      if (result === 1) return "execute";
+      if (result === 2) return "replay";
+      if (result === 0) return null;
+      throw new Error("Invalid action consumption receipt");
+    } catch {
+      throw new ServiceUnavailableException("operator_stepup_unavailable");
+    }
+  }
+
+  // ============================================================================
   // Workforce TOTP ceremonies
   // ============================================================================
 

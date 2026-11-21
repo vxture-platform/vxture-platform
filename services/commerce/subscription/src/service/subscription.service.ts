@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import {
   Inject,
   Injectable,
@@ -234,8 +235,11 @@ export class SubscriptionService {
     return this.repo.listSubscriptions(params);
   }
 
-  async getSubscription(id: string): Promise<SubscriptionRecord> {
-    const record = await this.repo.getById(id);
+  async getSubscription(
+    id: string,
+    client?: PoolClient,
+  ): Promise<SubscriptionRecord> {
+    const record = await this.repo.getById(id, client);
     if (!record) throw new NotFoundException(`订阅 ${id} 不存在`);
     return record;
   }
@@ -271,6 +275,7 @@ export class SubscriptionService {
     remark?: string,
     /** 发起方(缺省 operator,保持既有调用不变);customer = 租户自助退订。 */
     actorType: "operator" | "customer" | "system" = "operator",
+    expectedCurrentOrderId?: string,
   ): Promise<SubscriptionRecord> {
     const subscription = await this.getSubscription(id);
     if (subscription.status === "cancelled")
@@ -279,6 +284,9 @@ export class SubscriptionService {
       throw new ConflictException("订阅已过期");
 
     const result = await this.repo.update(id, subscription, {
+      ...(expectedCurrentOrderId
+        ? { expectedCurrentOrderId, expectedStatus: subscription.status }
+        : {}),
       status: "cancelled",
       endAt: new Date(),
       // 取消同时关自动续费(对齐 admin 侧 SQL 的既有行为;此前 service 路径
@@ -290,6 +298,8 @@ export class SubscriptionService {
         : {}),
       ...(remark !== undefined ? { operatorRemark: remark } : {}),
     });
+    if (!result)
+      throw new ConflictException("订阅已发生后续变更，退款撤销需人工核对");
     await this.safeProvisioningHook("cancel", id, () =>
       this.fireDeprovisionIfUncovered(result!, subscription.planVersionId),
     );
@@ -511,12 +521,12 @@ export class SubscriptionService {
    * 输了竞态的行 0 行 no-op 静默跳过；单行失败只记日志，趟不中断。
    */
   private async sweepToExpired(
-    rows: { id: string; status: string }[],
+    rows: { id: string; status: string; endAt?: Date | null }[],
     label: string,
     remark: string,
   ): Promise<{ id: string; from: string }[]> {
     const transitioned: { id: string; from: string }[] = [];
-    for (const { id, status } of rows) {
+    for (const { id, status, endAt } of rows) {
       try {
         const before = await this.getSubscription(id);
         if (before.status !== status) continue; // moved since the scan
@@ -525,6 +535,7 @@ export class SubscriptionService {
           operatorType: "system",
           operatorRemark: remark,
           expectedStatus: status,
+          ...(endAt !== undefined ? { expectedEndAt: endAt } : {}),
         });
         if (!result) {
           this.logger.debug(
@@ -1068,6 +1079,7 @@ export class SubscriptionService {
           operatorType: "system",
           operatorRemark: "renewal order unpaid past period end (grace window)",
           expectedStatus: r.status,
+          expectedEndAt: r.endAt,
         });
         if (!result) continue;
         await this.applyTransitionHooks(
@@ -1137,11 +1149,13 @@ export class SubscriptionService {
     workspaceId: string,
     planVersionId: string,
     excludeSubscriptionId?: string,
+    client?: PoolClient,
   ): Promise<void> {
     return this.assertNoTierConflict(
       workspaceId,
       planVersionId,
       excludeSubscriptionId,
+      client,
     );
   }
 
@@ -1160,11 +1174,13 @@ export class SubscriptionService {
     workspaceId: string,
     planVersionId: string,
     excludeSubscriptionId?: string,
+    client?: PoolClient,
   ): Promise<void> {
     const conflicts = await this.repo.findTierConflicts(
       workspaceId,
       planVersionId,
       excludeSubscriptionId,
+      ...(client ? [client] : []),
     );
     if (conflicts.length > 0) {
       const detail = conflicts

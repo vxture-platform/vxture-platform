@@ -39,6 +39,7 @@ check_file() {
 }
 
 check_file "$VERIFY_DIR/baseline-assertions.sql"
+check_file "$VERIFY_DIR/column-locks-drift.sql"
 check_file "$VERIFY_DIR/database-timezone.sql"
 check_file "$PLATFORM_ENV"
 
@@ -54,37 +55,33 @@ fi
 echo "=== Vxture Platform baseline audit (read-only; expected tables from DDL = $EXPECTED_TABLES) ==="
 # DDL 基线指纹在容器内重算（与 apply.sh 打戳同环境同文件同法 → hash 口径一致），
 # 比对 public.vx_ddl_baseline：列级漂移（表数不变的演进）也机器可见。
-docker run --rm \
+verify_file() {
+  docker run --rm \
   --network vxture-prod \
   --env-file "$PLATFORM_ENV" \
   --env EXPECTED_TABLES="$EXPECTED_TABLES" \
+  --env 'PGOPTIONS=-c default_transaction_read_only=on -c statement_timeout=20000 -c lock_timeout=1000' \
   -v "$DDL_DIR:/ddl:ro" \
   -v "$VERIFY_DIR:/verify:ro" \
   postgres:18-alpine \
-  sh -lc 'H="$(cat /ddl/[0-9]*.sql | md5sum | awk "{print \$1}")" && psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v expected_tables="$EXPECTED_TABLES" -v expected_ddl_hash="$H" -f /verify/baseline-assertions.sql'
+  sh -c 'H="$(cat /ddl/[0-9]*.sql | md5sum | awk "{print \$1}")" && exec psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -v expected_tables="$EXPECTED_TABLES" -v expected_ddl_hash="$H" -c "BEGIN READ ONLY; SET LOCAL statement_timeout=20000; SET LOCAL lock_timeout=1000;" -f "$1" -c "ROLLBACK;"' sh "$1"
+}
+
+# Apply the same explicit read-only transaction to every audit, including owner
+# connections. -X prevents local psql startup files from changing this policy.
+verify_file /verify/baseline-assertions.sql
 
 # D. 列级锁「声明 ↔ 活库」一致（2026-09-07 事故整改）。前三项断言比的是表与行，
 #    列级 GRANT 是第四个可漂移面：98_column_locks.sql 只在 28-apply 跑，已有库不重放，
 #    于是迁移新增的列在生产没有授权，应用写它就 42501——而静态守卫拿代码比的是仓库里
 #    的锁文件（是对的），两边各自自洽，差异只在活库上，只能在这里抓。
-docker run --rm \
-  --network vxture-prod \
-  --env-file "$PLATFORM_ENV" \
-  -v "$DDL_DIR:/ddl:ro" \
-  -v "$VERIFY_DIR:/verify:ro" \
-  postgres:18-alpine \
-  sh -lc 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /verify/column-locks-drift.sql'
+verify_file /verify/column-locks-drift.sql
 
 # E. 库级会话时区默认 = UTC（owner 裁定 4，2026-10-04「用量日表时区，默认按照 UTC+0」）。
 #    默认长在被连的那一头（ALTER DATABASE … SET timezone = 'UTC'，00_schemas.sql + 迁移
 #    2026-10-05-database-timezone-utc.sql）。那份迁移在非 owner 账号下**只告警不中断**——一条权限
 #    问题不该卡住整条 migrate 链——于是缺口必须有一处每次 verify 都红的地方，就是这里。判据读
 #    pg_db_role_setting（共享目录，reporting_ro 也读得到），只认库级默认，不认当前会话的 show timezone。
-docker run --rm \
-  --network vxture-prod \
-  --env-file "$PLATFORM_ENV" \
-  -v "$VERIFY_DIR:/verify:ro" \
-  postgres:18-alpine \
-  sh -lc 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /verify/database-timezone.sql'
+verify_file /verify/database-timezone.sql
 
 echo "=== Platform baseline audit PASSED ==="

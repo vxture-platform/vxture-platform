@@ -483,15 +483,27 @@ GRANT UPDATE (status, interval_ms, last_started_at, last_finished_at, last_durat
 
 -- promotion.voucher_batches  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON promotion.voucher_batches FROM platform_svc;
-GRANT UPDATE (tenant_id, kind, name, code_prefix, effect, total_count, issued_count, per_user_limit, valid_from, valid_until, status, updated_at) ON promotion.voucher_batches TO platform_svc;
+GRANT UPDATE (tenant_id, kind, name, code_prefix, effect, total_count, issued_count, per_user_limit, valid_from, valid_until, status, updated_at, policy_snapshot, claim_until, use_valid_days, per_workspace_limit, per_tenant_limit, reviewed_by, reviewed_at, frozen_at) ON promotion.voucher_batches TO platform_svc;
 
 -- promotion.vouchers  [anchor: id, created_at]
 REVOKE UPDATE ON promotion.vouchers FROM platform_svc;
-GRANT UPDATE (batch_id, code, status, max_uses, used_count, assigned_workspace_id, assigned_user_id, expires_at, redeemed_at) ON promotion.vouchers TO platform_svc;
+GRANT UPDATE (batch_id, code, status, max_uses, used_count, assigned_workspace_id, assigned_user_id, expires_at, redeemed_at, assigned_tenant_id, claimed_at, claim_token_digest, claim_key_version, replacement_of_redemption_id, funding_order_id, funding_payment_id) ON promotion.vouchers TO platform_svc;
 
 -- promotion.voucher_redemptions  [anchor: id, redemption_no]
 REVOKE UPDATE ON promotion.voucher_redemptions FROM platform_svc;
-GRANT UPDATE (voucher_id, tenant_id, workspace_id, user_id, kind, effect_snapshot, transaction_id, subscription_id, invoice_item_id, payment_id, redeemed_at) ON promotion.voucher_redemptions TO platform_svc;
+GRANT UPDATE (voucher_id, tenant_id, workspace_id, user_id, kind, effect_snapshot, transaction_id, subscription_id, invoice_item_id, payment_id, redeemed_at, reservation_id, order_id, operation_id) ON promotion.voucher_redemptions TO platform_svc;
+
+-- ===========================================================================
+-- Promotion ownership and audit permissions, including future service roles.
+-- ===========================================================================
+REVOKE UPDATE ON promotion.voucher_operations FROM platform_svc;
+REVOKE UPDATE ON promotion.voucher_events FROM platform_svc;
+REVOKE UPDATE ON promotion.voucher_reservations FROM platform_svc;
+REVOKE DELETE ON promotion.voucher_operations, promotion.voucher_events, promotion.voucher_reservations FROM platform_svc;
+REVOKE UPDATE, DELETE ON promotion.voucher_operations, promotion.voucher_events, promotion.voucher_reservations FROM svc_admin_bff, svc_console_bff, svc_platform_api;
+GRANT UPDATE (status, consumed_at, released_at, release_reason) ON promotion.voucher_reservations TO platform_svc;
+GRANT UPDATE (status, consumed_at, released_at, release_reason) ON promotion.voucher_reservations TO svc_admin_bff, svc_console_bff, svc_platform_api;
+
 
 
 
@@ -660,3 +672,34 @@ GRANT UPDATE (mime, bytes) ON tenancy.customer_portal_assets TO platform_svc;
 -- tenancy.customer_portal_events [anchor: id, created_at]
 REVOKE UPDATE ON tenancy.customer_portal_events FROM platform_svc;
 GRANT UPDATE (portal_id, actor_id, surface, action, version_id) ON tenancy.customer_portal_events TO platform_svc;
+-- Refund allocation and compensation facts cannot be rewritten by service roles.
+REVOKE UPDATE, DELETE ON billing.refund_allocations, promotion.voucher_compensations
+    FROM svc_admin_bff, svc_console_bff, svc_platform_api;
+REVOKE UPDATE ON billing.refund_allocations FROM platform_svc;
+REVOKE UPDATE ON promotion.voucher_compensations FROM platform_svc;
+REVOKE DELETE ON billing.refund_allocations, promotion.voucher_compensations FROM platform_svc;
+GRANT UPDATE (status, updated_at) ON billing.refund_allocations TO platform_svc;
+GRANT UPDATE (status, updated_at) ON billing.refund_allocations TO svc_admin_bff, svc_console_bff, svc_platform_api;
+GRANT UPDATE (replacement_voucher_id, status, reason, updated_at) ON promotion.voucher_compensations TO platform_svc;
+GRANT UPDATE (replacement_voucher_id, status, reason, updated_at) ON promotion.voucher_compensations TO svc_admin_bff, svc_console_bff, svc_platform_api;
+
+-- Match the existing refund update whitelist; calculation snapshots are insert-only.
+REVOKE UPDATE ON billing.refunds FROM svc_admin_bff, svc_console_bff, svc_platform_api;
+GRANT UPDATE (tenant_id, bill_id, pay_record_id, transaction_id, order_id, refund_amount, currency, refund_reason, refund_type, audit_status, audit_remark, auditor_id, audit_at, refund_status, refund_at, transfer_channel, transfer_reference, transfer_initiated_at, transfer_initiated_by, transfer_date, transfer_attempt, payout_account_id, payout_account_label, recipient_account_name, recipient_bank_name, recipient_bank_account, created_by_type, created_by_id, updated_at) ON billing.refunds TO svc_admin_bff, svc_console_bff, svc_platform_api;
+
+-- Wallet evidence is insert-only; role permissions match trigger protection.
+REVOKE UPDATE, DELETE ON billing.wallet_accounts FROM platform_svc, svc_admin_bff, svc_console_bff, svc_platform_api;
+REVOKE UPDATE ON billing.wallet_accounts FROM platform_svc;
+REVOKE UPDATE, DELETE ON billing.wallet_operations FROM platform_svc, svc_admin_bff, svc_console_bff, svc_platform_api;
+REVOKE UPDATE ON billing.wallet_operations FROM platform_svc;
+REVOKE UPDATE, DELETE ON billing.wallet_lots FROM platform_svc, svc_admin_bff, svc_console_bff, svc_platform_api;
+REVOKE UPDATE ON billing.wallet_lots FROM platform_svc;
+REVOKE UPDATE, DELETE ON billing.wallet_entries FROM platform_svc, svc_admin_bff, svc_console_bff, svc_platform_api;
+REVOKE UPDATE ON billing.wallet_entries FROM platform_svc;
+GRANT SELECT ON billing.wallet_accounts,billing.wallet_operations,billing.wallet_lots,billing.wallet_entries TO svc_auth_bff;
+-- Card source facts are immutable; only the terminal conversion can be written.
+REVOKE UPDATE, DELETE ON billing.wallet_card_allocations FROM platform_svc, svc_admin_bff, svc_console_bff, svc_platform_api;
+REVOKE UPDATE ON billing.wallet_card_allocations FROM platform_svc;
+GRANT UPDATE (status, principal_lot_id, updated_at) ON billing.wallet_card_allocations TO platform_svc;
+GRANT UPDATE (status, principal_lot_id, updated_at) ON billing.wallet_card_allocations TO svc_admin_bff, svc_console_bff, svc_platform_api;
+GRANT SELECT ON billing.wallet_card_allocations TO svc_auth_bff, reporting_ro;

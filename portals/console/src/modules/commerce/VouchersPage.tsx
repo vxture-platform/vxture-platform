@@ -28,9 +28,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { listEmptyReason } from "@/lib/list-empty-reason";
 import { useTableLabels } from "@/lib/table";
-import { useTableSort } from "@/lib/table-sort";
 import {
   ActionMenu,
   Badge,
@@ -52,9 +50,22 @@ import type {
   DataTableColumn,
   MetricGridItem,
   StatusBadgeTone,
+  DataTableSort,
 } from "@vxture/design-system";
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
-import { fetchVouchers, type ConsoleVoucher } from "@/api/console-bff";
+import {
+  fetchVoucherPage,
+  type ConsoleVoucher,
+  type ConsoleVoucherPage,
+} from "@/api/console-bff";
+import {
+  useVoucherContextKey,
+  useVoucherPermission,
+  VoucherClaimDialog,
+} from "./VoucherClaimDialog";
+import { SubscriptionRedemptionDialog } from "./SubscriptionRedemptionDialog";
+import { RechargeCardDialog } from "./RechargeCardDialog";
+import { SubscriptionExtensionDialog } from "./SubscriptionExtensionDialog";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
@@ -65,12 +76,27 @@ import { ListPagination } from "@/components/pagination";
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { useDateFormat } from "@/lib/use-date-format";
 
-const STATUS_TONES: Record<ConsoleVoucher["status"], StatusBadgeTone> = {
+// ============================================================================
+// Read-side presentation
+// ============================================================================
+
+type VoucherStatus = NonNullable<ConsoleVoucher["availabilityStatus"]>;
+
+/** Prefer the additive state while supporting older BFF responses. */
+function voucherStatus(voucher: ConsoleVoucher): VoucherStatus {
+  return voucher.availabilityStatus ?? voucher.status;
+}
+
+const STATUS_TONES: Record<VoucherStatus, StatusBadgeTone> = {
   available: "success",
   reserved: "info",
   redeemed: "neutral",
   expired: "neutral",
   revoked: "warning",
+  not_started: "info",
+  paused: "warning",
+  archived: "neutral",
+  unavailable: "neutral",
 };
 
 const KNOWN_KINDS = new Set([
@@ -79,10 +105,11 @@ const KNOWN_KINDS = new Set([
   "recharge_card",
   "redemption",
   "extension",
+  "invite",
 ]);
 
-/** 状态筛选的取值:券的五个状态,外加「全部」。默认落在「可用」。 */
-type VoucherFilter = ConsoleVoucher["status"] | "all";
+/** Filter on accurate presentation states, defaulting to available vouchers. */
+type VoucherFilter = VoucherStatus | "all";
 
 const VOUCHERS_PAGE_SIZE = 10;
 /** 到期告急阈值:与概览卡「{n} 张将于 7 天内到期」同一条线。 */
@@ -90,7 +117,17 @@ const SOON_MS = 7 * 86_400_000;
 /** 费用中心(待付订单在这;挂单反查与「去使用」都指向它)。 */
 const BILLING_HREF = "/billing";
 
+// ============================================================================
+// Page
+// ============================================================================
+
 export function VouchersPage() {
+  const identity = useVoucherContextKey();
+  const allowed = useVoucherPermission();
+  if (!allowed) return null;
+  return <VouchersContent key={identity} />;
+}
+function VouchersContent() {
   const { fmtDate, fmtTime } = useDateFormat();
 
   const t = useTranslations("vouchersPage");
@@ -100,6 +137,18 @@ export function VouchersPage() {
   const { session } = useConsoleSession();
 
   const [vouchers, setVouchers] = useState<ConsoleVoucher[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<ConsoleVoucherPage["summary"]>({
+    total: 0,
+    available: 0,
+    redeemed: 0,
+    expiringSoon: 0,
+  });
+  const [sort, setSort] = useState<DataTableSort | undefined>(undefined);
+  const [claiming, setClaiming] = useState(false);
+  const [redeeming, setRedeeming] = useState<string | null>(null);
+  const [recharging, setRecharging] = useState<string | null>(null);
+  const [extending, setExtending] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<VoucherFilter>("available");
   const [query, setQuery] = useState("");
@@ -116,22 +165,49 @@ export function VouchersPage() {
     let active = true;
     setLoading(true);
     setLoadFailed(false);
-    fetchVouchers()
-      .then((rows) => {
-        if (active) setVouchers(rows);
-      })
-      .catch(() => {
-        if (!active) return;
-        setVouchers([]);
-        setLoadFailed(true);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const timer = window.setTimeout(
+      () =>
+        void fetchVoucherPage({
+          page,
+          pageSize,
+          status: filter,
+          query,
+          ...(sort ? { sort: sort.columnId, direction: sort.direction } : {}),
+        })
+          .then((result) => {
+            if (active) {
+              setVouchers(result.items);
+              setTotal(result.total);
+              setSummary(result.summary);
+              setPage((p) =>
+                Math.min(p, Math.max(1, Math.ceil(result.total / pageSize))),
+              );
+            }
+          })
+          .catch(() => {
+            if (!active) return;
+            setVouchers([]);
+            setLoadFailed(true);
+          })
+          .finally(() => {
+            if (active) setLoading(false);
+          }),
+      200,
+    );
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
-  }, [session.tenant?.id, reloadKey]);
+  }, [
+    session.tenant?.id,
+    session.tenant?.workspace,
+    reloadKey,
+    page,
+    pageSize,
+    filter,
+    query,
+    sort,
+  ]);
 
   useEffect(() => {
     if (!copiedId) return;
@@ -142,7 +218,7 @@ export function VouchersPage() {
   const kindLabel = (kind: string): string =>
     KNOWN_KINDS.has(kind) ? t(`kind.${kind}`) : kind;
 
-  /** 面值表达:折扣 = 9折/立减 ¥X(上限 ¥Y);金额券 = ¥X。 */
+  /** Present percentage reductions, currency amounts and non-monetary effects. */
   const faceValue = (v: ConsoleVoucher): string => {
     if (v.kind === "discount") {
       if (v.discountType === "percent" && v.discountValue !== undefined) {
@@ -151,7 +227,7 @@ export function VouchersPage() {
               amount: formatCurrency(
                 Number.parseFloat(v.maxOff),
                 locale as Locale,
-                "CNY",
+                v.currency ?? "CNY",
               ),
             })
           : "";
@@ -159,16 +235,36 @@ export function VouchersPage() {
       }
       if (v.discountType === "fixed" && v.discountValue !== undefined) {
         return t("face.fixedOff", {
-          amount: formatCurrency(v.discountValue, locale as Locale, "CNY"),
+          amount: formatCurrency(
+            v.discountValue,
+            locale as Locale,
+            v.currency ?? "CNY",
+          ),
         });
       }
     }
+    if (v.kind === "recharge_card")
+      return t("face.recharge", {
+        principal: v.amount ?? "—",
+        bonus: v.bonusAmount ?? "—",
+      });
     if (v.amount) {
       return formatCurrency(
         Number.parseFloat(v.amount),
         locale as Locale,
-        "CNY",
+        v.currency ?? "CNY",
       );
+    }
+    if (v.kind === "invite") return t("face.invite");
+    if (v.kind === "redemption") {
+      return v.durationDays
+        ? t("face.redemptionDays", { days: v.durationDays })
+        : t("face.redemption");
+    }
+    if (v.kind === "extension") {
+      return v.extendDays
+        ? t("face.extensionDays", { days: v.extendDays })
+        : t("face.extension");
     }
     return "—";
   };
@@ -179,54 +275,11 @@ export function VouchersPage() {
     setPage(1);
   }, []);
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return vouchers.filter((v) => {
-      if (filter !== "all" && v.status !== filter) return false;
-      if (!q) return true;
-      // 搜索面:券码、批次名、挂单号——客服对单时手上就这三样。
-      return [v.code, v.batchName, v.orderNo ?? ""].some((s) =>
-        s.toLowerCase().includes(q),
-      );
-    });
-  }, [vouchers, filter, query]);
-
-  /* 排序在**分页之前**：只排当前页等于只排看得见的那 10 条。取值器给的是可比较的
-   * 原始值（时间戳、券码串），不是渲染结果——按渲染结果排会得到字典序。
-   * 「面值」不排：它是混合值（折扣券是「9折」这类文字），排不出有意义的顺序。 */
-  const sortAccessors = useMemo(
-    () => ({
-      code: (v: ConsoleVoucher) => v.code,
-      expires: (v: ConsoleVoucher) => new Date(v.expiresAt).getTime(),
-      usedAt: (v: ConsoleVoucher) =>
-        v.redeemedAt ? new Date(v.redeemedAt).getTime() : null,
-    }),
-    [],
-  );
-  const {
-    sort,
-    onSortChange,
-    rows: sortedVouchers,
-  } = useTableSort(visible, sortAccessors);
-
-  /* 筛掉之后当前页可能落空——夹回最后一页。 */
-  const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
-  useEffect(() => {
-    setPage((p) =>
-      Math.min(p, Math.max(1, Math.ceil(visible.length / pageSize))),
-    );
-  }, [visible.length, pageSize]);
-  const pagedVouchers = useMemo(
-    () => sortedVouchers.slice((page - 1) * pageSize, page * pageSize),
-    [sortedVouchers, page, pageSize],
-  );
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   const metrics = useMemo<MetricGridItem[]>(() => {
-    const available = vouchers.filter((v) => v.status === "available");
-    const soon = available.filter(
-      (v) => new Date(v.expiresAt).getTime() - Date.now() < SOON_MS,
-    ).length;
-    const used = vouchers.filter((v) => v.status === "redeemed").length;
+    const soon = summary.expiringSoon,
+      used = summary.redeemed;
     // 没读到就是「—」:读失败时的 0 不是没有券,是没有数据。
     const count = (n: number) => (loadFailed ? "—" : String(n));
     return [
@@ -234,7 +287,7 @@ export function VouchersPage() {
         id: "available",
         icon: "ticket",
         label: t("metrics.available"),
-        value: count(available.length),
+        value: count(summary.available),
         trend: loadFailed
           ? ""
           : soon > 0
@@ -253,11 +306,11 @@ export function VouchersPage() {
         id: "total",
         icon: "stack",
         label: t("metrics.total"),
-        value: count(vouchers.length),
+        value: count(summary.total),
         trend: loadFailed ? "" : t("metrics.totalHint"),
       },
     ];
-  }, [vouchers, t, loadFailed]);
+  }, [summary, t, loadFailed]);
 
   /** 两个时间列共用的写法:日期为主、时间为辅;`urgent` 时主行转告急色。 */
   const timeCell = (iso: string | null, urgent = false) =>
@@ -266,7 +319,7 @@ export function VouchersPage() {
         <span className={urgent ? "text-warning-text" : "text-foreground"}>
           {fmtDate(iso)}
         </span>
-        <span className="text-body-small text-muted-foreground">
+        <span className="text-body-sm text-muted-foreground">
           {fmtTime(iso)}
         </span>
       </span>
@@ -287,6 +340,25 @@ export function VouchersPage() {
       ),
     },
     {
+      id: "holder",
+      header: t("table.colHolder"),
+      cell: (v) => (
+        <span className="flex flex-col items-center">
+          <span>{t(`holder.${v.holderScope ?? "tenant"}`)}</span>
+          <span className="text-body-sm text-muted-foreground">
+            {v.holderLabel}
+          </span>
+          <span className="text-body-sm text-muted-foreground">
+            {t(
+              v.returnPolicy === "full_reversal_only"
+                ? "holder.returnOnReversal"
+                : "holder.noReturn",
+            )}
+          </span>
+        </span>
+      ),
+    },
+    {
       id: "kind",
       header: t("table.colKind"),
       align: "center",
@@ -302,7 +374,7 @@ export function VouchersPage() {
           <span className="font-medium text-foreground">{faceValue(v)}</span>
           {/* 可用次数只在多次券上出现:单次券每行都写「1/1」是噪音。 */}
           {v.maxUses > 1 ? (
-            <span className="text-body-small text-muted-foreground">
+            <span className="text-body-sm text-muted-foreground">
               {t("table.usesLeft", {
                 left: Math.max(0, v.maxUses - v.usedCount),
                 total: v.maxUses,
@@ -318,12 +390,26 @@ export function VouchersPage() {
       align: "center",
       cell: (v) => (
         <span className="flex flex-col items-center gap-xs">
-          <StatusBadge tone={STATUS_TONES[v.status]}>
-            {t(`status.${v.status}`)}
+          <StatusBadge tone={STATUS_TONES[voucherStatus(v)]}>
+            {t(`status.${voucherStatus(v)}`)}
           </StatusBadge>
+          {voucherStatus(v) === "not_started" && v.validFrom ? (
+            <span className="text-body-sm text-muted-foreground">
+              {t("table.validFrom", { date: fmtDate(v.validFrom) })}
+            </span>
+          ) : null}
+          {voucherStatus(v) === "unavailable" ? (
+            <span className="text-body-sm text-muted-foreground">
+              {t(
+                v.kind === "recharge_card"
+                  ? "table.rechargeUnavailable"
+                  : "table.unavailable",
+              )}
+            </span>
+          ) : null}
           {/* 挂单号 = 这个状态的原因:押在哪张单上 / 用到了哪张单上。 */}
           {v.orderNo ? (
-            <span className="font-mono text-body-small text-muted-foreground">
+            <span className="font-mono text-body-sm text-muted-foreground">
               {v.orderNo}
             </span>
           ) : null}
@@ -338,7 +424,8 @@ export function VouchersPage() {
       cell: (v) =>
         timeCell(
           v.expiresAt,
-          v.status === "available" &&
+          voucherStatus(v) === "available" &&
+            new Date(v.expiresAt).getTime() > Date.now() &&
             new Date(v.expiresAt).getTime() - Date.now() < SOON_MS,
         ),
     },
@@ -351,7 +438,7 @@ export function VouchersPage() {
         <span className="flex flex-col items-center">
           {timeCell(v.redeemedAt)}
           {v.redemptionNo ? (
-            <span className="font-mono text-body-small text-muted-foreground">
+            <span className="font-mono text-body-sm text-muted-foreground">
               {v.redemptionNo}
             </span>
           ) : null}
@@ -370,6 +457,19 @@ export function VouchersPage() {
   }
 
   function voucherMenuItems(v: ConsoleVoucher): ActionMenuItem[] {
+    const canUse =
+      session.isAuthenticated &&
+      voucherStatus(v) === "available" &&
+      [
+        "discount",
+        "credit_voucher",
+        "invite",
+        "redemption",
+        "extension",
+        "recharge_card",
+      ].includes(v.kind) &&
+      (!["redemption", "extension", "recharge_card"].includes(v.kind) ||
+        session.capabilities.includes("tenant.billing.manage"));
     return [
       {
         id: "copy",
@@ -390,14 +490,35 @@ export function VouchersPage() {
             `${BILLING_HREF}?order=${encodeURIComponent(v.orderNo ?? "")}`,
           ),
       },
-      /* 可用券的去处:券在订单支付页参与结算,这里只负责把人送到有待付单的地方。 */
+      // Invitations unlock plan purchase; only monetary vouchers go to checkout.
       {
         id: "use",
-        label: t("actions.use"),
+        label: t(
+          v.kind === "recharge_card"
+            ? "recharge.action"
+            : v.kind === "extension"
+              ? "extend.action"
+              : v.kind === "redemption"
+                ? "redeem.action"
+                : v.kind === "invite"
+                  ? "actions.useInvite"
+                  : "actions.use",
+        ),
         icon: "credit-card",
-        disabled: v.status !== "available",
-        ...(v.status === "available" ? {} : { hint: t("actions.useHint") }),
-        onSelect: () => router.push(BILLING_HREF),
+        disabled: !canUse,
+        ...(canUse ? {} : { hint: t("actions.useHint") }),
+        onSelect: () => {
+          if (!canUse) return;
+          return v.kind === "recharge_card"
+            ? setRecharging(v.id)
+            : v.kind === "extension"
+              ? setExtending(v.id)
+              : v.kind === "redemption"
+                ? setRedeeming(v.id)
+                : router.push(
+                    v.kind === "invite" ? "/subscription" : BILLING_HREF,
+                  );
+        },
       },
     ];
   }
@@ -407,8 +528,7 @@ export function VouchersPage() {
      默认值 `available` 本身在筛（已用 / 已过期都被它挡掉），所以券全用完的租户
      会拿到「一张券都没有」的文案，而且**拿不到「重置筛选」那颗按钮**
      ——逃生口恰好在需要它的时候不给。判据见 lib/list-empty-reason.ts。 */
-  const emptyIsFiltered =
-    listEmptyReason(vouchers.length, visible.length) === "filtered";
+  const emptyIsFiltered = summary.total > 0 && total === 0;
 
   return (
     <ViewLayout>
@@ -443,7 +563,7 @@ export function VouchersPage() {
             view="list"
             onViewChange={() => {}}
             cardsDisabledReason={t("filters.listOnly")}
-            count={t("filters.count", { count: visible.length })}
+            count={t("filters.count", { count: total })}
             aria-label={t("filters.groupLabel")}
             onReset={resetFilters}
             search={
@@ -459,6 +579,14 @@ export function VouchersPage() {
               />
             }
           >
+            <Button
+              variant="default"
+              size="md"
+              onClick={() => setClaiming(true)}
+            >
+              <Icon name="ticket" size="xs" fallback="placeholder" />
+              {t("claim.open")}
+            </Button>
             <NativeSelect
               wrapperClassName="w-fit basis-media-xl"
               value={filter}
@@ -473,6 +601,10 @@ export function VouchersPage() {
               <option value="redeemed">{t("status.redeemed")}</option>
               <option value="expired">{t("status.expired")}</option>
               <option value="revoked">{t("status.revoked")}</option>
+              <option value="not_started">{t("status.not_started")}</option>
+              <option value="paused">{t("status.paused")}</option>
+              <option value="archived">{t("status.archived")}</option>
+              <option value="unavailable">{t("status.unavailable")}</option>
               <option value="all">{t("filters.statusAll")}</option>
             </NativeSelect>
           </FilterBar>
@@ -480,10 +612,13 @@ export function VouchersPage() {
           <DataTable<ConsoleVoucher>
             labels={tableLabels}
             columns={columns}
-            rows={pagedVouchers}
+            rows={vouchers}
             rowKey={(v) => v.id}
             {...(sort ? { sort } : {})}
-            onSortChange={onSortChange}
+            onSortChange={(next) => {
+              setSort(next);
+              setPage(1);
+            }}
             /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
                与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
             leadingSpacer
@@ -528,9 +663,12 @@ export function VouchersPage() {
               <ListPagination
                 page={page}
                 pageCount={pageCount}
-                total={loadFailed ? 0 : visible.length}
+                total={loadFailed ? 0 : total}
                 pageSize={pageSize}
-                onPageSizeChange={setPageSize}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
                 onPageChange={setPage}
               />
             }
@@ -560,6 +698,48 @@ export function VouchersPage() {
           />
         </SectionBody>
       </PageSection>
+      {redeeming ? (
+        <SubscriptionRedemptionDialog
+          key={`${session.tenant?.id}:${session.tenant?.workspace}:${redeeming}`}
+          voucherId={redeeming}
+          onClose={() => setRedeeming(null)}
+          onRedeemed={() => setReloadKey((n) => n + 1)}
+        />
+      ) : null}
+      {recharging ? (
+        <RechargeCardDialog
+          key={
+            session.tenant?.id +
+            ":" +
+            session.tenant?.workspace +
+            ":" +
+            recharging
+          }
+          voucherId={recharging}
+          onClose={() => setRecharging(null)}
+          onRedeemed={() => setReloadKey((n) => n + 1)}
+        />
+      ) : null}
+      {extending ? (
+        <SubscriptionExtensionDialog
+          key={`${session.tenant?.id}:${session.tenant?.workspace}:${extending}`}
+          voucherId={extending}
+          onClose={() => setExtending(null)}
+          onExtended={() => setReloadKey((n) => n + 1)}
+        />
+      ) : null}
+      {claiming ? (
+        <VoucherClaimDialog
+          key={`${session.tenant?.id}:${session.tenant?.workspace}`}
+          onClose={() => setClaiming(false)}
+          onClaimed={() => {
+            setFilter("available");
+            setQuery("");
+            setPage(1);
+            setReloadKey((n) => n + 1);
+          }}
+        />
+      ) : null}
     </ViewLayout>
   );
 }

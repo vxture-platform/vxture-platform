@@ -13,6 +13,17 @@ const BASE = {
 };
 
 describe("authSchema · 两把内部口令各自穿过域 parse", () => {
+  it("preserves optional voucher claim keys without deriving them from JWT secrets", () => {
+    const input = {
+      VOUCHER_CLAIM_ACTIVE_KEY: "k1",
+      VOUCHER_CLAIM_KEYS: JSON.stringify({ k1: "ab".repeat(32) }),
+    };
+    expect(authSchema.parse({ ...BASE, ...input })).toMatchObject(input);
+    expect(authSchema.parse(BASE).VOUCHER_CLAIM_KEYS).toBeUndefined();
+    expect(() =>
+      authSchema.parse({ ...BASE, VOUCHER_CLAIM_ACTIVE_KEY: "bad.version" }),
+    ).toThrow();
+  });
   it("IDP_INTERNAL_TOKEN 给了就原样到达", () => {
     const parsed = authSchema.parse({ ...BASE, IDP_INTERNAL_TOKEN: "idp-x" });
     expect(parsed.IDP_INTERNAL_TOKEN).toBe("idp-x");

@@ -29,18 +29,58 @@
 
 import {
   Controller,
+  Body,
   BadRequestException,
   Get,
   Inject,
+  Optional,
+  Post,
+  Query,
+  Header,
+  HttpException,
+  ServiceUnavailableException,
   Req,
+  Res,
   UnauthorizedException,
 } from "@nestjs/common";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import type { Pool } from "pg";
-import { PromotionService, centsToYuan } from "@vxture/service-promotion";
+// ⚠️ 跨层引用: Promotion owns claim transactions and customer ledger scope.
+import {
+  PromotionService,
+  centsToYuan,
+  PgVoucherClaims,
+  VoucherClaimCredentials,
+  PgCustomerVoucherLedger,
+  type ClaimVoucherCommand,
+  type CustomerVoucherQuery,
+  type CustomerVoucherRecord,
+} from "@vxture/service-promotion";
+// ⚠️ 跨层引用: Consume infrastructure key configuration and shared rate storage.
+import { VxConfigService } from "@vxture/core-config";
+import type Redis from "ioredis";
+import { createHash } from "node:crypto";
+import {
+  previewRechargeCard,
+  redeemRechargeCard,
+  rechargeCardResult,
+  type RechargeCommand,
+} from "../lib/recharge-card-operation";
+import { RP_REDIS } from "../oidc/oidc-rp.tokens";
 import type { TenantVoucherRecord } from "@vxture/service-promotion";
 import type { RequestContext } from "../types/console.types";
 import { RequireCapability } from "../auth/capability";
+import {
+  previewSubscriptionVoucher,
+  redeemSubscriptionVoucher,
+  subscriptionVoucherResult,
+} from "../lib/subscription-voucher-operation";
+import {
+  previewSubscriptionExtension,
+  extendSubscriptionVoucher,
+  subscriptionExtensionResult,
+  type ExtensionCommand,
+} from "../lib/subscription-extension-operation";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -58,6 +98,15 @@ export interface ConsoleVoucherView {
   maxOff?: string | null;
   /** credit_voucher / recharge_card 面值(元字符串) */
   amount?: string;
+  bonusAmount?: string;
+  bonusExpiresInDays?: number | null;
+  /** ISO currency for monetary fields, defaulting to legacy CNY. */
+  currency: string;
+  /** Additive presentation state; status retains its legacy value set. */
+  availabilityStatus: TenantVoucherRecord["availabilityStatus"];
+  validFrom: string;
+  durationDays?: number;
+  extendDays?: number;
   status: "available" | "reserved" | "redeemed" | "expired" | "revoked";
   usedCount: number;
   maxUses: number;
@@ -66,6 +115,11 @@ export interface ConsoleVoucherView {
   redemptionNo: string | null;
   /** 反查到的挂单可视码;查不到(或本就没挂单)为 null。见头注「挂单反查」。 */
   orderNo: string | null;
+  holderScope?: "user" | "workspace" | "tenant";
+  holderLabel?: string;
+  claimedAt?: string | null;
+  returnPolicy?: "none" | "full_reversal_only";
+  unavailableReason?: string | null;
 }
 
 function mapVoucher(r: TenantVoucherRecord): ConsoleVoucherView {
@@ -75,6 +129,13 @@ function mapVoucher(r: TenantVoucherRecord): ConsoleVoucherView {
     kind: r.kind,
     batchName: r.batchName,
     status: r.displayStatus,
+    availabilityStatus: r.availabilityStatus,
+    validFrom: r.validFrom.toISOString(),
+    currency:
+      typeof r.effect["currency"] === "string" &&
+      /^[A-Z]{3}$/.test(r.effect["currency"])
+        ? r.effect["currency"]
+        : "CNY",
     usedCount: r.usedCount,
     maxUses: r.maxUses,
     expiresAt: r.expiresAt.toISOString(),
@@ -83,17 +144,55 @@ function mapVoucher(r: TenantVoucherRecord): ConsoleVoucherView {
     orderNo: null, // 反查在 listVouchers 里整页一次补齐
   };
   if (r.kind === "discount") {
-    const t = r.effect["discountType"];
+    const t = r.effect["discount_type"] ?? r.effect["discountType"];
     const v = r.effect["value"];
-    const cap = r.effect["maxOffCents"];
+    const cap = r.effect["max_off_cents"] ?? r.effect["maxOffCents"];
     if (t === "percent" || t === "fixed") view.discountType = t;
-    if (typeof v === "number") {
+    if (
+      typeof v === "number" &&
+      Number.isFinite(v) &&
+      v >= 0 &&
+      ((t === "percent" && v <= 100) ||
+        (t === "fixed" && Number.isSafeInteger(v)))
+    ) {
       view.discountValue = t === "fixed" ? Number(centsToYuan(v)) : v;
     }
-    view.maxOff = typeof cap === "number" ? centsToYuan(cap) : null;
-  } else {
-    const cents = r.effect["amountCents"];
-    if (typeof cents === "number") view.amount = centsToYuan(cents);
+    view.maxOff =
+      typeof cap === "number" && Number.isSafeInteger(cap) && cap >= 0
+        ? centsToYuan(cap)
+        : null;
+  } else if (r.kind === "credit_voucher" || r.kind === "recharge_card") {
+    const cents =
+      r.kind === "recharge_card"
+        ? (r.effect["face_value_cents"] ?? r.effect["faceValueCents"])
+        : (r.effect["amount_cents"] ?? r.effect["amountCents"]);
+    if (
+      typeof cents === "number" &&
+      Number.isSafeInteger(cents) &&
+      cents >= 0
+    ) {
+      view.amount = centsToYuan(cents);
+    }
+    if (r.kind === "recharge_card") {
+      const bonus = r.effect["bonus_cents"];
+      if (
+        typeof bonus === "number" &&
+        Number.isSafeInteger(bonus) &&
+        bonus >= 0
+      )
+        view.bonusAmount = (bonus / 100).toFixed(2);
+      const days = r.effect["bonus_expires_in_days"];
+      view.bonusExpiresInDays = typeof days === "number" ? days : null;
+    }
+  } else if (r.kind === "redemption" || r.kind === "extension") {
+    const days =
+      r.kind === "redemption"
+        ? (r.effect["duration_days"] ?? r.effect["durationDays"])
+        : (r.effect["extend_days"] ?? r.effect["extendDays"]);
+    if (typeof days === "number" && Number.isSafeInteger(days) && days > 0) {
+      if (r.kind === "redemption") view.durationDays = days;
+      else view.extendDays = days;
+    }
   }
   return view;
 }
@@ -104,7 +203,261 @@ export class PromotionRouter {
   constructor(
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
     @Inject(PromotionService) private readonly promotion: PromotionService,
+    @Optional()
+    @Inject(VxConfigService)
+    private readonly config?: VxConfigService,
+    @Optional() @Inject(RP_REDIS) private readonly redis?: Redis,
   ) {}
+
+  // =========================================================================
+  // New contracts are additive; the legacy array endpoint remains available.
+  // =========================================================================
+  @Get("vouchers/page")
+  @Header("Cache-Control", "no-store")
+  async voucherPage(
+    @Req() req: Request & RequestContext,
+    @Query() query: Record<string, string> = {},
+  ) {
+    const scope = await this.scope(req);
+    const input: CustomerVoucherQuery = {
+      page: Number(query.page ?? 1),
+      pageSize: Number(query.pageSize ?? 20),
+      status: query.status ?? "available",
+      query: query.query ?? "",
+      ...(query.sort
+        ? { sort: query.sort as NonNullable<CustomerVoucherQuery["sort"]> }
+        : {}),
+      ...(query.direction
+        ? {
+            direction: query.direction as NonNullable<
+              CustomerVoucherQuery["direction"]
+            >,
+          }
+        : {}),
+    };
+    const result = await new PgCustomerVoucherLedger(this.pool).page(
+      scope,
+      input,
+    );
+    return {
+      ...result,
+      items: result.items.map((r: CustomerVoucherRecord) => ({
+        ...mapVoucher(r),
+        holderScope: r.holderScope,
+        holderLabel: r.holderLabel,
+        claimedAt: r.claimedAt?.toISOString() ?? null,
+        returnPolicy: r.returnPolicy,
+        orderNo: r.orderNo,
+        unavailableReason: r.unavailableReason,
+      })),
+    };
+  }
+
+  @Post("claims/preview")
+  @Header("Cache-Control", "no-store")
+  async previewClaim(
+    @Req() req: Request & RequestContext,
+    @Body() body: { secret: string; target?: "user" | "workspace" },
+  ) {
+    const scope = await this.scope(req);
+    await this.limitClaims(req, scope.userId);
+    const preview = await new PgVoucherClaims(
+      this.pool,
+      new VoucherClaimCredentials(this.config?.auth),
+    ).preview(scope, body?.secret, body?.target);
+    return {
+      ...preview,
+      ...(preview.kind === "recharge_card"
+        ? {
+            recharge: {
+              principal: (
+                Number(preview.effect.face_value_cents) / 100
+              ).toFixed(2),
+              bonus: (Number(preview.effect.bonus_cents) / 100).toFixed(2),
+            },
+          }
+        : {}),
+    };
+  }
+
+  @Get("claims/result")
+  @Header("Cache-Control", "no-store")
+  async claimResult(
+    @Req() req: Request & RequestContext,
+    @Query("idempotencyKey") idempotencyKey: string,
+    @Res() response: Response,
+  ) {
+    // Explicit JSON preserves a missing receipt as null for strict JSON clients.
+    return response.json(
+      await PgVoucherClaims.result(
+        this.pool,
+        await this.scope(req),
+        idempotencyKey,
+      ),
+    );
+  }
+
+  @Post("claims")
+  @Header("Cache-Control", "no-store")
+  async claimVoucher(
+    @Req() req: Request & RequestContext,
+    @Body() body: ClaimVoucherCommand,
+  ) {
+    const scope = await this.scope(req);
+    await this.limitClaims(req, scope.userId);
+    return new PgVoucherClaims(
+      this.pool,
+      new VoucherClaimCredentials(this.config?.auth),
+    ).claim(scope, body);
+  }
+
+  @Post("recharges/preview")
+  @RequireCapability("tenant.billing.manage")
+  @Header("Cache-Control", "no-store")
+  async previewRecharge(
+    @Req() req: Request & RequestContext,
+    @Body() body: { voucherId: string },
+  ) {
+    return previewRechargeCard(
+      this.pool,
+      await this.scope(req),
+      body?.voucherId,
+    );
+  }
+
+  @Post("recharges")
+  @RequireCapability("tenant.billing.manage")
+  @Header("Cache-Control", "no-store")
+  async redeemRecharge(
+    @Req() req: Request & RequestContext,
+    @Body() body: RechargeCommand,
+  ) {
+    return redeemRechargeCard(this.pool, await this.scope(req), body);
+  }
+
+  @Get("recharges/result")
+  @RequireCapability("tenant.billing.manage")
+  @Header("Cache-Control", "no-store")
+  async rechargeResult(
+    @Req() req: Request & RequestContext,
+    @Query("idempotencyKey") key: string,
+    @Res() response: Response,
+  ) {
+    return response.json(
+      await rechargeCardResult(this.pool, await this.scope(req), key),
+    );
+  }
+
+  @Post("redemptions/preview")
+  @RequireCapability("tenant.billing.manage")
+  @Header("Cache-Control", "no-store")
+  async previewRedemption(
+    @Req() req: Request & RequestContext,
+    @Body() body: { voucherId: string },
+  ) {
+    return previewSubscriptionVoucher(
+      this.pool,
+      await this.scope(req),
+      body?.voucherId,
+    );
+  }
+
+  @Post("redemptions")
+  @RequireCapability("tenant.billing.manage")
+  @Header("Cache-Control", "no-store")
+  async redeemSubscription(
+    @Req() req: Request & RequestContext,
+    @Body() body: { voucherId: string; idempotencyKey: string },
+  ) {
+    return redeemSubscriptionVoucher(this.pool, await this.scope(req), body);
+  }
+
+  @Get("redemptions/result")
+  @Header("Cache-Control", "no-store")
+  async redemptionResult(
+    @Req() req: Request & RequestContext,
+    @Query("idempotencyKey") key: string,
+    @Res() response: Response,
+  ) {
+    return response.json(
+      await subscriptionVoucherResult(this.pool, await this.scope(req), key),
+    );
+  }
+
+  @Post("extensions/preview")
+  @RequireCapability("tenant.billing.manage")
+  @Header("Cache-Control", "no-store")
+  async previewExtension(
+    @Req() req: Request & RequestContext,
+    @Body() body: { voucherId: string },
+  ) {
+    return previewSubscriptionExtension(
+      this.pool,
+      await this.scope(req),
+      body?.voucherId,
+    );
+  }
+
+  @Post("extensions")
+  @RequireCapability("tenant.billing.manage")
+  @Header("Cache-Control", "no-store")
+  async extendSubscription(
+    @Req() req: Request & RequestContext,
+    @Body() body: ExtensionCommand,
+  ) {
+    return extendSubscriptionVoucher(this.pool, await this.scope(req), body);
+  }
+
+  @Get("extensions/result")
+  @Header("Cache-Control", "no-store")
+  async extensionResult(
+    @Req() req: Request & RequestContext,
+    @Query("idempotencyKey") key: string,
+    @Res() response: Response,
+  ) {
+    return response.json(
+      await subscriptionExtensionResult(this.pool, await this.scope(req), key),
+    );
+  }
+
+  private async scope(req: Request & RequestContext) {
+    if (!req.tenant || !req.user)
+      throw new UnauthorizedException("No active tenant session");
+    return {
+      tenantId: req.tenant.id,
+      userId: req.user.id,
+      workspaceId:
+        req.activeWorkspaceId ??
+        (await this.resolveDefaultWorkspace(req.tenant.id)),
+    };
+  }
+
+  private async limitClaims(req: Request, userId: string) {
+    if (!this.redis)
+      throw new ServiceUnavailableException("卡券领取暂时不可用");
+    // Only the framework-resolved peer address is used; untrusted forwarding headers are ignored.
+    const source = createHash("sha256")
+      .update(req.ip ?? req.socket?.remoteAddress ?? "unknown")
+      .digest("hex");
+    try {
+      const keys = [
+        `vx:voucher-claim:user:${userId}`,
+        `vx:voucher-claim:source:${source}`,
+      ];
+      const result = await this.redis.eval(
+        `local a=redis.call('INCR',KEYS[1]);if a==1 then redis.call('EXPIRE',KEYS[1],60) end;
+        local b=redis.call('INCR',KEYS[2]);if b==1 then redis.call('EXPIRE',KEYS[2],60) end;
+        if a>20 or b>100 then return 0 else return 1 end`,
+        2,
+        ...keys,
+      );
+      if (Number(result) !== 1)
+        throw new HttpException("领取请求过于频繁，请稍后重试", 429);
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new ServiceUnavailableException("卡券领取暂时不可用");
+    }
+  }
 
   @Get("vouchers")
   async listVouchers(
@@ -112,7 +465,9 @@ export class PromotionRouter {
   ): Promise<ConsoleVoucherView[]> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     if (!req.user) throw new UnauthorizedException("No active session");
-    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const workspaceId =
+      req.activeWorkspaceId ??
+      (await this.resolveDefaultWorkspace(req.tenant.id));
     const rows = await this.promotion.listTenantVouchers({
       tenantId: req.tenant.id,
       workspaceId,

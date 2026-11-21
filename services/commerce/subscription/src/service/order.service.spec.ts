@@ -189,13 +189,15 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
       async (): Promise<string | null> => "ord-1",
     ),
     getRefundByOrder: vi.fn(async (): Promise<RefundRecordView | null> => null),
+    isCurrentSubscriptionOrder: vi.fn(async () => true),
+    findRefundRecoveryOrders: vi.fn(async () => []),
     getRefundById: vi.fn(async (): Promise<RefundRecordView | null> => null),
     createRefundRequest: vi.fn(async () => refundView()),
     auditRefund: vi.fn(async () => refundView({ auditStatus: "approved" })),
     isBalancePaidOrder: vi.fn(async () => false),
     executeRefund: vi.fn(async () => ({
       refund: refundView({ auditStatus: "approved", refundStatus: "success" }),
-      order: order({ status: "refunded" }),
+      order: { ...orderRow, status: "refunded" },
     })),
     markRefundFailed: vi.fn(async () =>
       refundView({ auditStatus: "approved", refundStatus: "failed" }),
@@ -1043,8 +1045,9 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
     ).toHaveBeenCalledWith(
       "sub-new",
       "op",
-      expect.stringContaining("RFD-"),
+      expect.stringContaining("refund reversal"),
       "operator",
+      "ord-1",
     );
   });
 
@@ -1889,6 +1892,8 @@ describe("OrderService sweeps", () => {
       "a",
       expect.objectContaining({ actorType: "system", actorId: null }),
       "expired",
+      undefined,
+      expect.any(Function),
     );
   });
 
@@ -2387,5 +2392,26 @@ describe("balance payment", () => {
       ),
     ).rejects.toThrow("原租户余额");
     expect(orders.markRefundTransferInitiated).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// Both repositories must share the application wallet port.
+// ============================================================================
+describe("wallet settlement wiring", () => {
+  it("connects and disconnects both transaction paths", () => {
+    const orders = { setWalletSettlement: vi.fn() };
+    const subscriptions = { setWalletSettlement: vi.fn() };
+    const service = new OrderService(
+      orders as never,
+      subscriptions as never,
+      {} as never,
+      {} as never,
+    );
+    const port = { postInTransaction: vi.fn() };
+    service.setWalletSettlement(port);
+    service.setWalletSettlement(null);
+    for (const repo of [orders, subscriptions])
+      expect(repo.setWalletSettlement.mock.calls).toEqual([[port], [null]]);
   });
 });

@@ -1,3 +1,7 @@
+import {
+  settlementCents,
+  type WalletSettlementPort,
+} from "../types/wallet-settlement.types";
 import { randomUUID } from "node:crypto";
 import { ConflictException, Inject, Injectable } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
@@ -118,6 +122,13 @@ function toNotifyDisplay(r: NotifyDisplayRow): NotifyDisplay {
 export class PgSubscriptionRepository {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
 
+  private walletSettlement: WalletSettlementPort | null = null;
+
+  /** Inject the source wallet from the application composition root. */
+  setWalletSettlement(port: WalletSettlementPort | null): void {
+    this.walletSettlement = port;
+  }
+
   async listSubscriptions(
     params: ListSubscriptionsParams,
   ): Promise<ListSubscriptionsResult> {
@@ -169,8 +180,11 @@ export class PgSubscriptionRepository {
     };
   }
 
-  async getById(id: string): Promise<SubscriptionRecord | null> {
-    const result = await this.pool.query<SubscriptionRow>(
+  async getById(
+    id: string,
+    client?: PoolClient,
+  ): Promise<SubscriptionRecord | null> {
+    const result = await (client ?? this.pool).query<SubscriptionRow>(
       `select * from metering.subscriptions where id = $1 and deleted_at is null limit 1`,
       [id],
     );
@@ -192,10 +206,14 @@ export class PgSubscriptionRepository {
     return row ? this.mapSubscription(row) : null;
   }
 
-  async create(input: CreateSubscriptionInput): Promise<SubscriptionRecord> {
-    const client = await this.pool.connect();
+  /** Create service and quotas together. @param input - Subscription terms. @param transaction - Optional caller-owned transaction; caller commits, rolls back and releases it. @returns Created subscription. @throws {Error} When materialization fails. */
+  async create(
+    input: CreateSubscriptionInput,
+    transaction?: PoolClient,
+  ): Promise<SubscriptionRecord> {
+    const client = transaction ?? (await this.pool.connect());
     try {
-      await client.query("begin");
+      if (!transaction) await client.query("begin");
 
       const status = input.status ?? "active";
       const subscriptionKind = input.subscriptionKind ?? "paid";
@@ -255,13 +273,13 @@ export class PgSubscriptionRepository {
         ],
       );
 
-      await client.query("commit");
+      if (!transaction) await client.query("commit");
       return this.mapSubscription(subscription);
     } catch (err) {
-      await client.query("rollback");
+      if (!transaction) await client.query("rollback");
       throw err;
     } finally {
-      client.release();
+      if (!transaction) client.release();
     }
   }
 
@@ -290,6 +308,8 @@ export class PgSubscriptionRepository {
           updated_at      = now()
          where id = $1 and deleted_at is null
            and ($6::text is null or status = $6)
+           and ($7::uuid is null or current_order_id = $7)
+           and (not $8::boolean or date_trunc('milliseconds',end_at) is not distinct from $9::timestamptz)
          returning *`,
         [
           id,
@@ -298,6 +318,9 @@ export class PgSubscriptionRepository {
           input.autoRenew ?? null,
           input.toPlanVersionId ?? null,
           input.expectedStatus ?? null,
+          input.expectedCurrentOrderId ?? null,
+          input.expectedEndAt !== undefined,
+          input.expectedEndAt ?? null,
         ],
       );
 
@@ -491,8 +514,9 @@ export class PgSubscriptionRepository {
     workspaceId: string,
     planVersionId: string,
     excludeSubscriptionId?: string,
+    client?: PoolClient,
   ): Promise<{ productCode: string; newTier: string; existingTier: string }[]> {
-    const result = await this.pool.query<{
+    const result = await (client ?? this.pool).query<{
       product_code: string;
       new_tier: string;
       existing_tier: string;
@@ -553,9 +577,13 @@ export class PgSubscriptionRepository {
   async findExpiredSubscriptionIds(
     limit: number,
     graceDays: number,
-  ): Promise<{ id: string; status: string }[]> {
-    const result = await this.pool.query<{ id: string; status: string }>(
-      `select s.id, s.status from metering.subscriptions s
+  ): Promise<{ id: string; status: string; endAt: Date | null }[]> {
+    const result = await this.pool.query<{
+      id: string;
+      status: string;
+      endAt: Date | null;
+    }>(
+      `select s.id, s.status, s.end_at as "endAt" from metering.subscriptions s
         where s.subscription_kind <> 'trial'
           -- 'suspended' 是 2026-09-25 补的。此前只扫在用三态，于是被运营冻结的订阅
           -- end_at 过了也没有任何人动它——永不到期、永不释放，也永不再计费。
@@ -866,39 +894,75 @@ export class PgSubscriptionRepository {
     );
     if (external.rows[0]?.paid)
       throw new ConflictException("该订单已有外部付款，请继续使用原支付方式");
-    const wallet = await client.query<{ balance: string; currency: string }>(
-      `select balance::text, currency from billing.credits where tenant_id = $1 for update`,
-      [input.tenantId],
+    if (!this.walletSettlement)
+      throw new ConflictException("余额来源账本未接入，暂不能余额付款");
+    // The invoice lock also serializes direct retries outside order orchestration.
+    const invoice = (
+      await client.query<{
+        tenant_id: string;
+        currency: string;
+        paid_amount: string;
+        payable_amount: string;
+      }>(
+        "select tenant_id,currency,paid_amount::text,payable_amount::text from billing.invoices where id=$1 and deleted_at is null for update",
+        [input.invoiceId],
+      )
+    ).rows[0];
+    if (
+      !invoice ||
+      invoice.tenant_id !== input.tenantId ||
+      invoice.currency !== input.currency
+    )
+      throw new ConflictException("余额付款账单归属或币种不匹配");
+    const lockedExternal = await client.query(
+      "select id from billing.payments where bill_id=$1 and pay_source in ('online','offline') and pay_status='paid' limit 1",
+      [input.invoiceId],
     );
-    const before = wallet.rows[0];
-    if (!before || before.currency !== input.currency) {
-      throw new ConflictException("当前租户没有该币种的可用余额");
+    if (lockedExternal.rows.length)
+      throw new ConflictException("该订单已有外部付款，请继续使用原支付方式");
+    const amountCents = settlementCents(input.amountYuan);
+    const existing = (
+      await client.query<{
+        id: string;
+        paid_amount: string;
+        currency: string;
+        transaction_id: string;
+      }>(
+        "select id,paid_amount::text,currency,transaction_id from billing.payments where bill_id=$1 and pay_source='balance' and pay_status='paid'",
+        [input.invoiceId],
+      )
+    ).rows;
+    const receipt = await this.walletSettlement.postInTransaction(
+      client,
+      {
+        tenantId: input.tenantId,
+        currency: input.currency,
+        actorType: "customer",
+        actorId: input.actorId,
+      },
+      {
+        action: "consume",
+        amountCents,
+        invoiceId: input.invoiceId,
+        idempotencyKey: "order-balance:" + input.invoiceId,
+      },
+    );
+    if (existing.length) {
+      if (
+        existing.length !== 1 ||
+        existing[0]!.transaction_id !== receipt.transactionId ||
+        settlementCents(existing[0]!.paid_amount) !== amountCents ||
+        existing[0]!.currency !== input.currency
+      )
+        throw new ConflictException("原余额付款来源或金额不匹配");
+      return existing[0]!.id;
     }
-    const debit = await client.query<{ balance: string }>(
-      `update billing.credits set balance = balance - $2::numeric,
-         total_consumed = total_consumed + $2::numeric, version = version + 1, updated_at = now()
-       where tenant_id = $1 and currency = $3 and balance >= $2::numeric and $2::numeric > 0
-       returning balance::text`,
-      [input.tenantId, input.amountYuan, input.currency],
-    );
-    if (!debit.rows[0])
-      throw new ConflictException("账户余额不足，请选择其他支付方式");
-    const transaction = await client.query<{ id: string }>(
-      `insert into billing.transactions
-       (tenant_id, bill_id, transaction_no, trade_type, amount, currency,
-        balance_before, balance_after, trade_status, actor_type, actor_id)
-       values ($1,$2,$3,'consume',-$4::numeric,$5,$6,$7,'success','customer',$8) returning id`,
-      [
-        input.tenantId,
-        input.invoiceId,
-        visibleCode("TXN"),
-        input.amountYuan,
-        input.currency,
-        before.balance,
-        debit.rows[0].balance,
-        input.actorId,
-      ],
-    );
+    if (
+      amountCents <= 0 ||
+      settlementCents(invoice.paid_amount) + amountCents >
+        settlementCents(invoice.payable_amount)
+    )
+      throw new ConflictException("余额付款超过账单未付金额");
     const payment = await client.query<{ id: string }>(
       `insert into billing.payments
        (tenant_id,bill_id,transaction_id,pay_order_no,pay_source,total_amount,paid_amount,
@@ -907,7 +971,7 @@ export class PgSubscriptionRepository {
       [
         input.tenantId,
         input.invoiceId,
-        transaction.rows[0]!.id,
+        receipt.transactionId,
         visibleCode("PAY"),
         input.amountYuan,
         input.currency,

@@ -147,6 +147,17 @@ async function stateOf(over: Record<string, unknown> = {}): Promise<string> {
 }
 
 describe("订单轴：实体状态 → wire 十态", () => {
+  it("preserves voucher settlement and activation while presenting noncash reversal as cancellation", async () => {
+    const records = await routerWith([
+      row({ order_status: "refunded", order_close_reason: "noncash_reversal" }),
+    ]).getMyOrders(req());
+    expect(records[0]).toMatchObject({
+      orderStatus: "cancelled",
+      noncashReversed: true,
+      activatedAt: NOW.toISOString(),
+    });
+  });
+
   it.each([
     ["pending_payment", "pending_payment"],
     ["pending_verify", "paid_pending_verify"],

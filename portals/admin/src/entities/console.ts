@@ -1543,6 +1543,8 @@ export interface UsageMeteringRecord {
 }
 
 export type PromotionOperationStatus =
+  | "draft"
+  | "archived"
   | "active"
   | "scheduled"
   | "expired"
@@ -1550,6 +1552,7 @@ export type PromotionOperationStatus =
 export type PromotionOperationType = "discount" | "coupon" | "campaign";
 
 export interface PromotionOperationRecord {
+  requiresCashFunding?: boolean;
   id: string;
   promotionCode: string;
   promotionName: string;
@@ -1562,6 +1565,10 @@ export interface PromotionOperationRecord {
    * campaign），分辨不出具体是哪种；发放弹窗要按券型改规则，所以留原值。
    */
   kind: string;
+  batchStatus?: "draft" | "active" | "paused" | "archived";
+  tenantId?: string | null;
+  totalCount?: number;
+  issuedCount?: number;
   status: PromotionOperationStatus;
   scopeLabel: string;
   discountLabel: string;
@@ -1583,6 +1590,10 @@ export interface PromotionRedemptionRecord {
   redemptionNo: string;
   promotionCode: string;
   promotionName: string;
+  kind: string;
+  benefitLabel: string;
+  walletTransactions: string[];
+  subscriptionId: string | null;
   tenantId: string;
   tenantCode: string;
   tenantName: string;
@@ -1590,7 +1601,7 @@ export interface PromotionRedemptionRecord {
   orderNo: string | null;
   billId: string;
   billNo: string;
-  billStatus: BillingBillStatus;
+  billStatus: BillingBillStatus | null;
   servicePlanName: string | null;
   currency: string;
   orderAmount: number;

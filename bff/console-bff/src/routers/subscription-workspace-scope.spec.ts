@@ -112,7 +112,7 @@ function setup(
   const orderService = {
     findOpenOrderForProduct: vi.fn(async () => null),
     createOrder: vi.fn(async () => ({
-      order: { id: "order", orderNo: "OD-1" },
+      order: { id: "order", orderNo: "OD-1", createdAt: new Date() },
       billNo: "BL-1",
     })),
   };
@@ -144,7 +144,23 @@ function setup(
     none,
     none,
     none,
-    { query } as unknown as Pool,
+    {
+      query,
+      connect: async () => ({
+        query: async (sql: string, params: unknown[] = []) => {
+          if (
+            sql === "begin" ||
+            sql === "commit" ||
+            sql === "rollback" ||
+            sql.includes("pg_advisory_xact_lock") ||
+            sql.includes("promotion.voucher_operations")
+          )
+            return { rows: [] };
+          return query(sql, params);
+        },
+        release: vi.fn(),
+      }),
+    } as unknown as Pool,
     { resolveWorkspaceEntitlements } as never,
     { listProductIds: async () => [] } as never,
     { getQuotaOverviewRows } as never,
@@ -271,6 +287,7 @@ describe("subscription workspace scope", () => {
     await router.createOrder(req(), body);
     expect(orderService.createOrder).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: TENANT, workspaceId: SELECTED }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -283,6 +300,7 @@ describe("subscription workspace scope", () => {
         fromSubscriptionId: "selected-subscription",
         intent: "renew",
       }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -299,6 +317,7 @@ describe("subscription workspace scope", () => {
         fromSubscriptionId: "selected-subscription",
         planVersionId: "pv-2",
       }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
@@ -8,7 +8,6 @@ import {
   ActionButton,
   ActionMenu,
   Badge,
-  Banner,
   BulkActionBar,
   DataTable,
   EmptyState,
@@ -24,16 +23,21 @@ import { ListPagination } from "@/modules/shared/ListPagination";
 import {
   assignVouchers,
   createVoucherBatch,
-  fetchPromotionOperations,
+  fetchPromotionPage,
 } from "@/api/admin-bff";
-import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
+import { VoucherBatchDetailDialog } from "./VoucherBatchDetailDialog";
+import { useAdminSession } from "@/features/session/AdminSessionProvider";
+import {
+  useStepUp,
+  isStepUpCancelled,
+  StepUpCancelledError,
+} from "@/providers/StepUpProvider";
 import {
   AssignVouchersDialog,
   CreateVoucherBatchDialog,
   type CreateBatchPayload,
 } from "@/modules/commercial/VoucherBatchDialogs";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
-import { isListTruncated } from "@/lib/list-truncation";
 import type {
   PromotionOperationRecord,
   PromotionOperationStatus,
@@ -47,6 +51,8 @@ type StatusFilter = "all" | PromotionOperationStatus;
 type TypeFilter = "all" | PromotionOperationType;
 
 function statusLabel(status: PromotionOperationStatus) {
+  if (status === "draft") return "待审核";
+  if (status === "archived") return "已归档";
   if (status === "scheduled") return "待开始";
   if (status === "expired") return "已结束";
   if (status === "paused") return "已暂停";
@@ -61,25 +67,11 @@ function typeLabel(type: PromotionOperationType) {
 
 function statusTone(status: PromotionOperationStatus) {
   if (status === "active") return "normal";
+  if (status === "draft") return "warning";
+  if (status === "archived") return "muted";
   if (status === "scheduled") return "warning";
   if (status === "paused") return "muted";
   return "danger";
-}
-
-function promotionSearchText(record: PromotionOperationRecord) {
-  return [
-    record.promotionCode,
-    record.promotionName,
-    record.scopeLabel,
-    record.discountLabel,
-    record.ownerName,
-    record.description,
-    statusLabel(record.status),
-    typeLabel(record.promotionType),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
 }
 
 /* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
@@ -111,7 +103,9 @@ function promotionCsvColumns(
 
 function PromotionActionsMenu({
   record,
+  onDetail,
 }: {
+  onDetail: (record: PromotionOperationRecord) => void;
   record: PromotionOperationRecord;
 }) {
   const router = useRouter();
@@ -124,6 +118,12 @@ function PromotionActionsMenu({
       <ActionMenu
         label={`${record.promotionName} 操作`}
         items={[
+          {
+            id: "detail",
+            label: "批次详情与管理",
+            icon: "list",
+            onSelect: () => onDetail(record),
+          },
           {
             id: "redemptions",
             label: "查看核销",
@@ -167,7 +167,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       cell: (record) => (
         <span className="inline-flex flex-col items-center gap-2xs">
           {<Badge variant="outline">{record.scopeLabel}</Badge>}
-          <span className="text-body-small text-muted-foreground">
+          <span className="text-body-sm text-muted-foreground">
             {record.description}
           </span>
         </span>
@@ -192,7 +192,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       cell: (record) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatNumber(record.redemptionCount)}
-          <span className="text-body-small text-muted-foreground">{`${formatNumber(record.tenantCount)} 租户`}</span>
+          <span className="text-body-sm text-muted-foreground">{`${formatNumber(record.tenantCount)} 租户`}</span>
         </span>
       ),
     },
@@ -207,7 +207,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
               {statusLabel(record.status)}
             </Tag>
           }
-          <span className="text-body-small text-muted-foreground">
+          <span className="text-body-sm text-muted-foreground">
             {record.ownerName}
           </span>
         </span>
@@ -231,11 +231,22 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
 }
 
 export function PromotionsPage() {
+  const { session } = useAdminSession();
+  const canWrite =
+    session.isAuthenticated &&
+    session.capabilities.includes("promotion:campaign.manage");
+  const [detailTarget, setDetailTarget] = useState<string | null>(null);
   const locale = useLocale();
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
   const [records, setRecords] = useState<PromotionOperationRecord[]>([]);
-  const [recordsTruncated, setRecordsTruncated] = useState(false);
+  const [summary, setSummary] = useState({
+    total: 0,
+    active: 0,
+    redemptions: 0,
+    tenants: 0,
+    coupons: 0,
+  });
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -251,6 +262,7 @@ export function PromotionsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [assignTarget, setAssignTarget] =
     useState<PromotionOperationRecord | null>(null);
+  const writeInFlight = useRef(false);
   const [writeBusy, setWriteBusy] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [assignedCodes, setAssignedCodes] = useState<string[] | null>(null);
@@ -259,17 +271,34 @@ export function PromotionsPage() {
   useEffect(() => {
     let active = true;
     setLoadError(null);
-    fetchPromotionOperations()
+    setLoading(true);
+    setSelectedRecordIds(new Set());
+    fetchPromotionPage({
+      page: currentPage,
+      pageSize,
+      status: statusFilter,
+      type: typeFilter,
+      q: query,
+    })
       .then((items) => {
         if (active) {
-          setRecords(items);
-          setRecordsTruncated(isListTruncated(items));
+          setCurrentPage((page) =>
+            Math.min(page, Math.max(1, Math.ceil(items.total / pageSize))),
+          );
+          setRecords(items.items);
+          setSummary(items.summary);
         }
       })
       .catch((error) => {
         if (active) {
           setRecords([]);
-          setRecordsTruncated(false);
+          setSummary({
+            total: 0,
+            active: 0,
+            redemptions: 0,
+            tenants: 0,
+            coupons: 0,
+          });
           setLoadError(
             error instanceof Error ? error.message : "优惠数据读取失败",
           );
@@ -281,81 +310,109 @@ export function PromotionsPage() {
     return () => {
       active = false;
     };
-  }, [reloadNonce]);
+  }, [reloadNonce, currentPage, pageSize, statusFilter, typeFilter, query]);
+
+  const identity = JSON.stringify([
+    session.isAuthenticated,
+    session.user?.id,
+    [...session.capabilities].sort(),
+  ]);
+  const identityRef = useRef(identity);
+  const mounted = useRef(true);
+  identityRef.current = identity;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    setCreateOpen(false);
+    setAssignTarget(null);
+    setDetailTarget(null);
+    setAssignedCodes(null);
+    setWriteError(null);
+  }, [identity]);
 
   async function handleCreateBatch(payload: CreateBatchPayload) {
+    if (writeInFlight.current || !canWrite || !mounted.current) return;
+    const actor = identityRef.current;
+    writeInFlight.current = true;
     setWriteBusy(true);
     setWriteError(null);
     try {
-      await runWithStepUp(() => createVoucherBatch(payload));
+      await runWithStepUp(() => {
+        if (!mounted.current || actor !== identityRef.current)
+          throw new StepUpCancelledError();
+        return createVoucherBatch(payload);
+      });
+      if (!mounted.current || actor !== identityRef.current) return;
       setCreateOpen(false);
       setReloadNonce((n) => n + 1);
     } catch (error) {
-      if (isStepUpCancelled(error)) return;
+      if (
+        isStepUpCancelled(error) ||
+        !mounted.current ||
+        actor !== identityRef.current
+      )
+        return;
       setWriteError(
         error instanceof Error ? error.message : "批次创建失败，请稍后重试。",
       );
     } finally {
-      setWriteBusy(false);
+      writeInFlight.current = false;
+      if (mounted.current) setWriteBusy(false);
     }
   }
 
   async function handleAssign(payload: {
     batchId: string;
     count: number;
+    idempotencyKey: string;
+    reason: string;
+    targetTenantId?: string;
     targetUserId?: string;
     targetWorkspaceId?: string;
   }) {
+    if (writeInFlight.current || !canWrite || !mounted.current) return;
+    const actor = identityRef.current;
+    writeInFlight.current = true;
     setWriteBusy(true);
     setWriteError(null);
     try {
-      const result = await runWithStepUp(() => assignVouchers(payload));
+      const result = await runWithStepUp(() => {
+        if (!mounted.current || actor !== identityRef.current)
+          throw new StepUpCancelledError();
+        return assignVouchers(payload);
+      });
+      if (!mounted.current || actor !== identityRef.current) return;
       setAssignedCodes(result.codes);
       setReloadNonce((n) => n + 1);
     } catch (error) {
-      if (isStepUpCancelled(error)) return;
+      if (
+        isStepUpCancelled(error) ||
+        !mounted.current ||
+        actor !== identityRef.current
+      )
+        return;
       setWriteError(
         error instanceof Error ? error.message : "券码发放失败，请稍后重试。",
       );
     } finally {
-      setWriteBusy(false);
+      writeInFlight.current = false;
+      if (mounted.current) setWriteBusy(false);
     }
   }
 
   const promotionColumns = usePromotionColumns();
 
-  const filteredRecords = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return records.filter((record) => {
-      if (statusFilter !== "all" && record.status !== statusFilter)
-        return false;
-      if (typeFilter !== "all" && record.promotionType !== typeFilter)
-        return false;
-      if (
-        normalizedQuery &&
-        !promotionSearchText(record).includes(normalizedQuery)
-      )
-        return false;
-      return true;
-    });
-  }, [query, records, statusFilter, typeFilter]);
-  const pageCount = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
-  const activePage = Math.min(currentPage, pageCount);
-  const visibleRecords = filteredRecords.slice(
-    (activePage - 1) * pageSize,
-    activePage * pageSize,
-  );
-  const activeCount = records.filter(
-    (record) => record.status === "active",
-  ).length;
-  const redemptionCount = records.reduce(
-    (sum, record) => sum + record.redemptionCount,
-    0,
-  );
-  const tenantReach = records.reduce(
-    (sum, record) => sum + record.tenantCount,
-    0,
-  );
+  const filteredRecords = records;
+  const pageCount = Math.max(1, Math.ceil(summary.total / pageSize));
+  const activePage = currentPage;
+  const visibleRecords = records;
+  const activeCount = summary.active,
+    redemptionCount = summary.redemptions,
+    tenantReach = summary.tenants;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -400,7 +457,7 @@ export function PromotionsPage() {
             icon="sparkles"
             eyebrow="产品体系"
             title="营销优惠"
-            description="市场运营侧查看卡券批次、发放与核销台账（批次/发码/核销数据来自 promotion 域）。券面金额按 kind 存于 effect JSONB，暂不在本台账展示（见 TD-030）。"
+            description="管理卡券批次的草稿审核、发行预算、定向发放与审计历史。首次发行后经济配置冻结。"
           />
         }
         summary={
@@ -415,7 +472,7 @@ export function PromotionsPage() {
                   help: "当前筛选条件下的优惠活动数。",
                   icon: "sparkles",
                   label: "优惠活动",
-                  value: formatNumber(records.length),
+                  value: formatNumber(summary.total),
                   tags: [`生效 ${formatNumber(activeCount)}`],
                 },
                 {
@@ -424,7 +481,7 @@ export function PromotionsPage() {
                   icon: "check",
                   label: "核销次数",
                   value: formatNumber(redemptionCount),
-                  tags: [`筛选 ${formatNumber(filteredRecords.length)}`],
+                  tags: [`筛选 ${formatNumber(summary.total)}`],
                   tone: "success",
                 },
                 {
@@ -440,24 +497,13 @@ export function PromotionsPage() {
                   id: "pending-config",
                   help: "券类活动数（promotionType = coupon）。",
                   icon: "clock",
-                  label: "待配置",
-                  value: formatNumber(
-                    records.filter(
-                      (record) => record.promotionType === "coupon",
-                    ).length,
-                  ),
+                  label: "券类活动",
+                  value: formatNumber(summary.coupons),
                   tags: ["优惠码"],
                   tone: "warning",
                 },
               ]}
             />
-            {recordsTruncated ? (
-              <Banner
-                tone="warning"
-                title="当前优惠列表可能未展示全部数据"
-                description="本次加载已达到单次读取上限（500 条），如未看到目标优惠活动，请尝试缩小筛选范围（如按状态、类型等）重新查询。"
-              />
-            ) : null}
           </>
         }
         filters={
@@ -465,7 +511,7 @@ export function PromotionsPage() {
             view="list"
             onViewChange={() => {}}
             cardsDisabledReason={tShared("common.cardsRetired")}
-            count={formatNumber(filteredRecords.length)}
+            count={formatNumber(summary.total)}
             aria-label="营销优惠筛选"
             search={
               <Input
@@ -485,11 +531,12 @@ export function PromotionsPage() {
                   onClick={handleExportAll}
                   disabled={filteredRecords.length === 0}
                 >
-                  导出全部
+                  导出本页
                 </ActionButton>
                 <ActionButton
                   variant="outline"
                   icon="plus"
+                  disabled={!canWrite}
                   onClick={() => {
                     setWriteError(null);
                     setCreateOpen(true);
@@ -500,11 +547,19 @@ export function PromotionsPage() {
                 <ActionButton
                   variant="outline"
                   icon="arrow-right"
-                  disabled={selectedRecords.length !== 1}
+                  disabled={
+                    !canWrite ||
+                    selectedRecords.length !== 1 ||
+                    selectedRecords[0]?.batchStatus !== "active" ||
+                    selectedRecords[0]?.status !== "active" ||
+                    selectedRecords[0]?.requiresCashFunding === true
+                  }
                   title={
-                    selectedRecords.length === 1
-                      ? undefined
-                      : "勾选一个批次后可发放券码"
+                    selectedRecords[0]?.requiresCashFunding
+                      ? "本金卡请打开批次详情，从真实销售收款生成领取凭证"
+                      : selectedRecords.length === 1
+                        ? undefined
+                        : "勾选一个批次后可发放券码"
                   }
                   onClick={() => {
                     const target = selectedRecords[0];
@@ -529,6 +584,8 @@ export function PromotionsPage() {
                 aria-label="优惠状态"
               >
                 <option value="all">{tShared("filters.allStates")}</option>
+                <option value="draft">待审核</option>
+                <option value="archived">已归档</option>
                 <option value="active">生效中</option>
                 <option value="scheduled">待开始</option>
                 <option value="paused">已暂停</option>
@@ -581,7 +638,12 @@ export function PromotionsPage() {
               indexStart={(activePage - 1) * pageSize + 1}
               selectedKeys={[...selectedRecordIds]}
               onSelectionChange={(keys) => setSelectedRecordIds(new Set(keys))}
-              rowActions={(record) => <PromotionActionsMenu record={record} />}
+              rowActions={(record) => (
+                <PromotionActionsMenu
+                  record={record}
+                  onDetail={(item) => setDetailTarget(item.id)}
+                />
+              )}
               empty={
                 <EmptyState
                   title={loadError ? "优惠数据读取失败" : "没有匹配的优惠"}
@@ -606,7 +668,7 @@ export function PromotionsPage() {
           <ListPagination
             currentPage={activePage}
             pageCount={pageCount}
-            total={filteredRecords.length}
+            total={summary.total}
             pageSize={pageSize}
             onPageSizeChange={setPageSize}
             onPageChange={setCurrentPage}
@@ -614,6 +676,13 @@ export function PromotionsPage() {
         }
       />
 
+      {detailTarget ? (
+        <VoucherBatchDetailDialog
+          id={detailTarget}
+          onClose={() => setDetailTarget(null)}
+          onChanged={() => setReloadNonce((n) => n + 1)}
+        />
+      ) : null}
       {createOpen ? (
         <CreateVoucherBatchDialog
           busy={writeBusy}

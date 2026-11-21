@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * PromotionRedemptionsPage.tsx - Cash and subscription benefit redemption evidence.
+ * @package @vxture/admin
+ * @layer Presentation
+ * @category component
+ * @author AI-Generated
+ * @date 2026-11-19
+ */
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
@@ -38,7 +46,10 @@ import {
 import { Tag, type PageSize, formatCurrency } from "./CommercialUtils";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
-type BillStatusFilter = "all" | BillingBillStatus;
+// ===========================================================================
+// Read models keep absent bills distinct from paid bills and cash discounts.
+// ===========================================================================
+type BillStatusFilter = "all" | "none" | BillingBillStatus;
 
 // C15: redemption status machine (applied/redeemed/reversed) removed — no status
 // column on voucher_redemptions (a redemption row IS a completed redemption; the
@@ -66,7 +77,8 @@ function redemptionSearchText(
     record.servicePlanName,
     record.operatorName,
     record.remark,
-    billStatusLabels[record.billStatus],
+    record.benefitLabel,
+    record.billStatus ? billStatusLabels[record.billStatus] : "无关联账单",
   ]
     .filter(Boolean)
     .join(" ")
@@ -84,6 +96,8 @@ function redemptionCsvColumns(
     { label: "券码", value: (record) => record.promotionCode },
     { label: "优惠编号", value: (record) => record.promotionCode },
     { label: "优惠名称", value: (record) => record.promotionName },
+    { label: "核销权益", value: (record) => record.benefitLabel },
+    { label: "订阅标识", value: (record) => record.subscriptionId ?? "" },
     {
       label: "租户编号",
       value: (record) => formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
@@ -94,13 +108,26 @@ function redemptionCsvColumns(
     { label: "账单号", value: (record) => record.billNo },
     {
       label: "账单状态",
-      value: (record) => billStatusLabels[record.billStatus],
+      value: (record) =>
+        record.billStatus ? billStatusLabels[record.billStatus] : "无关联账单",
     },
     { label: "套餐", value: (record) => record.servicePlanName ?? "" },
-    { label: "货币", value: (record) => record.currency },
-    { label: "订单金额", value: (record) => record.orderAmount },
-    { label: "优惠金额", value: (record) => record.discountAmount },
-    { label: "应付金额", value: (record) => record.payableAmount },
+    {
+      label: "货币",
+      value: (record) => (record.billId ? record.currency : ""),
+    },
+    {
+      label: "订单金额",
+      value: (record) => (record.billId ? record.orderAmount : ""),
+    },
+    {
+      label: "优惠金额",
+      value: (record) => (record.billId ? record.discountAmount : ""),
+    },
+    {
+      label: "应付金额",
+      value: (record) => (record.billId ? record.payableAmount : ""),
+    },
     { label: "操作人", value: (record) => record.operatorName },
     {
       label: "核销时间",
@@ -130,9 +157,23 @@ function RedemptionActionsMenu({
             id: "bill",
             label: "账单详情",
             icon: "arrow-right",
+            disabled: !record.billNo,
             onSelect: () =>
               router.push(`/billing/${encodeURIComponent(record.billNo)}`),
           },
+          ...(record.subscriptionId
+            ? [
+                {
+                  id: "subscription",
+                  label: "订阅详情",
+                  icon: "arrow-right" as const,
+                  onSelect: () =>
+                    router.push(
+                      `/subscriptions/${encodeURIComponent(record.subscriptionId!)}`,
+                    ),
+                },
+              ]
+            : []),
           {
             id: "tenant",
             label: tShared("actions.viewTenant"),
@@ -174,7 +215,13 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
           title={record.redemptionNo}
           description={`${record.promotionCode} · ${record.promotionName}`}
           onTitleClick={() =>
-            router.push(`/billing/${encodeURIComponent(record.billNo)}`)
+            record.subscriptionId
+              ? router.push(
+                  `/subscriptions/${encodeURIComponent(record.subscriptionId)}`,
+                )
+              : record.billNo
+                ? router.push(`/billing/${encodeURIComponent(record.billNo)}`)
+                : undefined
           }
         />
       ),
@@ -197,23 +244,36 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       header: "账单",
       cell: (record) => (
         <span className="inline-flex flex-col items-center gap-2xs">
-          {
+          {record.billStatus ? (
             <Tag tone={billStatusTone(record.billStatus)}>
               {billStatusLabels[record.billStatus]}
             </Tag>
-          }
-          <span className="text-body-small text-muted-foreground">{`${record.billNo} · ${record.orderNo ?? "未关联订单"}`}</span>
+          ) : (
+            <Tag tone="muted">无关联账单</Tag>
+          )}
+          <span className="text-body-sm text-muted-foreground">
+            {[record.billNo, record.orderNo].filter(Boolean).join(" · ") ||
+              (record.kind === "recharge_card"
+                ? "充值卡入钱包"
+                : "订阅权益核销")}
+          </span>
         </span>
       ),
     },
     {
       id: "discount",
-      header: "优惠金额",
+      header: "核销权益 / 金额",
       align: "numeric",
       cell: (record) => (
         <span className="inline-flex flex-col items-end gap-2xs">
-          {formatCurrency(record.discountAmount, record.currency)}
-          <span className="text-body-small text-muted-foreground">{`应付 ${formatCurrency(record.payableAmount, record.currency)} / 原价 ${formatCurrency(record.orderAmount, record.currency)}`}</span>
+          {record.billId
+            ? formatCurrency(record.discountAmount, record.currency)
+            : record.benefitLabel}
+          <span className="text-body-sm text-muted-foreground">
+            {record.billId
+              ? `应付 ${formatCurrency(record.payableAmount, record.currency)} / 原价 ${formatCurrency(record.orderAmount, record.currency)}`
+              : "不涉及账单金额"}
+          </span>
         </span>
       ),
     },
@@ -295,7 +355,11 @@ export function PromotionRedemptionsPage() {
   const filteredRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return records.filter((record) => {
-      if (billStatusFilter !== "all" && record.billStatus !== billStatusFilter)
+      if (
+        billStatusFilter === "none"
+          ? Boolean(record.billId)
+          : billStatusFilter !== "all" && record.billStatus !== billStatusFilter
+      )
         return false;
       if (
         normalizedQuery &&
@@ -306,7 +370,7 @@ export function PromotionRedemptionsPage() {
         return false;
       return true;
     });
-  }, [billStatusFilter, query, records]);
+  }, [billStatusFilter, query, records, billStatusLabels]);
 
   const pageCount = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   const activePage = Math.min(currentPage, pageCount);
@@ -365,7 +429,7 @@ export function PromotionRedemptionsPage() {
             icon="check"
             eyebrow="订阅交易"
             title="优惠核销"
-            description="运营侧查看券核销台账（核销均为客户自助）。减免金额来自账单 discount_amount。"
+            description="查看客户自助核销、订阅权益、钱包入账与关联账单。本金和赠额分账展示，兑换不重复计收款。"
           />
         }
         summary={
@@ -461,6 +525,7 @@ export function PromotionRedemptionsPage() {
                 aria-label="账单状态"
               >
                 <option value="all">全部账单</option>
+                <option value="none">无关联账单</option>
                 <option value="unpaid">
                   {tShared("status.generic.awaitingPayment")}
                 </option>

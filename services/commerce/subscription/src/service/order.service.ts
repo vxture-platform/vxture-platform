@@ -7,7 +7,10 @@
  * 钩子），再由 PgOrderRepository.applySubscriptionTerms 把订单条款（周期 / 实付 / current_order_id）
  * 落到订阅上。履约（fulfill）幂等：订单已 fulfilled 直接返回；失败停在 paid，reconcile 重试。
  */
+import type { WalletSettlementPort } from "../types/wallet-settlement.types";
 import type { PoolClient } from "pg";
+import { allocateRefundSources } from "../money/refund-sources";
+import { readRefundSources } from "../repository/refund-settlement";
 import {
   ConflictException,
   Inject,
@@ -305,6 +308,12 @@ export class OrderService {
     @Inject(PromotionService) private readonly promotion: PromotionService,
   ) {}
 
+  /** Connect both repositories to the same transaction-scoped wallet. */
+  setWalletSettlement(port: WalletSettlementPort | null): void {
+    this.orders.setWalletSettlement(port);
+    this.subRepo.setWalletSettlement(port);
+  }
+
   setCustomerNotifier(notifier: CustomerNotifier | null): void {
     this.notifier = notifier;
   }
@@ -346,49 +355,65 @@ export class OrderService {
   async findOpenOrderForProduct(
     workspaceId: string,
     productCode: string,
+    client?: PoolClient,
   ): Promise<OrderRecord | null> {
-    return this.orders.findOpenOrderForProduct(workspaceId, productCode);
+    return this.orders.findOpenOrderForProduct(
+      workspaceId,
+      productCode,
+      client,
+    );
   }
 
   /**
-   * 下单。new：档位并存守卫；upgrade：原订阅须在用且目标版本不同；renew：原订阅须可续
-   * （在用或到期族）且同套餐。不建订阅行。
+   * Validate purchase intent and create the order without provisioning a subscription.
+   * @param input - Purchase terms and explicit renewal or upgrade consent.
+   * @param transaction - Optional caller-owned transaction shared with promotion effects.
+   * @returns The created order and invoice.
+   * @throws {ConflictException} When the purchase conflicts with current subscription facts.
    */
-  async createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
-    await this.assertPurchaseAllowed(input);
+  async createOrder(
+    input: CreateOrderInput,
+    transaction?: PoolClient,
+  ): Promise<CreateOrderResult> {
+    await this.assertPurchaseAllowed(input, false, transaction);
     if (input.intent === "upgrade" && input.fromSubscriptionId) {
       const source = await this.subscriptions.getSubscription(
         input.fromSubscriptionId,
+        transaction,
       );
       // 折抵随单落库（P2-a）：确认页展示的报价与这里同一函数，同一时刻只差秒级。
       const quote = await this.quoteUpgrade(
         input.fromSubscriptionId,
         input.price,
+        transaction,
       );
-      return this.orders.createOrder({
-        ...input,
-        proration: {
-          credit: quote.credit,
-          payable: quote.payable,
-          leftover: quote.leftover,
-          snapshot: {
-            ...quote,
-            fromPlanVersionId: source.planVersionId,
-            fromPeriodEnd: source.endAt?.toISOString() ?? null,
-            fromPaidAmount: source.payAmount,
-            computedAt: new Date().toISOString(),
+      return this.orders.createOrder(
+        {
+          ...input,
+          proration: {
+            credit: quote.credit,
+            payable: quote.payable,
+            leftover: quote.leftover,
+            snapshot: {
+              ...quote,
+              fromPlanVersionId: source.planVersionId,
+              fromPeriodEnd: source.endAt?.toISOString() ?? null,
+              fromPaidAmount: source.payAmount,
+              computedAt: new Date().toISOString(),
+            },
           },
         },
-      });
+        transaction,
+      );
     }
-    return this.orders.createOrder(input);
+    return this.orders.createOrder(input, transaction);
   }
 
   /**
    * Validate the purchase before creating an order or moving money.
    * @param input - Workspace, plan, and explicitly chosen order operation.
    * @param existingOrder - Version-change consent was checked when this order was placed.
-   * @param client - Existing payment transaction used to probe held subscriptions.
+   * @param client - Existing creation or payment transaction used to probe held subscriptions.
    * @returns Resolves when the purchase is valid against current subscription facts.
    * @throws {ConflictException} When ownership, plan, status, or purchase direction conflicts.
    */
@@ -413,16 +438,26 @@ export class OrderService {
       client,
     );
     if (input.intent === "new") {
-      await this.subscriptions.assertTierAvailable(
-        input.workspaceId,
-        input.planVersionId,
-      );
+      if (client) {
+        await this.subscriptions.assertTierAvailable(
+          input.workspaceId,
+          input.planVersionId,
+          undefined,
+          client,
+        );
+      } else {
+        await this.subscriptions.assertTierAvailable(
+          input.workspaceId,
+          input.planVersionId,
+        );
+      }
     } else {
       if (!input.fromSubscriptionId) {
         throw new ConflictException(`${input.intent} 需要指定原订阅`);
       }
       const from = await this.subscriptions.getSubscription(
         input.fromSubscriptionId,
+        client,
       );
       if (
         from.workspaceId !== input.workspaceId ||
@@ -441,6 +476,7 @@ export class OrderService {
       const target = await this.orders.resolveRenewTarget(
         from.planVersionId,
         input.planVersionId,
+        client,
       );
       if (!target) {
         throw new ConflictException("套餐版本不存在，请重新选择");
@@ -546,8 +582,12 @@ export class OrderService {
   async quoteUpgrade(
     fromSubscriptionId: string,
     pNew: number,
+    client?: PoolClient,
   ): Promise<ProrationResult> {
-    const basis = await this.orders.getProrationBasis(fromSubscriptionId);
+    const basis = await this.orders.getProrationBasis(
+      fromSubscriptionId,
+      client,
+    );
     if (!basis)
       throw new NotFoundException(`订阅 ${fromSubscriptionId} 不存在`);
     const now = new Date();
@@ -621,6 +661,7 @@ export class OrderService {
         ) {
           const source = await this.subscriptions.getSubscription(
             order.fromSubscriptionId,
+            client,
           );
           if (
             source.planVersionId !== order.proration.fromPlanVersionId ||
@@ -653,6 +694,12 @@ export class OrderService {
           workspaceId: order.workspaceId,
           userId: input.userId,
         };
+        if (
+          (input.discountVoucherId || input.creditVoucherId) &&
+          invoice.currency !== "CNY"
+        ) {
+          throw new ConflictException("当前卡券仅支持人民币订单。");
+        }
         const reserved = await this.promotion.reserveForOrder(client, {
           scope,
           discountVoucherId: input.discountVoucherId ?? null,
@@ -676,6 +723,14 @@ export class OrderService {
             "折扣券不可用于该订单（折后应付低于已收款）",
           );
         }
+        if (
+          (discount && quote.discountOffCents === 0) ||
+          (credit && quote.voucherOffCents === 0)
+        ) {
+          throw new ConflictException(
+            "所选卡券未提供额外抵扣，请取消选择后重试。",
+          );
+        }
         if (discount && quote.discountOffCents > 0) {
           discountItemId = await this.subRepo.insertDiscountItemTx(client, {
             invoiceId: invoice.id,
@@ -692,6 +747,8 @@ export class OrderService {
           settlement: {
             discountVoucherId: discount?.voucherId ?? null,
             creditVoucherId: credit?.voucherId ?? null,
+            discountReservationId: discount?.reservationId ?? null,
+            creditReservationId: credit?.reservationId ?? null,
             voucherOff: centsToYuan(quote.voucherOffCents),
             cashDue: centsToYuan(quote.cashDueCents),
             reservedAt: new Date().toISOString(),
@@ -723,10 +780,21 @@ export class OrderService {
               actorId: input.userId,
             },
           );
+          if (reserved.length > 0)
+            await this.promotion.recordReservations(
+              client,
+              { orderId: order.id, invoiceId: invoice.id },
+              scope,
+              reserved,
+              quote,
+            );
           await this.promotion.finalizeReserved(
             client,
             reserved.map((v: ReservedVoucher) => ({
               voucherId: v.voucherId,
+              reservationId: v.reservationId,
+              orderId: order.id,
+              invoiceId: invoice.id,
               kind: v.kind,
               scope,
               effectSnapshot: v.effectSnapshot,
@@ -762,6 +830,18 @@ export class OrderService {
           credential,
           actorId: input.userId,
         });
+        if (reserved.length > 0)
+          await this.promotion.recordReservations(
+            client,
+            {
+              orderId: order.id,
+              invoiceId: invoice.id,
+              declarationPaymentId: paymentId,
+            },
+            scope,
+            reserved,
+            quote,
+          );
         await this.orders.markDeclaredTx(client, order.id);
         await this.orders.insertEventTx(client, {
           orderId: order.id,
@@ -1246,12 +1326,30 @@ export class OrderService {
      * 那个策略项与 `usage_over_threshold` 这个码都留着：将来要重新立「用超多少不得退」
      * 的规则，两样都是现成的开关。
      */
+    const actualRefundable = basis?.sources
+      ? basis.sources
+          .filter((s) => s.source !== "voucher")
+          .reduce((n, s) => n + s.cents, 0) / 100
+      : (basis?.balancePaidAmount ?? Number(order.payableAmount));
+    const targets = basis?.sources
+      ? allocateRefundSources(
+          basis.sources,
+          basis.consumableShare ?? DEFAULT_CONSUMABLE_SHARE,
+          usageRatio,
+        )
+      : null;
     const refund = computeWindowRefund({
-      paid: basis?.balancePaidAmount ?? Number(order.payableAmount),
+      paid: actualRefundable,
       alpha: basis?.consumableShare ?? DEFAULT_CONSUMABLE_SHARE,
       usedRatio: usageRatio,
     });
-    if (!(Number(order.payableAmount) > 0)) reasons.push("zero_amount");
+    if (targets)
+      refund.amount =
+        targets
+          .filter((s) => s.source !== "voucher")
+          .reduce((n, s) => n + s.targetCents, 0) / 100;
+    refund.kept = Number((refund.paid - refund.amount).toFixed(2));
+    if (!(actualRefundable > 0)) reasons.push("zero_amount");
     // 实付大于 0 却折算成 0：配额用尽（α=1 的产品）。开一张 ¥0 的退款单能跑，但那对
     // 客户是个「已退款 ¥0」的假象，所以这里当作不可退，并给出自己的原因码。
     else if (refund.amount <= 0) reasons.push("fully_consumed");
@@ -1265,7 +1363,7 @@ export class OrderService {
       keptAmount: refund.kept.toFixed(2),
       consumableShare: refund.alpha,
       windowEndsAt,
-      usageRatio: Math.round(usageRatio * 10000) / 10000,
+      usageRatio,
       policy,
     };
   }
@@ -1372,6 +1470,18 @@ export class OrderService {
       /* 实付 0 与「过了窗口」对客户是两件事，必须分开说：前者本来就没付钱，
          后者是付了钱但不退。混成一条会让 0 元用户以为自己损失了什么。 */
       if (eligibility.reasons.includes("zero_amount")) {
+        const noncashBasis = await this.orders.getRefundBasis(order.id);
+        if (
+          noncashBasis?.sources?.some((s) => s.source === "voucher") &&
+          eligibility.reasons.every((reason) => reason === "zero_amount")
+        ) {
+          await this.reverseNonCashOrder(
+            order,
+            input.actorType ?? "customer",
+            input.actorUserId,
+            eligibility,
+          );
+        }
         await notify("subscription.cancelled_no_charge", order.payableAmount);
         return { outcome: "no_charge" };
       }
@@ -1436,6 +1546,10 @@ export class OrderService {
       createdByType: input.actorType ?? "customer",
       clientIp: input.clientIp ?? null,
       recipient: input.recipient ?? null,
+      costPolicy: {
+        alpha: eligibility.consumableShare,
+        usage: eligibility.usageRatio,
+      },
     });
     await this.emit(`refund_requested ${created.refundNo}`, async () =>
       this.refundNotice("refund.requested", created, order, "requested", {
@@ -1557,6 +1671,7 @@ export class OrderService {
     }
     if (refund.refundStatus === "success") {
       const order = await this.getOrder(refund.orderId);
+      await this.recoverRefundEffect(order, actor);
       return { refund, order };
     }
     if (
@@ -1571,30 +1686,31 @@ export class OrderService {
       );
     }
     const order = await this.getOrder(refund.orderId);
-    const done = await this.orders.executeRefund({ refund, order, actor });
-    if (order.subscriptionId) {
-      try {
-        const sub = await this.subscriptions.getSubscription(
-          order.subscriptionId,
+    const done = await this.orders.executeRefund({
+      refund,
+      order,
+      actor,
+      afterSettlement: async (
+        client,
+        calculation,
+        refundedCashCents,
+        refundedWalletCents,
+      ) => {
+        await this.promotion.queueRefundCompensations(
+          client,
+          order.id,
+          refund.id,
+          {
+            ...calculation,
+            refundedCashCents,
+            refundedWalletCents,
+          },
         );
-        if (sub.status !== "cancelled" && sub.status !== "expired") {
-          await this.subscriptions.cancelSubscription(
-            sub.id,
-            actor.actorId ?? undefined,
-            `refund ${refund.refundNo} (order ${order.orderNo})`,
-            actor.actorType === "customer" ? "customer" : actor.actorType,
-          );
-        }
-      } catch (err) {
-        this.logger.error(
-          `refund ${refund.refundNo}: subscription rollback failed — ${String(err)}`,
-        );
-      }
-    }
+      },
+    });
+    await this.recoverRefundEffect(done.order, actor);
     await this.emit(`refund_completed ${refund.refundNo}`, async () =>
       this.refundNotice(
-        /* 按真实走的渠道说话：银行转账 → 「已退回到你提供的收款账户」；支付宝（与回填的
-           legacy）→ 「已退回原付款渠道」。 */
         refund.transferChannel === "bank_transfer"
           ? "refund.completed"
           : "refund.completed_original_channel",
@@ -1604,6 +1720,120 @@ export class OrderService {
       ),
     );
     return done;
+  }
+
+  /**
+   * Reverse a voucher-only order after cancellation, without creating a refund row.
+   * @param original - Current order found by the cancellation flow.
+   * @param actorType - Actual cancellation realm.
+   * @param actorId - Actual cancellation account.
+   * @param eligibility - Frozen usage policy from the cancellation quote.
+   * @returns Resolves after the noncash completion and intentions commit together.
+   * @throws {ConflictException} When cash exists or effect ownership is uncertain.
+   */
+  private async reverseNonCashOrder(
+    original: OrderRecord,
+    actorType: "customer" | "operator",
+    actorId: string,
+    eligibility: RefundEligibility,
+  ): Promise<void> {
+    await this.orders.withOrderTx(original.id, async ({ client, order }) => {
+      if (order.status === "refunded") return;
+      if (order.status !== "fulfilled" || !order.subscriptionId)
+        throw new ConflictException("非现金订单尚未完整撤销");
+      const sub = (
+        await client.query<{ status: string; current_order_id: string | null }>(
+          "select status,current_order_id from metering.subscriptions where id=$1 for update",
+          [order.subscriptionId],
+        )
+      ).rows[0];
+      if (
+        !sub ||
+        sub.current_order_id !== order.id ||
+        !["cancelled", "expired"].includes(sub.status)
+      )
+        throw new ConflictException("订阅效果尚未完整撤销");
+      const sources = await readRefundSources(client, order.id, true);
+      if (
+        !sources.length ||
+        sources.some(
+          (s) => s.source !== "voucher" || s.currency !== order.currency,
+        )
+      )
+        return;
+      const targets = allocateRefundSources(
+        sources,
+        eligibility.consumableShare,
+        eligibility.usageRatio,
+      );
+      await this.promotion.queueRefundCompensations(client, order.id, null, {
+        targets,
+        cashTargetCents: 0,
+        refundedCashCents: 0,
+      });
+      await this.orders.markNonCashReversedTx(client, order.id, {
+        actorType,
+        actorId,
+      });
+    });
+  }
+
+  /**
+   * Recover reversed effects and pending vouchers without repeating cash refunds.
+   * @param limit - Maximum orders and compensation intentions per pass.
+   * @returns Completed compensation count.
+   * @throws {Error} When any persisted compensation could not be processed.
+   */
+  async reconcileRefundSettlements(limit = 100): Promise<number> {
+    for (const id of await this.orders.findRefundRecoveryOrders(limit))
+      await this.recoverRefundEffect(await this.getOrder(id), {
+        actorType: "system",
+        actorId: null,
+      });
+    const result = await this.promotion.recoverRefundCompensations(limit);
+    if (result.failed)
+      throw new Error(
+        `${result.failed} refund compensation(s) failed; pending intentions retained`,
+      );
+    return result.completed;
+  }
+
+  /**
+   * Retry effect rollback only when this order still owns the subscription.
+   * @param order - Financially reversed order.
+   * @param actor - Actual executor of this recovery attempt.
+   * @returns Resolves without undoing an already committed refund on failure.
+   */
+  private async recoverRefundEffect(
+    order: OrderRecord,
+    actor: OrderActor,
+  ): Promise<void> {
+    if (order.subscriptionId) {
+      try {
+        const sub = await this.subscriptions.getSubscription(
+          order.subscriptionId,
+        );
+        if (!(await this.orders.isCurrentSubscriptionOrder(order.id, sub.id))) {
+          this.logger.error(
+            `refund ${order.orderNo}: subsequent subscription order requires manual review`,
+          );
+          return;
+        }
+        if (sub.status !== "cancelled" && sub.status !== "expired") {
+          await this.subscriptions.cancelSubscription(
+            sub.id,
+            actor.actorId ?? undefined,
+            `refund reversal (order ${order.orderNo})`,
+            actor.actorType === "customer" ? "customer" : actor.actorType,
+            order.id,
+          );
+        }
+      } catch (err) {
+        this.logger.error(
+          `refund ${order.orderNo}: subscription rollback failed — ${String(err)}`,
+        );
+      }
+    }
   }
 
   /**
@@ -1737,7 +1967,7 @@ export class OrderService {
       throw new ConflictException("订单没有可退的支付记录");
     }
 
-    const paid = basis.balancePaidAmount ?? Number(order.payableAmount);
+    const paid = Number(eligibility.paidAmount);
     const amount = input.amount ?? eligibility.amount;
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) {
@@ -1758,6 +1988,10 @@ export class OrderService {
       userId: input.operatorId,
       createdByType: "operator",
       clientIp: input.clientIp ?? null,
+      costPolicy: {
+        alpha: eligibility.consumableShare,
+        usage: eligibility.usageRatio,
+      },
     });
     await this.emit(`refund_requested ${created.refundNo}`, async () =>
       /* 收件人走默认口径（订单创建人）——发起人是运营，不能把消息发给运营自己。 */
@@ -1831,9 +2065,22 @@ export class OrderService {
     kind: "cancelled" | "expired" = "cancelled",
     lifecycleId?: string,
   ): Promise<OrderRecord> {
-    const cancelled = lifecycleId
-      ? await this.orders.cancelOrder(orderId, actor, kind, lifecycleId)
-      : await this.orders.cancelOrder(orderId, actor, kind);
+    const cancelled = await this.orders.cancelOrder(
+      orderId,
+      actor,
+      kind,
+      lifecycleId,
+      async (client, invoice) =>
+        this.promotion.releaseOrderReservations(
+          client,
+          {
+            orderId,
+            invoiceId: invoice.id,
+            actor: { realm: actor.actorType, id: actor.actorId },
+          },
+          kind === "expired" ? "order_expired" : "cancelled",
+        ),
+    );
     await this.emit(`${kind} ${cancelled.orderNo}`, async () => {
       const display = await this.orders.getPlanDisplay(cancelled.planVersionId);
       return {

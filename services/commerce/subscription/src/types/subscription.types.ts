@@ -101,6 +101,10 @@ export interface CreateSubscriptionInput {
 }
 
 export interface UpdateSubscriptionInput {
+  /** A lifecycle scan must not overwrite a term extended after its snapshot. */
+  expectedEndAt?: Date | null;
+  /** Refund rollback must not cancel a subscription advanced by another order. */
+  expectedCurrentOrderId?: string;
   status?: string;
   endAt?: Date;
   autoRenew?: boolean;

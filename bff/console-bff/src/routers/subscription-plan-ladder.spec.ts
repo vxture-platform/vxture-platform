@@ -91,7 +91,7 @@ describe("subscribe-context · 套餐阶梯的邀请可见性", () => {
     const sql = ladderSql(sqls);
     const call = query.mock.calls.find((c) => c[0] === sql);
 
-    expect(call?.[1]).toEqual(["arda", "u-1", "t-1"]);
+    expect(call?.[1]).toEqual(["arda", "u-1", "t-1", "ws-1"]);
   });
 
   it("看一眼不消耗券：阶梯只读，不写 promotion 表", async () => {

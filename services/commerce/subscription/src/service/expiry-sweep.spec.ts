@@ -83,6 +83,28 @@ describe("sweepExpiredSubscriptions", () => {
     expect(m.repo.update).not.toHaveBeenCalled();
   });
 
+  it("binds the expiry write to the scanned term even if a later read sees an extension", async () => {
+    const endAt = new Date("2026-09-01T00:00:00Z");
+    m.repo.findExpiredSubscriptionIds.mockResolvedValue([
+      { id: "s-1", status: "active", endAt },
+    ]);
+    m.repo.getById.mockResolvedValueOnce(
+      subscriptionFixture({
+        id: "s-1",
+        status: "active",
+        endAt: new Date("2027-01-01T00:00:00Z"),
+      }),
+    );
+    m.repo.update.mockResolvedValueOnce(null);
+    expect(await m.service.sweepExpiredSubscriptions()).toBe(0);
+    expect(m.repo.update).toHaveBeenCalledWith(
+      "s-1",
+      expect.anything(),
+      expect.objectContaining({ expectedEndAt: endAt }),
+    );
+    expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+  });
+
   it("a failing row is logged and skipped; the pass continues", async () => {
     m.repo.findExpiredSubscriptionIds.mockResolvedValue([
       { id: "bad", status: "active" },

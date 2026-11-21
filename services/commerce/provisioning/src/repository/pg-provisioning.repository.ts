@@ -9,7 +9,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { PROVISIONING_PG_POOL } from "../tokens";
 import type {
   ClaimedDelivery,
@@ -49,15 +49,17 @@ export class PgProvisioningRepository {
    * Returns the delivery id + seq. One transaction so state and queue never
    * diverge. The row is UNIQUE per (workspace_id, product_id) — each workspace
    * has its own space in the external product.
+   * When supplied, the caller owns transaction completion and connection release.
    */
   async enqueue(
     input: EnqueueProvisioningInput,
+    transaction?: PoolClient,
   ): Promise<{ deliveryId: string; seq: number }> {
     const isProvision = input.event === "tenant.provisioned";
     const occurredAt = input.occurredAt ?? Math.floor(Date.now() / 1000);
-    const client = await this.pool.connect();
+    const client = transaction ?? (await this.pool.connect());
     try {
-      await client.query("begin");
+      if (!transaction) await client.query("begin");
       const upsert = await client.query<{ id: string; version: number }>(
         `insert into provisioning.provisionings
            (workspace_id, tenant_id, product_id, status, version,
@@ -120,13 +122,13 @@ export class PgProvisioningRepository {
           JSON.stringify(payload),
         ],
       );
-      await client.query("commit");
+      if (!transaction) await client.query("commit");
       return { deliveryId, seq };
     } catch (err) {
-      await client.query("rollback");
+      if (!transaction) await client.query("rollback");
       throw err;
     } finally {
-      client.release();
+      if (!transaction) client.release();
     }
   }
 
@@ -138,8 +140,12 @@ export class PgProvisioningRepository {
    * product_webhooks registration are skipped (nothing to notify — otherwise
    * every enqueue would retry to dead-letter against a missing endpoint).
    * Returns the delivery id, or null when skipped / already enqueued.
+   * The optional connection joins the caller's transaction without committing it.
    */
-  async enqueueEvent(input: EnqueueEventInput): Promise<string | null> {
+  async enqueueEvent(
+    input: EnqueueEventInput,
+    transaction?: PoolClient,
+  ): Promise<string | null> {
     const occurredAt = input.occurredAt ?? Math.floor(Date.now() / 1000);
     const deliveryId = randomUUID();
     const payload: GenericEventPayload = {
@@ -151,7 +157,7 @@ export class PgProvisioningRepository {
       application: input.appCode,
       data: input.data,
     };
-    const res = await this.pool.query<{ id: string }>(
+    const res = await (transaction ?? this.pool).query<{ id: string }>(
       `insert into provisioning.webhook_deliveries
          (id, idempotency_key, provisioning_id, provisioning_version,
           workspace_id, tenant_id, product_id, event_type, payload,

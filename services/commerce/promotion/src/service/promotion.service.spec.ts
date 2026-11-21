@@ -115,6 +115,8 @@ describe("finalizeReserved", () => {
     });
     const out = await m.service.finalizeReserved(CLIENT, [
       {
+        orderId: "order",
+        invoiceId: "invoice",
         voucherId: "v-d",
         kind: "discount",
         scope: SCOPE,
@@ -131,17 +133,27 @@ describe("releaseReserved", () => {
   it("releases only the vouchers named by the credential", async () => {
     m.repo.release.mockResolvedValue(true);
     const released = await m.service.releaseReserved(CLIENT, {
+      orderId: "order",
+      invoiceId: "invoice",
       discountVoucherId: "v-d",
     });
     expect(released).toEqual(["v-d"]);
     expect(m.repo.release).toHaveBeenCalledTimes(1);
-    expect(m.repo.release).toHaveBeenCalledWith(CLIENT, "v-d");
+    expect(m.repo.release).toHaveBeenCalledWith(
+      CLIENT,
+      "v-d",
+      expect.objectContaining({ orderId: "order", invoiceId: "invoice" }),
+      undefined,
+      undefined,
+    );
   });
 
   it("skips (not throws) on stale credential — voucher no longer reserved", async () => {
     // e.g. re-reserved by another order, or already finalized (P10 guard)
     m.repo.release.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     const released = await m.service.releaseReserved(CLIENT, {
+      orderId: "order",
+      invoiceId: "invoice",
       discountVoucherId: "v-d",
       creditVoucherId: "v-c",
     });

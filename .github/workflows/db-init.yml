@@ -13,7 +13,9 @@ name: db-init
 #   action=seed              -> 29-seed (reseed platform catalog + sample via the new DDL seed)
 #                               -> 30-verify (live baseline audit)
 #   action=migrate           -> 28d replay migrations/*.sql (idempotent, POPULATED db)
-#                               -> 28c restamp ddl baseline -> 30-verify (product_330)
+#                               -> cutover gate + session lock; keep writes stopped.
+#                               Structural review and baseline restamp are separate approvals.
+#   action=migration-plan    -> offline plan only; no tailnet, upload or SSH.
 #                               migrate_until=<文件名/前缀>（可选）：**跑到这一份为止**。
 #                               给 expand/contract 用——「一份加列、一份换主键，中间夹一次
 #                               部署」时新旧代码必须共存一段，全量重放会把那段压成零。
@@ -61,6 +63,7 @@ on:
         options:
           - seed
           - migrate
+          - migration-plan
           - migrate-seed
           - reset
           - provision-secrets
@@ -71,7 +74,15 @@ on:
           - opener-seats-preflight
           - opener-seats-repair
       migrate_until:
-        description: "migrate only: 跑到这一份迁移为止（文件名或前缀；expand/contract 中间要夹部署时用）"
+        description: "migrate/migration-plan: exact filename or unique prefix; B02/B10/B11 cannot be split"
+        required: false
+        default: ""
+      migration_plan_sha256:
+        description: "migrate only: reviewed MIGRATION_PLAN_SHA256 from migration-plan"
+        required: false
+        default: ""
+      migration_evidence:
+        description: "migrate only: JSON {target_sha256,backup_sha256,restore_evidence,cutover_evidence,quiesced_at,writes_stopped:true,restore_verified:true}; operator attestations, not secrets"
         required: false
         default: ""
       confirm:
@@ -149,36 +160,62 @@ jobs:
             echo "pinned: HEAD == expected_sha == $HEAD_SHA"
           fi
 
-      # migrate_until 会变成远端的一个环境变量并参与 shell 展开，所以先把形状卡死：
-      # 只许文件名里会出现的那些字符。顺带抓拼写错——打错一个字就跑成全量是这里最坏的结果。
-      - name: Validate migrate_until
-        if: ${{ inputs.migrate_until != '' }}
+      # Use the real offline planner, so cutoff and content checks cannot drift.
+      - name: Review migration plan
+        if: ${{ inputs.action == 'migrate' || inputs.action == 'migration-plan' || inputs.migrate_until != '' }}
         env:
+          DB_ACTION: ${{ inputs.action }}
           MIGRATE_UNTIL: ${{ inputs.migrate_until }}
+          MIGRATE_PLAN_SHA256: ${{ inputs.migration_plan_sha256 }}
         run: |
-          if [ "${{ inputs.action }}" != "migrate" ]; then
-            echo "::error::migrate_until 只对 action=migrate 有意义（当前 ${{ inputs.action }}）" >&2
-            exit 1
-          fi
-          case "$MIGRATE_UNTIL" in
-            *[!A-Za-z0-9._-]*)
-              echo "::error::migrate_until 只许 [A-Za-z0-9._-]，收到：$MIGRATE_UNTIL" >&2
-              exit 1
-              ;;
+          set -euo pipefail
+          case "$DB_ACTION" in
+            migrate|migration-plan) ;;
+            *) echo 'migrate_until requires migrate or migration-plan' >&2; exit 1;;
           esac
-          # 不用 `| xargs basename | grep -q`：grep -q 命中即关管道 → xargs 吃 SIGPIPE →
-          # pipefail 下整条非零 → 命中时反而报「匹配不到」（2026-10-02 生产实撞，间歇性）。
-          HIT=0
-          for M in deploy/database/migrations/*.sql; do
-            case "$(basename "$M")" in *"$MIGRATE_UNTIL"*) HIT=1; break ;; esac
-          done
-          if [ "$HIT" != "1" ]; then
-            echo "::error::migrate_until=$MIGRATE_UNTIL 在本 ref 的 migrations/ 里匹配不到任何文件" >&2
+          bash deploy/scripts/28d-apply-migrations.sh --plan | tee "$RUNNER_TEMP/migration-plan.txt"
+          if [ "$DB_ACTION" = migrate ] && ! grep -Fxq "MIGRATION_PLAN_SHA256=$MIGRATE_PLAN_SHA256" "$RUNNER_TEMP/migration-plan.txt"; then
+            echo 'Reviewed migration plan hash is missing or changed' >&2
             exit 1
           fi
-          echo "migrate_until=$MIGRATE_UNTIL —— 将跑到这一份为止"
+
+      - name: Validate migration evidence
+        if: ${{ inputs.action == 'migrate' }}
+        env:
+          MIGRATION_EVIDENCE: ${{ inputs.migration_evidence }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, time
+          def unique(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError('Duplicate evidence field')
+                  result[key] = value
+              return result
+          evidence = json.loads(os.environ['MIGRATION_EVIDENCE'], object_pairs_hook=unique)
+          required = {'target_sha256', 'backup_sha256', 'restore_evidence', 'cutover_evidence', 'quiesced_at', 'writes_stopped', 'restore_verified'}
+          if not isinstance(evidence, dict) or set(evidence) != required:
+              raise ValueError('Exact cutover evidence fields are required')
+          for key in ('target_sha256', 'backup_sha256'):
+              if not isinstance(evidence[key], str) or not re.fullmatch(r'[a-f0-9]{64}', evidence[key]):
+                  raise ValueError('Invalid evidence hash')
+          for key in ('restore_evidence', 'cutover_evidence'):
+              if not isinstance(evidence[key], str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', evidence[key]):
+                  raise ValueError('Use a safe evidence reference, not credentials or a URL')
+          epoch = evidence['quiesced_at']
+          if type(epoch) is not int or not re.fullmatch(r'[1-9][0-9]{9}', str(epoch)) or not 0 <= time.time() - epoch <= 3600:
+              raise ValueError('Cutover must be a UTC epoch within the last hour')
+          if evidence['writes_stopped'] is not True or evidence['restore_verified'] is not True:
+              raise ValueError('Stopped writes and tested recovery must be explicitly attested')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              for key in sorted(required):
+                  value = 'yes' if evidence[key] is True else str(evidence[key])
+                  output.write('MIGRATE_' + key.upper() + '=' + value + '\n')
+          PY
 
       - name: Join tailnet
+        if: ${{ inputs.action != 'migration-plan' }}
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
@@ -186,6 +223,7 @@ jobs:
           tags: ${{ vars.TAILSCALE_OAUTH_CLIENT_TAG }}
 
       - name: Upload DB scripts to worker-01
+        if: ${{ inputs.action != 'migration-plan' }}
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
           host: ${{ secrets.DEPLOY_HOST_TAILNET_IP }}
@@ -206,6 +244,7 @@ jobs:
           command_timeout: 10m
 
       - name: Run DB action via SSH
+        if: ${{ inputs.action != 'migration-plan' }}
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           DB_ACTION: ${{ inputs.action }}
@@ -213,6 +252,7 @@ jobs:
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
           DEPLOY_RUNTIME_DIR: ${{ vars.DEPLOY_RUNTIME_DIR }}
           MIGRATE_UNTIL: ${{ inputs.migrate_until }}
+          MIGRATE_PLAN_SHA256: ${{ inputs.migration_plan_sha256 }}
           TEST_DELIVERY_PRODUCT: ${{ inputs.test_delivery_product }}
           TEST_DELIVERY_ACCOUNT: ${{ inputs.test_delivery_account }}
           TEST_DELIVERY_EVENT: ${{ inputs.test_delivery_event }}
@@ -233,7 +273,7 @@ jobs:
           #   ssh-keyscan -t ed25519 <host> | ssh-keygen -lf - | awk '{print $2}'
           fingerprint: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           command_timeout: 30m
-          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,MIGRATE_UNTIL,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT,STAGE_DIR
+          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,MIGRATE_UNTIL,MIGRATE_PLAN_SHA256,MIGRATE_TARGET_SHA256,MIGRATE_BACKUP_SHA256,MIGRATE_RESTORE_EVIDENCE,MIGRATE_CUTOVER_EVIDENCE,MIGRATE_QUIESCED_AT,MIGRATE_WRITES_STOPPED,MIGRATE_RESTORE_VERIFIED,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT,STAGE_DIR
           script: |
             set -e
             SRC="${STAGE_DIR:?}/deploy"
@@ -254,6 +294,21 @@ jobs:
                 exit 0
                 ;;
             esac
+            # Verification uses the per-run staging bundle without replacing
+            # shared deployment files or applying runtime environment shims.
+            if [ "$DB_ACTION" = verify ]; then
+              export RUNTIME_DIR="${DEPLOY_RUNTIME_DIR:-/srv/vxture/runtime}"
+              bash "$SRC/scripts/30-verify-platform-baseline.sh"
+              exit 0
+            fi
+            # Migration must not run the unrelated runtime-env shim or replace
+            # the shared deployment bundle. The entry freezes this staged input.
+            if [ "$DB_ACTION" = migrate ]; then
+              export RUNTIME_DIR="${DEPLOY_RUNTIME_DIR:-/srv/vxture/runtime}"
+              CONFIRM_MIGRATE=yes bash "$SRC/scripts/28d-apply-migrations.sh"
+              echo 'Migration finished. Keep writes stopped for structural review and separately approved restamp.'
+              exit 0
+            fi
             DEPLOY_DIR="${DEPLOY_DIR:-/srv/vxture/deploy}"
             mkdir -p "$DEPLOY_DIR" "$DEPLOY_DIR/secrets"
 
@@ -332,18 +387,6 @@ jobs:
               seed)
                 # Reseed platform catalog (+ sample) with the new DDL seed, then audit.
                 CONFIRM_SEED=yes bash scripts/29-seed-platform-ddl.sh
-                bash scripts/30-verify-platform-baseline.sh
-                ;;
-              migrate)
-                # Idempotent forward migrations on a POPULATED db (28d replays
-                # migrations/*.sql — applied ones no-op by convention), then
-                # restamp the DDL baseline to the repo authority and verify.
-                # This is the runway 28's create-once baseline apply can't be:
-                # small-step DDL evolution without reset (product_330).
-                # MIGRATE_UNTIL 非空时只跑到那一份为止（expand/contract 中间夹部署）。
-                # 它经 envs: 过来，不插值进脚本体（照同文件 TEST_DELIVERY_* 的做法）。
-                CONFIRM_MIGRATE=yes bash scripts/28d-apply-migrations.sh
-                CONFIRM_RESTAMP=yes bash scripts/28c-restamp-ddl-baseline.sh
                 bash scripts/30-verify-platform-baseline.sh
                 ;;
               migrate-seed)

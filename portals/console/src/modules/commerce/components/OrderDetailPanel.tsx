@@ -52,6 +52,11 @@ interface Step {
 function buildSteps(order: MyOrder, countdown: string | null): Step[] {
   const zero = Number.parseFloat(order.amount) === 0;
   const submitted: Step = { key: "submitted", at: order.createdAt };
+  if (order.noncashReversed)
+    return [
+      ...settledSteps(order, zero, submitted),
+      { key: "noncashReversed", at: null },
+    ];
   switch (order.orderStatus) {
     case "cancelled":
       return [submitted, { key: "cancelled", at: null, now: true }];

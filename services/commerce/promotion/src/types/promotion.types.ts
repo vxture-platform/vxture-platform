@@ -9,7 +9,8 @@ export type VoucherKind =
   | "recharge_card"
   | "redemption"
   | "discount"
-  | "extension";
+  | "extension"
+  | "invite";
 
 /** Kinds the V1 settlement engine accepts. */
 export type SettlementVoucherKind = "discount" | "credit_voucher";
@@ -50,6 +51,8 @@ export interface ReserveVouchersInput {
 }
 
 export interface ReservedVoucher {
+  /** New identity for this declaration, never reused after release. */
+  reservationId: string;
   voucherId: string;
   kind: SettlementVoucherKind;
   effect: DiscountEffect | CreditVoucherEffect;
@@ -57,7 +60,18 @@ export interface ReservedVoucher {
   effectSnapshot: Record<string, unknown>;
 }
 
+/** Actual executor; system jobs have no account UUID. */
+export interface SettlementActor {
+  realm: "customer" | "operator" | "system";
+  id: string | null;
+}
+
 export interface FinalizeVoucherInput {
+  actor?: SettlementActor;
+  orderId: string;
+  invoiceId: string;
+  reservationId?: string | null;
+  declarationPaymentId?: string | null;
   voucherId: string;
   kind: SettlementVoucherKind;
   scope: VoucherScope;
@@ -69,6 +83,13 @@ export interface FinalizeVoucherInput {
 }
 
 export interface ReleaseCredential {
+  actor?: SettlementActor;
+  orderId: string;
+  invoiceId: string;
+  declarationPaymentId?: string | null;
+  discountReservationId?: string | null;
+  creditReservationId?: string | null;
+  reason?: string;
   discountVoucherId?: string | null;
   creditVoucherId?: string | null;
 }
@@ -89,6 +110,13 @@ export interface TenantVoucherRecord {
   status: string;
   /** 展示派生态。 */
   displayStatus: "available" | "reserved" | "redeemed" | "expired" | "revoked";
+  /** Accurate read-side state; displayStatus remains the legacy contract. */
+  availabilityStatus:
+    | TenantVoucherRecord["displayStatus"]
+    | "not_started"
+    | "paused"
+    | "archived"
+    | "unavailable";
   usedCount: number;
   maxUses: number;
   validFrom: Date;
