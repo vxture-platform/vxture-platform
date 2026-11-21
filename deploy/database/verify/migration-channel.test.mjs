@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout } from "node:timers/promises";
 import { test } from "node:test";
+import { compareSchemaCatalogs, schemaCatalogSql } from "./schema-parity.mjs";
 
 // ===========================================================================
 // Never inherit connection strings or connect to an existing Docker network.
@@ -367,6 +368,380 @@ async function invitationMigrationRegression(t) {
         }
       },
     );
+}
+
+// ===========================================================================
+// Fresh DDL and actual upgraded catalogs must agree, including physical bounds.
+// Every database below belongs to this test's private, networkless container.
+// ===========================================================================
+async function schemaParityRegression(t) {
+  let successful = 0;
+  const check = (name, work) =>
+    t.test(name, async () => {
+      await work();
+      successful++;
+    });
+  const catalog = (db) => JSON.parse(ok(sql(db, schemaCatalogSql)));
+  const rows = (db) =>
+    JSON.parse(
+      ok(
+        sql(
+          db,
+          `SELECT jsonb_build_object(
+    'audit',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY id,created_at),'[]') FROM support.audit_logs t),
+    'usage',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY id,created_at),'[]') FROM metering.usage_events t),
+    'pools',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY event_id,event_created_at,quota_pool_id),'[]') FROM metering.usage_event_pools t));`,
+        ),
+      ),
+    );
+  const migration = read(
+    "deploy/database/migrations/2026-12-14-partition-boundary-utc.sql",
+  );
+  const header = `SELECT pg_advisory_lock(742138660,1);
+    SELECT set_config('vx.migrate_target',encode(sha256(convert_to(current_database()||E'\\n'||
+      coalesce(inet_server_addr()::text,'local')||E'\\n'||coalesce(inet_server_port()::text,'local')||E'\\n'||current_user,'UTF8')),'hex'),false);
+    SELECT set_config('vx.migrate_quiesced_at',floor(extract(epoch FROM clock_timestamp()))::bigint::text,false);\n`;
+  const applyRepair = (db, source = migration) => sql(db, header + source);
+  const reject = (result, message) => {
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, new RegExp(message));
+  };
+  ok(sql("postgres", "CREATE DATABASE parity_fresh;"));
+  for (const file of readdirSync(resolve(root, "deploy/database/ddl"))
+    .filter((n) => /^\d+_.*\.sql$/.test(n))
+    .sort())
+    ok(sql("parity_fresh", read(`deploy/database/ddl/${file}`)));
+  const expected = catalog("parity_fresh");
+  await check(
+    "fresh installation and full-history upgrade have equivalent actual catalogs",
+    () => {
+      const result = compareSchemaCatalogs(catalog("upgraded"), expected);
+      assert.deepEqual(result.differences, []);
+    },
+  );
+  await check(
+    "parity rejects a changed privilege, constraint flag, partition bound and unknown object",
+    () => {
+      for (const [key, value] of [
+        [
+          "rights:platform_svc:billing.wallet_entries",
+          {
+            ...expected["rights:platform_svc:billing.wallet_entries"],
+            delete: true,
+          },
+        ],
+        [
+          "constraint:billing.orders.orders_pkey",
+          {
+            ...expected["constraint:billing.orders.orders_pkey"],
+            validated: false,
+          },
+        ],
+        [
+          "relation:support.audit_logs_y2026m07",
+          {
+            ...expected["relation:support.audit_logs_y2026m07"],
+            partitionBound: "DEFAULT",
+          },
+        ],
+        ["relation:public.unreviewed", { kind: "r" }],
+      ])
+        assert.equal(
+          compareSchemaCatalogs({ ...expected, [key]: value }, expected)
+            .equivalent,
+          false,
+          key,
+        );
+    },
+  );
+  await check(
+    "only builtin text membership casts and the two exact gender names correspond",
+    () => {
+      const c = {
+        type: "c",
+        validated: true,
+        deferred: false,
+        deferrable: false,
+        definition:
+          "CHECK (gender::text = ANY (ARRAY['male'::character varying::text, 'female'::character varying::text]))",
+      };
+      const d = {
+        ...c,
+        definition:
+          "CHECK (gender::text = ANY (ARRAY['male'::character varying, 'female'::character varying]::text[]))",
+      };
+      assert.equal(
+        compareSchemaCatalogs(
+          { "constraint:account.user_profiles.chk_user_profiles_gender": c },
+          { "constraint:account.user_profiles.user_profiles_gender_check": d },
+        ).equivalent,
+        true,
+      );
+      assert.equal(
+        compareSchemaCatalogs(
+          { "constraint:account.user_profiles.other_gender": c },
+          { "constraint:account.user_profiles.user_profiles_gender_check": d },
+        ).equivalent,
+        false,
+      );
+      assert.equal(
+        compareSchemaCatalogs(
+          {
+            "constraint:account.user_profiles.chk_user_profiles_gender": {
+              ...c,
+              validated: false,
+            },
+          },
+          { "constraint:account.user_profiles.user_profiles_gender_check": d },
+        ).equivalent,
+        false,
+      );
+      assert.equal(
+        compareSchemaCatalogs(
+          {
+            "index:public.x": {
+              definition: "custom(ARRAY['a'::character varying::text])",
+            },
+          },
+          {
+            "index:public.x": {
+              definition: "custom(ARRAY['a'::character varying]::text[])",
+            },
+          },
+        ).equivalent,
+        false,
+      );
+      assert.throws(() => compareSchemaCatalogs({}, {}));
+      assert.equal(
+        compareSchemaCatalogs(
+          { "routine:public.x()": { definition: "BEGIN\r\nEND" } },
+          { "routine:public.x()": { definition: "BEGIN\nEND" } },
+        ).equivalent,
+        false,
+      );
+    },
+  );
+  ok(sql("postgres", "CREATE DATABASE parity_legacy TEMPLATE upgraded;"));
+  ok(
+    sql(
+      "parity_legacy",
+      `BEGIN;SET LOCAL TIME ZONE 'UTC';
+    ALTER TABLE metering.usage_event_pools DROP CONSTRAINT fk_usage_event_pools_event;
+    DO $$ DECLARE p text;d date;BEGIN
+      FOREACH p IN ARRAY ARRAY['metering.usage_event_pools','metering.usage_events','support.audit_logs'] LOOP
+        EXECUTE format('ALTER TABLE %s DETACH PARTITION %s_default',p,p);
+        d:=date '2026-07-01';WHILE d<date '2027-02-01' LOOP
+          EXECUTE format('ALTER TABLE %s DETACH PARTITION %s_y%sm%s',p,p,to_char(d,'YYYY'),to_char(d,'MM'));
+          d:=(d+interval '1 month')::date;
+        END LOOP;
+        d:=date '2026-07-01';WHILE d<date '2027-02-01' LOOP
+          EXECUTE format('ALTER TABLE %s ATTACH PARTITION %s_y%sm%s FOR VALUES FROM (%L) TO (%L)',
+            p,p,to_char(d,'YYYY'),to_char(d,'MM'),d::timestamp AT TIME ZONE 'Asia/Shanghai',
+            (d+interval '1 month') AT TIME ZONE 'Asia/Shanghai');
+          d:=(d+interval '1 month')::date;
+        END LOOP;
+        EXECUTE format('ALTER TABLE %s ATTACH PARTITION %s_default DEFAULT',p,p);
+      END LOOP;
+    END $$;
+    ALTER TABLE metering.usage_event_pools ADD CONSTRAINT fk_usage_event_pools_event
+      FOREIGN KEY(event_id,event_created_at) REFERENCES metering.usage_events(id,created_at);
+    INSERT INTO support.audit_logs(id,actor_type,actor_id,action,resource_type,resource_id,created_at,"after") VALUES
+      ('${id(220001)}','system','${id(1)}','parity.test','test','boundary-previous','2026-10-31T20:00:00.123456Z','{"retained":true}'),
+      ('${id(220002)}','system','${id(1)}','parity.test','test','boundary-default','2027-01-31T20:00:00.654321Z','{"retained":2}'),
+      ('${id(220003)}','system','${id(1)}','parity.test','test','boundary-before-window','2026-06-30T20:00:00.987654Z','{"retained":3}');COMMIT;`,
+    ),
+  );
+  const before = rows("parity_legacy"),
+    money = facts("parity_legacy"),
+    shape = catalog("parity_legacy");
+  await check(
+    "standalone and stale repair attempts leave all rows and structures untouched",
+    () => {
+      reject(
+        sql("parity_legacy", migration),
+        "PARTITION_REPAIR_MIGRATION_CHANNEL_REQUIRED",
+      );
+      reject(
+        sql(
+          "parity_legacy",
+          header +
+            "SELECT set_config('vx.migrate_quiesced_at','1',false);\n" +
+            migration,
+        ),
+        "PARTITION_REPAIR_CUTOVER_EVIDENCE_EXPIRED",
+      );
+      assert.deepEqual(rows("parity_legacy"), before);
+      assert.deepEqual(catalog("parity_legacy"), shape);
+    },
+  );
+  for (const [name, mutation, error] of [
+    [
+      "unknown-bound",
+      `ALTER TABLE support.audit_logs DETACH PARTITION support.audit_logs_y2026m07;
+      ALTER TABLE support.audit_logs ATTACH PARTITION support.audit_logs_y2026m07
+      FOR VALUES FROM ('2026-06-30T17:00:00Z') TO ('2026-07-31T16:00:00Z');`,
+      "PARTITION_REPAIR_BOUND_DRIFT",
+    ],
+    [
+      "external-fk",
+      "CREATE TABLE public.parity_ref(id uuid,created_at timestamptz,FOREIGN KEY(id,created_at) REFERENCES support.audit_logs(id,created_at));",
+      "PARTITION_REPAIR_DEPENDENCY_DRIFT",
+    ],
+    [
+      "child-view",
+      'CREATE VIEW public.parity_view AS SELECT * FROM "support"."audit_logs_y2026m07";',
+      "PARTITION_REPAIR_DEPENDENCY_DRIFT",
+    ],
+    [
+      "disabled-guard",
+      "ALTER TABLE support.audit_logs DISABLE TRIGGER trg_audit_logs_append_only;",
+      "PARTITION_REPAIR_TRIGGER_DRIFT",
+    ],
+  ])
+    await check(
+      `repair refuses ${name} before changing the conflicting structure`,
+      () => {
+        const db = "parity_refusal";
+        ok(sql("postgres", `CREATE DATABASE ${db} TEMPLATE parity_legacy;`));
+        try {
+          ok(sql(db, mutation));
+          const changed = catalog(db),
+            records = rows(db);
+          reject(applyRepair(db), error);
+          assert.deepEqual(catalog(db), changed);
+          assert.deepEqual(rows(db), records);
+        } finally {
+          ok(sql("postgres", `DROP DATABASE ${db};`));
+        }
+      },
+    );
+  await check(
+    "a missing notification role rolls back the actual forward grant migration",
+    () => {
+      const original = catalog("parity_legacy");
+      ok(
+        sql(
+          "postgres",
+          "ALTER ROLE svc_platform_api RENAME TO parity_absent_api;",
+        ),
+      );
+      try {
+        reject(
+          sql(
+            "parity_legacy",
+            read(
+              "deploy/database/migrations/2026-12-13-platform-notification-grants.sql",
+            ),
+          ),
+          "does not exist",
+        );
+      } finally {
+        ok(
+          sql(
+            "postgres",
+            "ALTER ROLE parity_absent_api RENAME TO svc_platform_api;",
+          ),
+        );
+      }
+      assert.deepEqual(catalog("parity_legacy"), original);
+    },
+  );
+  await check(
+    "a fault after physical relocation rolls back rows, bounds, FK, indexes and triggers",
+    () => {
+      reject(
+        applyRepair(
+          "parity_legacy",
+          migration.replace(
+            "-- PARTITION_REPAIR_BEFORE_VERIFY",
+            "RAISE EXCEPTION 'PARTITION_REPAIR_INJECTED_FAILURE';",
+          ),
+        ),
+        "PARTITION_REPAIR_INJECTED_FAILURE",
+      );
+      assert.deepEqual(rows("parity_legacy"), before);
+      assert.deepEqual(catalog("parity_legacy"), shape);
+      assert.deepEqual(facts("parity_legacy"), money);
+    },
+  );
+  await check(
+    "UTC repair preserves exact rows and money and reaches the clean catalog",
+    () => {
+      const result = applyRepair("parity_legacy");
+      ok(result);
+      assert.match(
+        result.stderr,
+        /PARTITION_REPAIR_COMPLETE: 21 bounds, 3 physical row relocations/,
+      );
+      assert.deepEqual(rows("parity_legacy"), before);
+      assert.deepEqual(facts("parity_legacy"), money);
+      assert.deepEqual(
+        compareSchemaCatalogs(catalog("parity_legacy"), expected).differences,
+        [],
+      );
+      assert.equal(
+        ok(
+          sql(
+            "parity_legacy",
+            `SELECT string_agg(tableoid::regclass::text,',' ORDER BY id) FROM support.audit_logs WHERE id IN ('${id(220001)}','${id(220002)}','${id(220003)}');`,
+          ),
+        ),
+        "support.audit_logs_y2026m10,support.audit_logs_y2027m01,support.audit_logs_default",
+      );
+    },
+  );
+  await check(
+    "repeated repair is a no-op and append-only protection still rejects mutation",
+    () => {
+      const exact = catalog("parity_legacy");
+      const result = applyRepair("parity_legacy");
+      ok(result);
+      assert.match(result.stderr, /PARTITION_REPAIR_ALREADY_UTC/);
+      assert.deepEqual(catalog("parity_legacy"), exact);
+      assert.deepEqual(rows("parity_legacy"), before);
+      for (const statement of [
+        "UPDATE support.audit_logs SET action=action;",
+        "DELETE FROM support.audit_logs;",
+      ])
+        reject(sql("parity_legacy", statement), "append-only");
+      assert.deepEqual(rows("parity_legacy"), before);
+    },
+  );
+  await check(
+    "a restored repaired backup retains data and actual catalog parity",
+    () => {
+      const dump = ok(
+        docker([
+          "exec",
+          container,
+          "pg_dump",
+          "-U",
+          "postgres",
+          "-d",
+          "parity_legacy",
+          "--no-owner",
+          "--no-comments",
+        ]),
+      );
+      ok(sql("postgres", "CREATE DATABASE parity_recovered;"));
+      ok(sql("parity_recovered", dump));
+      assert.deepEqual(rows("parity_recovered"), before);
+      assert.deepEqual(facts("parity_recovered"), money);
+      assert.deepEqual(
+        compareSchemaCatalogs(catalog("parity_recovered"), expected)
+          .differences,
+        [],
+      );
+    },
+  );
+  assert.equal(
+    successful,
+    13,
+    "Every schema-parity subtest must pass before emitting the acceptance receipt",
+  );
+  t.diagnostic(
+    `SCHEMA_PARITY_ACCEPTED=${JSON.stringify({ equivalent: true, migrationCount: migrations.length, partitionBoundaryCount: 21, physicalTestRows: 3, restored: true })}`,
+  );
 }
 
 // Project the checked-in platform column policy onto columns present before
@@ -751,6 +1126,18 @@ if (process.argv[2] === "--seed-catalog") {
           `${container}:/migrations`,
         ]),
       );
+      // Release archives use the repository's LF policy. Windows checkout CRLF
+      // must not become a different stored dollar-quoted function body in tests.
+      for (const file of migrations) {
+        const source = read(`deploy/database/migrations/${file}`);
+        if (source.includes("\r\n"))
+          ok(
+            docker(
+              ["exec", "-i", container, "tee", `/migrations/${file}`],
+              source.replaceAll("\r\n", "\n"),
+            ),
+          );
+      }
       ok(docker(["exec", container, "mkdir", "-p", "/verify"]));
       ok(
         docker([
@@ -815,6 +1202,14 @@ if (process.argv[2] === "--seed-catalog") {
         ddl += source + "\n";
       }
       ok(sql("upgraded", ddl));
+      // The real legacy database has these explicit names, rather than both the
+      // inline clean-install names and a second historical migration constraint.
+      ok(
+        sql(
+          "upgraded",
+          "ALTER TABLE account.user_profiles RENAME CONSTRAINT user_profiles_gender_check TO chk_user_profiles_gender; ALTER TABLE tenancy.tenant_contacts RENAME CONSTRAINT tenant_contacts_gender_check TO chk_tenant_contacts_gender;",
+        ),
+      );
       ok(sql("upgraded", baselineColumnLocks()));
       ok(
         command(process.execPath, [
@@ -995,6 +1390,7 @@ export DATABASE_URL='postgresql://postgres@127.0.0.1/upgraded?options=-c%20defau
             });
           assert.deepEqual(facts("upgraded"), before);
           t.diagnostic("S05_READONLY_TESTS_PASSED=4");
+          ok(sql("upgraded", "DROP TABLE public.s05_write_probe;"));
         },
       );
       const backup = ok(
@@ -1108,6 +1504,10 @@ export DATABASE_URL='postgresql://postgres@127.0.0.1/upgraded?options=-c%20defau
         },
       );
       if (fullPassed) {
+        await t.test(
+          "S08-R4a actual catalog and legacy partition safety",
+          schemaParityRegression,
+        );
         await t.test(
           "full-history repeat preserves money and final wallet guards",
           () => {

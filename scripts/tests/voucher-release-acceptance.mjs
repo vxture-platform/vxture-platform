@@ -255,13 +255,30 @@ try {
       { tests, cleanupReceipts: cleanups.length },
     );
     verifyCleanup(cleanups);
+    if (name === "migration-channel") {
+      const receipt = result.text.match(
+        /SCHEMA_PARITY_ACCEPTED=(\{[^\r\n]+\})/,
+      )?.[1];
+      const parity = receipt ? JSON.parse(receipt) : null;
+      check(
+        "actual-schema-parity",
+        result.stage.ok &&
+          complete &&
+          parity?.equivalent === true &&
+          parity.migrationCount === 139 &&
+          parity.partitionBoundaryCount === 21 &&
+          parity.physicalTestRows === 3 &&
+          parity.restored === true,
+        { receipt: parity },
+      );
+    }
   }
   check(
     "historical-migration-count",
     readdirSync(join(snapshot, "deploy/database/migrations")).filter((file) =>
       file.endsWith(".sql"),
-    ).length === 137,
-    { expected: 137 },
+    ).length === 139,
+    { expected: 139 },
   );
 
   for (const name of [

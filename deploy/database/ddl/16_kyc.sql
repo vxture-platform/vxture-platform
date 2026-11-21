@@ -47,7 +47,7 @@ CREATE TABLE kyc.tenant_verifications (
     CONSTRAINT chk_tenant_verifications_type   CHECK (verification_type IN ('individual','enterprise')),
     -- 方式轴与主体轴正交：能力差异（可订阅 / 可开票）按方式派生，见 console 认证页设计
     CONSTRAINT chk_tenant_verifications_method CHECK (verification_method IN ('lite','face','documents')),
-    CONSTRAINT chk_tenant_verifications_status CHECK (status IN ('unverified','pending','verified','rejected'))
+    CONSTRAINT chk_tenant_verifications_status CHECK (status IN ('unverified','pending','verified','rejected','superseded'))
 );
 CREATE INDEX idx_tenant_verifications_tenant_id   ON kyc.tenant_verifications (tenant_id);
 CREATE INDEX idx_tenant_verifications_status      ON kyc.tenant_verifications (status);
