@@ -229,7 +229,7 @@ jobs:
           # 拆仓后 Dockerfile 内的 pnpm install 要从 registry 装 @vxture/design-*，
           # 而 GitHub Packages 即便包公开也要求鉴权。
           secrets: |
-            node_auth_token=${{ secrets.NODE_AUTH_TOKEN || github.token }}
+            node_auth_token=${{ github.token }}
           platforms: linux/amd64
           push: true
           # 关掉 provenance / SBOM 证明。buildx 默认把它们作为独立 manifest 一起推，
@@ -268,7 +268,7 @@ jobs:
           # 拆仓后 Dockerfile 内的 pnpm install 要从 registry 装 @vxture/design-*，
           # 而 GitHub Packages 即便包公开也要求鉴权。
           secrets: |
-            node_auth_token=${{ secrets.NODE_AUTH_TOKEN || github.token }}
+            node_auth_token=${{ github.token }}
           platforms: linux/amd64
           push: true
           # 关掉 provenance / SBOM 证明。buildx 默认把它们作为独立 manifest 一起推，

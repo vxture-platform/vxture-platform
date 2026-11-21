@@ -774,10 +774,12 @@ describe("voucher draft and assignment DOM", () => {
 // ============================================================================
 // Real published primitives: render the confirmation contract separately.
 // ============================================================================
+// Load the published package during collection, before the assertion time budget.
+const design = await vi.importActual<typeof import("@vxture/design-system")>(
+  "@vxture/design-system",
+);
+
 it("renders the real design-system confirmation with target and consequences", async () => {
-  const design = await vi.importActual<typeof import("@vxture/design-system")>(
-    "@vxture/design-system",
-  );
   const confirm = vi.fn();
   await act(async () => {
     root.render(
