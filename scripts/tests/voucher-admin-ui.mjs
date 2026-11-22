@@ -51,6 +51,9 @@ const files = [
   "portals/admin/src/modules/commercial/PromotionRedemptionsPage.tsx",
   "portals/admin/src/modules/commercial/VoucherBatchDetailDialog.tsx",
   "portals/admin/src/modules/commercial/voucher-management.ui.test.tsx",
+  "portals/admin/src/modules/commercial/voucher-display.ts",
+  "portals/admin/messages/zh-CN.json",
+  "portals/admin/messages/en-US.json",
   "scripts/tests/voucher-admin-ui.mjs",
 ];
 const fingerprint = () =>
@@ -196,7 +199,7 @@ try {
         preload,
         join(dirname(require.resolve("eslint/package.json")), "bin/eslint.js"),
         ...files
-          .filter((p) => p.startsWith("portals/admin/"))
+          .filter((p) => p.startsWith("portals/admin/") && /\.tsx?$/.test(p))
           .map((p) => p.slice("portals/admin/".length)),
         "--no-cache",
         "--max-warnings=0",

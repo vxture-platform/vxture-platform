@@ -644,6 +644,13 @@ function mapPromotionBatchRow(
   return {
     id: row.id,
     promotionCode: row.code_prefix ?? row.id,
+    codePrefix: row.code_prefix,
+    effect:
+      row.effect !== null &&
+      typeof row.effect === "object" &&
+      !Array.isArray(row.effect)
+        ? (row.effect as Record<string, unknown>)
+        : null,
     promotionName: row.name,
     promotionType: derivePromotionType(row.kind),
     /* 原始券型。`promotionType` 把 invite / redemption / extension 一起归成

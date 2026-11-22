@@ -3569,7 +3569,7 @@
       "platform": "平台级"
     },
     "promotions": {
-      "promotionCode": "优惠编号",
+      "promotionCode": "发码前缀",
       "promotionName": "优惠名称",
       "type": "类型",
       "status": "状态",
@@ -3618,7 +3618,12 @@
       "typeFilter": "优惠类型",
       "list": "营销优惠清单",
       "empty": "没有匹配的优惠",
-      "emptyHint": "清空筛选条件后可查看全部优惠活动。"
+      "emptyHint": "清空筛选条件后可查看全部优惠活动。",
+      "prefixValue": "发码前缀：{prefix}",
+      "targetedTenant": "定向租户",
+      "issuedCount": "已发 {issued}/{total}",
+      "benefitUnavailable": "权益数据暂不可用",
+      "configuredPlan": "解锁已配置套餐"
     },
     "detail": {
       "faceValue": "面额 ¥{amount}",

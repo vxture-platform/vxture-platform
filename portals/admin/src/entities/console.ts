@@ -1555,6 +1555,10 @@ export interface PromotionOperationRecord {
   requiresCashFunding?: boolean;
   id: string;
   promotionCode: string;
+  /** Explicit issuance prefix; promotionCode remains for older clients. */
+  codePrefix?: string | null;
+  /** Structured benefit data lets each client format its current language. */
+  effect?: Record<string, unknown> | null;
   promotionName: string;
   promotionType: PromotionOperationType;
   /**

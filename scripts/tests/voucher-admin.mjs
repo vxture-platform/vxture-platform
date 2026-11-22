@@ -94,6 +94,9 @@ const scope = {
       path: "bff/admin-bff/src/routers/invite-voucher.spec.ts",
     },
     {
+      path: "bff/admin-bff/src/routers/commercial-promotion.spec.ts",
+    },
+    {
       path: "bff/admin-bff/src/routers/order-payment-e2e.itest.spec.ts",
     },
     {
@@ -267,6 +270,7 @@ try {
     "src/auth/voucher-step-up.spec.ts",
     "src/auth/auth.service.spec.ts",
     "src/routers/invite-voucher.spec.ts",
+    "src/routers/commercial-promotion.spec.ts",
     "src/routers/voucher-security.http.spec.ts",
     "src/routers/billing-action-guard.spec.ts",
     "src/providers/commerce-services.provider.spec.ts",

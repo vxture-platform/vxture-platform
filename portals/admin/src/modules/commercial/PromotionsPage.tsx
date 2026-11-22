@@ -30,6 +30,7 @@ import {
   fetchPromotionPage,
 } from "@/api/admin-bff";
 import { VoucherBatchDetailDialog } from "./VoucherBatchDetailDialog";
+import { useVoucherDisplay } from "./voucher-display";
 import { useAdminSession } from "@/features/session/AdminSessionProvider";
 import {
   useStepUp,
@@ -70,11 +71,12 @@ function promotionCsvColumns(
   tShared: ReturnType<typeof useTranslations>,
   statusLabels: Record<PromotionOperationStatus, string>,
   typeLabels: Record<PromotionOperationType, string>,
+  display: ReturnType<typeof useVoucherDisplay>,
 ): CsvColumn<PromotionOperationRecord>[] {
   return [
     {
       label: tShared("voucherManagement.promotions.promotionCode"),
-      value: (record) => record.promotionCode,
+      value: display.prefix,
     },
     {
       label: tShared("voucherManagement.promotions.promotionName"),
@@ -90,11 +92,11 @@ function promotionCsvColumns(
     },
     {
       label: tShared("voucherManagement.promotions.scope"),
-      value: (record) => record.scopeLabel,
+      value: display.scope,
     },
     {
       label: tShared("voucherManagement.promotions.benefit"),
-      value: (record) => record.discountLabel,
+      value: display.benefit,
     },
     {
       label: tShared("voucherManagement.promotions.redemptions"),
@@ -168,6 +170,7 @@ function PromotionActionsMenu({
 
 /** 这一页的标已经是 DS `Tag`，不带业务色类，与批 4 无关。 */
 function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
+  const display = useVoucherDisplay();
   const statusLabels = usePromotionStatusLabels();
   const typeLabels = usePromotionTypeLabels();
   const locale = useLocale();
@@ -182,7 +185,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
         <TableTitleCell
           icon="target"
           title={record.promotionName}
-          description={`${record.promotionCode} · ${typeLabels[record.promotionType]}`}
+          description={`${tShared("voucherManagement.promotions.prefixValue", { prefix: display.prefix(record) })} · ${typeLabels[record.promotionType]}`}
           onTitleClick={() => router.push("/promotion-redemptions")}
         />
       ),
@@ -192,9 +195,9 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       header: tShared("voucherManagement.promotions.scope"),
       cell: (record) => (
         <span className="inline-flex flex-col items-center gap-2xs">
-          {<Badge variant="outline">{record.scopeLabel}</Badge>}
+          {<Badge variant="outline">{display.scope(record)}</Badge>}
           <span className="text-body-sm text-muted-foreground">
-            {record.description}
+            {display.description(record)}
           </span>
         </span>
       ),
@@ -206,7 +209,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       cell: (record) => (
         <TableTitleCell
           layout="stacked"
-          title={record.discountLabel}
+          title={display.benefit(record)}
           description={typeLabels[record.promotionType]}
         />
       ),
@@ -263,6 +266,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
 }
 
 export function PromotionsPage() {
+  const display = useVoucherDisplay();
   const statusLabels = usePromotionStatusLabels();
   const typeLabels = usePromotionTypeLabels();
   const { session } = useAdminSession();
@@ -479,7 +483,7 @@ export function PromotionsPage() {
   function handleExportSelected() {
     exportRowsToCsv(
       "promotions-export",
-      promotionCsvColumns(locale, tShared, statusLabels, typeLabels),
+      promotionCsvColumns(locale, tShared, statusLabels, typeLabels, display),
       selectedRecords,
     );
   }
@@ -487,7 +491,7 @@ export function PromotionsPage() {
   function handleExportAll() {
     exportRowsToCsv(
       "promotions-export",
-      promotionCsvColumns(locale, tShared, statusLabels, typeLabels),
+      promotionCsvColumns(locale, tShared, statusLabels, typeLabels, display),
       filteredRecords,
     );
   }
