@@ -9,6 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { formatVoucherEffect } from "./voucher-display";
 import { useVoucherLabels } from "@/modules/shared/enum-labels";
 import { formatDateTime } from "@vxture-platform/shared";
 import {
@@ -50,59 +51,6 @@ import {
 // ===========================================================================
 // Human-readable lifecycle and audit labels
 // ===========================================================================
-function effectLabel(
-  detail: VoucherBatchDetail,
-  tShared: ReturnType<typeof useTranslations>,
-) {
-  const effect = detail.effect;
-  if (detail.kind === "credit_voucher")
-    return tShared("voucherManagement.detail.faceValue", {
-      amount: (Number(effect.amount_cents ?? effect.amountCents) / 100).toFixed(
-        2,
-      ),
-    });
-  if (detail.kind === "discount")
-    return effect.discount_type === "percent"
-      ? tShared("voucherManagement.detail.percent", {
-          percent: String(effect.value),
-          cap: effect.max_off_cents
-            ? tShared("voucherManagement.detail.cap", {
-                amount: Number(effect.max_off_cents) / 100,
-              })
-            : "",
-        })
-      : tShared("voucherManagement.detail.fixed", {
-          amount: Number(effect.value) / 100,
-        });
-  if (detail.kind === "invite")
-    return tShared("voucherManagement.detail.unlockPlan", {
-      plan: String(
-        effect.plan_code ??
-          effect.planCode ??
-          effect.plan_version_id ??
-          effect.planVersionId,
-      ),
-    });
-  if (detail.kind === "extension")
-    return tShared("voucherManagement.detail.extension", {
-      days: String(effect.extend_days ?? "—"),
-      products: Array.isArray(effect.applicable_product_codes)
-        ? effect.applicable_product_codes.join(
-            tShared("voucherManagement.common.separator"),
-          )
-        : tShared("voucherManagement.detail.allProducts"),
-    });
-  if (detail.kind === "redemption")
-    return tShared("voucherManagement.detail.redemption", {
-      days: String(effect.duration_days ?? "—"),
-    });
-  if (detail.kind === "recharge_card")
-    return tShared("voucherManagement.detail.recharge", {
-      principal: Number(effect.face_value_cents ?? 0) / 100,
-      bonus: Number(effect.bonus_cents ?? 0) / 100,
-    });
-  return tShared("enums.voucherUnknown.kind");
-}
 function Pager({
   page,
   total,
@@ -466,7 +414,7 @@ function VoucherBatchDetailContent({
             <>
               <p>
                 {labels.kind(detail.kind)} · {labels.batchStatus(detail.status)}{" "}
-                · {effectLabel(detail, tShared)}
+                · {formatVoucherEffect(detail, tShared)}
               </p>
               <p>
                 {detail.tenantId

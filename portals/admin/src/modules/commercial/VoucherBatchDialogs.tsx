@@ -11,6 +11,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useVoucherDisplay } from "./voucher-display";
 import { DialogForm, Input, Label, NativeSelect } from "@vxture/design-system";
 import { fetchProductPlans, fetchPlanVersions } from "@/api/admin-bff";
 import type {
@@ -811,6 +812,7 @@ export function AssignVouchersDialog({
     targetWorkspaceId?: string;
   }) => void;
 }) {
+  const display = useVoucherDisplay();
   const tShared = useTranslations();
   const requestKey = useCommandIdentity();
   const submitting = useRef(false);
@@ -849,11 +851,11 @@ export function AssignVouchersDialog({
           : inviteKind
             ? tShared("voucherManagement.draft.assignInvite", {
                 name: batch.promotionName,
-                benefit: batch.discountLabel,
+                benefit: display.benefit(batch),
               })
             : tShared("voucherManagement.draft.assignDescription", {
                 name: batch.promotionName,
-                benefit: batch.discountLabel,
+                benefit: display.benefit(batch),
               })
       }
       submitLabel={tShared("voucherManagement.draft.assign")}

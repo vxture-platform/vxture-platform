@@ -272,9 +272,14 @@ let onClose: ReturnType<typeof vi.fn<() => void>>,
 const batch: PromotionOperationRecord = {
   id: "batch",
   promotionCode: "VB-01",
+  codePrefix: "VB-01",
+  effect: { amount_cents: 1000 },
   promotionName: "Test batch",
   promotionType: "coupon",
   kind: "credit_voucher",
+  tenantId: null,
+  totalCount: 100,
+  issuedCount: 1,
   status: "active",
   scopeLabel: "平台级",
   discountLabel: "10元",
@@ -1269,6 +1274,345 @@ describe.each(["zh-CN", "en-US"])(
           action: english ? "Unknown operation" : "未知操作",
           funding: english ? "Unknown status" : "未知状态",
         });
+    });
+  },
+);
+
+// ============================================================================
+// Structured list data must stay localized across every presentation surface.
+// ============================================================================
+const localizedBenefits = [
+  {
+    kind: "discount",
+    effect: { discount_type: "percent", value: 20, max_off_cents: 1500 },
+    en: "Discount voucher · Save 20%, capped at ¥15",
+    zh: "折扣券 · 立减 20%，封顶 ¥15",
+  },
+  {
+    kind: "credit_voucher",
+    effect: { amount_cents: 1234 },
+    en: "Credit voucher · Face value ¥12.34",
+    zh: "代金券 · 面额 ¥12.34",
+  },
+  {
+    kind: "invite",
+    effect: { planCode: "arda-private" },
+    en: "Invitation voucher · Unlock plan arda-private",
+    zh: "邀请券 · 解锁套餐 arda-private",
+  },
+  {
+    kind: "redemption",
+    effect: { duration_days: 30 },
+    en: "Subscription voucher · Operator grant · Redeem a new 30-day subscription",
+    zh: "订阅兑换券 · 运营赠送 · 兑换 30 天新订阅",
+  },
+  {
+    kind: "extension",
+    effect: { extend_days: 7, applicable_product_codes: ["arda", "karda"] },
+    en: "Extension voucher · Extend 7 days from the original expiry · Main products: arda, karda · Quotas are not reset",
+    zh: "展期券 · 从原到期日延长 7 天 · 主产品：arda、karda · 不重置配额",
+  },
+  {
+    kind: "recharge_card",
+    effect: { face_value_cents: 1000, bonus_cents: 500 },
+    en: "Recharge card · Recharge principal ¥10, bonus ¥5 · Principal requires actual receipts; bonus is recorded separately",
+    zh: "充值卡 · 充值本金 ¥10，赠额 ¥5 · 本金须有真实收款；赠额单独入账",
+  },
+] satisfies Array<{
+  kind: string;
+  effect: Record<string, unknown>;
+  en: string;
+  zh: string;
+}>;
+
+describe.each(["zh-CN", "en-US"])(
+  "structured voucher presentation (%s)",
+  (locale) => {
+    it("localizes six-kind list, scope, issuance counts and actual export values", async () => {
+      state.locale = locale;
+      const english = locale === "en-US";
+      const records = localizedBenefits.map((item, index) => ({
+        ...batch,
+        id: `kind-${index}`,
+        promotionName: `用户自定中文名称 ${index}`,
+        kind: item.kind,
+        effect: item.effect,
+        codePrefix: "VX26-",
+        promotionCode: "VX26-",
+        tenantId: index % 2 ? "tenant" : null,
+        totalCount: 10,
+        issuedCount: index + 1,
+        discountLabel: "旧中文权益",
+        description: "旧中文发行说明",
+      }));
+      vi.mocked(api.fetchPromotionPage).mockResolvedValue({
+        items: records,
+        total: 6,
+        page: 1,
+        pageSize: 20,
+        summary: {
+          total: 6,
+          active: 6,
+          redemptions: 0,
+          tenants: 0,
+          coupons: 2,
+        },
+      });
+      await act(async () => root.render(<PromotionsPage />));
+      const rows = host.querySelectorAll('[role="row"]');
+      expect(rows).toHaveLength(6);
+      for (const [index, item] of localizedBenefits.entries()) {
+        const text = rows[index]!.textContent;
+        expect(text).toContain(english ? item.en : item.zh);
+        expect(text).toContain(
+          english ? `Issued ${index + 1}/10` : `已发 ${index + 1}/10`,
+        );
+        expect(text).toContain(
+          index % 2
+            ? english
+              ? "Targeted tenant"
+              : "定向租户"
+            : english
+              ? "Platform-wide"
+              : "平台级",
+        );
+        expect(text).toContain(`用户自定中文名称 ${index}`);
+        expect(text).toContain(
+          english ? "Issuance prefix: VX26-" : "发码前缀：VX26-",
+        );
+        expect(text).not.toContain("旧中文");
+      }
+      await click(english ? "Export this page" : "导出本页");
+      const [, columns, exported] = vi.mocked(exportRowsToCsv).mock.calls[0]!;
+      expect(exported).toEqual(records);
+      expect(columns[0]!.label).toBe(english ? "Issuance prefix" : "发码前缀");
+      for (const [index, record] of records.entries()) {
+        expect(columns[0]!.value(record)).toBe("VX26-");
+        expect(columns[4]!.value(record)).toBe(
+          index % 2
+            ? english
+              ? "Targeted tenant"
+              : "定向租户"
+            : english
+              ? "Platform-wide"
+              : "平台级",
+        );
+        expect(columns[5]!.value(record)).toBe(
+          english ? localizedBenefits[index]!.en : localizedBenefits[index]!.zh,
+        );
+      }
+    });
+
+    it("keeps six-kind detail and assignment descriptions consistent without executing actions", async () => {
+      state.locale = locale;
+      const english = locale === "en-US";
+      for (const item of localizedBenefits) {
+        detail = { ...detail, kind: item.kind, effect: item.effect };
+        await renderDetail(`detail-${item.kind}`);
+        const [kindLabel, ...benefitParts] = (
+          english ? item.en : item.zh
+        ).split(" · ");
+        expect(host.textContent).toContain(kindLabel);
+        expect(host.textContent).toContain(benefitParts.join(" · "));
+        await act(async () =>
+          root.render(
+            <AssignVouchersDialog
+              batch={{ ...batch, kind: item.kind, effect: item.effect }}
+              busy={false}
+              error={null}
+              assignedCodes={null}
+              onClose={onClose}
+              onSubmit={vi.fn()}
+            />,
+          ),
+        );
+        expect(host.textContent).toContain(english ? item.en : item.zh);
+      }
+      expect(state.run).not.toHaveBeenCalled();
+      expect(api.assignVouchers).not.toHaveBeenCalled();
+      expect(api.manageVoucherBatch).not.toHaveBeenCalled();
+    });
+
+    it("distinguishes prefixes from identifiers and hides missing and legacy UUID fallbacks", async () => {
+      state.locale = locale;
+      const english = locale === "en-US";
+      const uuid = "6aa86113-341c-4074-8796-94b0bc7479de";
+      const legacy = { ...batch, id: "legacy", promotionCode: uuid };
+      delete legacy.codePrefix;
+      const records = [
+        { ...batch, id: "absent", codePrefix: null, promotionCode: uuid },
+        { ...batch, id: "empty", codePrefix: "", promotionCode: uuid },
+        legacy,
+        { ...batch, id: "prefix-a", codePrefix: "VX26-" },
+        { ...batch, id: "prefix-b", codePrefix: "VX26-" },
+      ];
+      vi.mocked(api.fetchPromotionPage).mockResolvedValue({
+        items: records,
+        total: 5,
+        page: 1,
+        pageSize: 20,
+        summary: {
+          total: 5,
+          active: 5,
+          redemptions: 0,
+          tenants: 0,
+          coupons: 5,
+        },
+      });
+      await act(async () => root.render(<PromotionsPage />));
+      expect(host.querySelector('[role="table"]')?.textContent).not.toContain(
+        uuid,
+      );
+      expect(host.textContent).toContain(
+        english ? "Issuance prefix: —" : "发码前缀：—",
+      );
+      await click(english ? "Export this page" : "导出本页");
+      const columns = vi.mocked(exportRowsToCsv).mock.calls[0]![1];
+      expect(records.map((record) => columns[0]!.value(record))).toEqual([
+        "—",
+        "—",
+        "—",
+        "VX26-",
+        "VX26-",
+      ]);
+    });
+
+    it("shows neutral missing data instead of legacy prose or invented zero amounts", async () => {
+      state.locale = locale;
+      const english = locale === "en-US";
+      const legacy = { ...batch, id: "legacy" };
+      delete legacy.effect;
+      delete legacy.tenantId;
+      const records = [
+        legacy,
+        { ...batch, id: "null", effect: null },
+        {
+          ...batch,
+          id: "array",
+          effect: [] as unknown as Record<string, unknown>,
+        },
+        { ...batch, id: "amount", effect: { amount_cents: null } },
+        {
+          ...batch,
+          id: "discount",
+          kind: "discount",
+          effect: { discount_type: "unexpected", value: 100 },
+        },
+        {
+          ...batch,
+          id: "recharge",
+          kind: "recharge_card",
+          effect: { face_value_cents: "wrong", bonus_cents: 500 },
+        },
+      ].map((record) => ({
+        ...record,
+        discountLabel: "旧中文权益",
+        description: "旧中文说明",
+      }));
+      vi.mocked(api.fetchPromotionPage).mockResolvedValue({
+        items: records,
+        total: records.length,
+        page: 1,
+        pageSize: 20,
+        summary: {
+          total: records.length,
+          active: records.length,
+          redemptions: 0,
+          tenants: 0,
+          coupons: 0,
+        },
+      });
+      await act(async () => root.render(<PromotionsPage />));
+      const rows = host.querySelectorAll('[role="row"]');
+      for (const row of rows) {
+        expect(row.textContent).toContain(
+          english ? "Benefit data unavailable" : "权益数据暂不可用",
+        );
+        expect(row.textContent).not.toMatch(/NaN|undefined|¥0|旧中文/);
+      }
+      expect(rows[0]!.textContent).toContain(english ? "Unknown" : "未知");
+      await click(english ? "Export this page" : "导出本页");
+      const columns = vi.mocked(exportRowsToCsv).mock.calls[0]![1];
+      for (const record of records)
+        expect(columns[5]!.value(record)).toContain(
+          english ? "Benefit data unavailable" : "权益数据暂不可用",
+        );
+    });
+
+    it("preserves fixed discounts, historical amount aliases and bonus-only card meaning", async () => {
+      state.locale = locale;
+      const english = locale === "en-US";
+      const uuid = "6aa86113-341c-4074-8796-94b0bc7479de";
+      const values = [
+        {
+          kind: "discount",
+          effect: { discount_type: "fixed", value: 1234, max_off_cents: 1000 },
+          en: "Save ¥12.34, capped at ¥10",
+          zh: "立减 ¥12.34，封顶 ¥10",
+        },
+        {
+          kind: "credit_voucher",
+          effect: { amountCents: 1234 },
+          en: "Face value ¥12.34",
+          zh: "面额 ¥12.34",
+        },
+        {
+          kind: "credit_voucher",
+          effect: { face_value_cents: 1234 },
+          en: "Face value ¥12.34",
+          zh: "面额 ¥12.34",
+        },
+        {
+          kind: "recharge_card",
+          effect: { face_value_cents: 0, bonus_cents: 500 },
+          en: "principal ¥0, bonus ¥5",
+          zh: "本金 ¥0，赠额 ¥5",
+        },
+        {
+          kind: "invite",
+          effect: { plan_version_id: uuid },
+          en: "Unlock the configured plan",
+          zh: "解锁已配置套餐",
+        },
+      ];
+      const records = values.map((value, index) => ({
+        ...batch,
+        id: `alias-${index}`,
+        kind: value.kind,
+        effect: value.effect,
+      }));
+      vi.mocked(api.fetchPromotionPage).mockResolvedValue({
+        items: records,
+        total: records.length,
+        page: 1,
+        pageSize: 20,
+        summary: {
+          total: records.length,
+          active: records.length,
+          redemptions: 0,
+          tenants: 0,
+          coupons: 0,
+        },
+      });
+      await act(async () => root.render(<PromotionsPage />));
+      const rows = host.querySelectorAll('[role="row"]');
+      values.forEach((value, index) =>
+        expect(rows[index]!.textContent).toContain(
+          english ? value.en : value.zh,
+        ),
+      );
+      expect(host.querySelector('[role="table"]')?.textContent).not.toContain(
+        uuid,
+      );
+      await click(english ? "Export this page" : "导出本页");
+      const columns = vi.mocked(exportRowsToCsv).mock.calls[0]![1];
+      records.forEach((record, index) => {
+        const actual = columns[5]!.value(record);
+        expect(actual).toContain(
+          english ? values[index]!.en : values[index]!.zh,
+        );
+        expect(actual).not.toContain(uuid);
+      });
     });
   },
 );

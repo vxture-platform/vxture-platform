@@ -3569,7 +3569,7 @@
       "platform": "Platform-wide"
     },
     "promotions": {
-      "promotionCode": "Promotion number",
+      "promotionCode": "Issuance prefix",
       "promotionName": "Promotion name",
       "type": "Type",
       "status": "Status",
@@ -3618,7 +3618,12 @@
       "typeFilter": "Promotion type",
       "list": "Promotion list",
       "empty": "No matching promotions",
-      "emptyHint": "Clear the filters to view all promotions."
+      "emptyHint": "Clear the filters to view all promotions.",
+      "prefixValue": "Issuance prefix: {prefix}",
+      "targetedTenant": "Targeted tenant",
+      "issuedCount": "Issued {issued}/{total}",
+      "benefitUnavailable": "Benefit data unavailable",
+      "configuredPlan": "Unlock the configured plan"
     },
     "detail": {
       "faceValue": "Face value ¥{amount}",
