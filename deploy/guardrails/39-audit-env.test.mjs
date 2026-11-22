@@ -63,6 +63,8 @@ function fixture(t) {
               REDIS_URL: "redis://:fixture-redis@cache.invalid:6379",
               OIDC_CLIENT_ID: "platform-api",
               OIDC_CLIENT_SECRET: CLIENT_SECRET,
+              WORKBENCH_DESKTOP_ENABLED: "0",
+              RUYIN_DESKTOP_OIDC_CLIENT_SECRET: "",
             }[key] ?? `fixture-${key.toLowerCase()}`;
           return `${key}=${value}`;
         },
@@ -335,4 +337,69 @@ test("requires the dedicated Workbench activity connection for production", (t) 
   const result = audit(root);
   assert.notEqual(result.status, 0);
   assert.match(result.output, /WORKBENCH_ACTIVITY_DATABASE_URL/u);
+});
+
+// ============================================================================
+// Optional native module inside the existing workbench service
+// ============================================================================
+function enableDesktop(root) {
+  for (const [key, value] of Object.entries({
+    WORKBENCH_DESKTOP_ENABLED: "1",
+    WORKBENCH_BFF_PORT: "3061",
+    OIDC_CLIENT_ID: "workbench",
+    OIDC_ISSUER: "https://accounts.vxture.com",
+    RUYIN_BFF_BASE: "https://api.ruyin.work",
+    RUYIN_DESKTOP_OIDC_CLIENT_SECRET: "fixture-distinct-desktop-secret",
+    RUYIN_DESKTOP_SESSION_TTL: "86400",
+  }))
+    setKey(root, "runtime/.env.workbench-bff", key, value);
+  setKey(
+    root,
+    "runtime/.env.auth-bff",
+    "OIDC_CLIENT_SECRET_HASH_RUYIN_DESKTOP",
+    "$2b$12$" + "a".repeat(53),
+  );
+}
+test("desktop uses the existing workbench env without an additional service or role", (t) => {
+  const root = fixture(t);
+  enableDesktop(root);
+  const result = audit(root);
+  assert.equal(result.status, 0, result.output);
+});
+for (const [key, value] of [
+  ["WORKBENCH_DESKTOP_ENABLED", "true"],
+  ["RUYIN_BFF_BASE", "https://console.vxture.com"],
+  ["RUYIN_DESKTOP_OIDC_CLIENT_SECRET", ""],
+  ["RUYIN_DESKTOP_OIDC_CLIENT_SECRET", CLIENT_SECRET],
+  ["RUYIN_DESKTOP_SESSION_TTL", "1"],
+  ["WORKBENCH_BFF_PORT", "3062"],
+]) {
+  test("desktop rejects invalid " + key, (t) => {
+    const root = fixture(t);
+    enableDesktop(root);
+    setKey(root, "runtime/.env.workbench-bff", key, value);
+    assert.equal(audit(root).status, 1);
+  });
+}
+test("desktop activation requires its independent IdP hash", (t) => {
+  const root = fixture(t);
+  enableDesktop(root);
+  setKey(
+    root,
+    "runtime/.env.auth-bff",
+    "OIDC_CLIENT_SECRET_HASH_RUYIN_DESKTOP",
+    "",
+  );
+  assert.equal(audit(root).status, 1);
+});
+test("browser-only deployments allow an absent desktop secret", (t) => {
+  const root = fixture(t);
+  setKey(
+    root,
+    "runtime/.env.workbench-bff",
+    "RUYIN_DESKTOP_OIDC_CLIENT_SECRET",
+    "",
+  );
+  const result = audit(root);
+  assert.equal(result.status, 0, result.output);
 });

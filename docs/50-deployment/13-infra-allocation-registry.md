@@ -33,14 +33,22 @@
 
 L0 各面的**段归属与段内取号规则**(x0=UI / x1=BFF / x2–x9 归本面)见端口登记表,本表只登记域名/容器/宿主绑定:
 
-| 面(L0)           | 域名                                                                       | 容器                              | 宿主绑定                                       |
-| ---------------- | -------------------------------------------------------------------------- | --------------------------------- | ---------------------------------------------- |
-| website          | vxture.com(www 301→apex) + ruyin.work(占位页,另一注册域,见 06 §ruyin.work) | vx-platform-website / website-bff | —                                              |
-| console          | console.vxture.com                                                         | vx-platform-console / console-bff | —                                              |
-| admin            | y.vxture.com                                                               | vx-platform-admin / admin-bff     | —                                              |
-| opera            | x.vxture.com                                                               | vx-platform-opera / opera-bff     | —                                              |
-| accounts(IdP)    | accounts.vxture.com(`/oidc/*`→auth-bff)                                    | vx-platform-accounts / auth-bff   | auth-bff 经 vx-nginx 的 tailnet 别名暴露(见下) |
-| varda(非面,内嵌) | 无域名(console/admin `/varda/*` 反代)                                      | varda-bff / varda-agent           | worker-02 发布(UFW 仅放行 tailnet)             |
+| 面(L0)             | 域名                                                     | 容器                                  | 宿主绑定                                       |
+| ------------------ | -------------------------------------------------------- | ------------------------------------- | ---------------------------------------------- |
+| website            | vxture.com(www 301→apex)                                 | vx-platform-website / website-bff     | —                                              |
+| console            | console.vxture.com                                       | vx-platform-console / console-bff     | —                                              |
+| workbench（RUYIN） | ruyin.work（网页）；api.ruyin.work（桌面入口，尚未激活） | vx-platform-workbench / workbench-bff | —                                              |
+| admin              | y.vxture.com                                             | vx-platform-admin / admin-bff         | —                                              |
+| opera              | x.vxture.com                                             | vx-platform-opera / opera-bff         | —                                              |
+| accounts(IdP)      | accounts.vxture.com(`/oidc/*`→auth-bff)                  | vx-platform-accounts / auth-bff       | auth-bff 经 vx-nginx 的 tailnet 别名暴露(见下) |
+| varda(非面,内嵌)   | 无域名(console/admin `/varda/*` 反代)                    | varda-bff / varda-agent               | worker-02 发布(UFW 仅放行 tailnet)             |
+
+2026-11-23 纠偏：端口登记中的 workbench 即 RUYIN，网页和既有 BFF 沿用原分配。
+桌面适配迁入同一 `bff/workbench`，复用 `platform_bff-workbench`、现有连接及运行文件；
+不新增 `ruyin-bff` 容器、独立镜像、数据库角色或监听端口，3062 方案未获批准。
+`api.ruyin.work` 为已确认且 DNS 已配置的桌面来源，受控路径映射到既有后端；
+网页和桌面使用分开的 RP 凭据及会话空间，不代表两套业务服务。
+此处记录本地接线目标，尚未生产激活；提交发布、独立桌面客户端登记与凭据注入另行确认。
 
 **边缘带(不占应用段,一个公网 API 边缘 + 两个 tailnet S2S 别名,三个口都由 vx-nginx 发布、平台容器不发布任何宿主口;具体端口见端口登记表)**:
 

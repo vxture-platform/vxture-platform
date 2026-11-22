@@ -47,6 +47,7 @@ import {
   MeteringReadService, // ⚠️ 跨层引用: reuse the period-aware domain resource read service.
   OrderService,
   SubscriptionService,
+  readSubscribedProducts, // ⚠️ 跨层引用: Reuse the public domain read without changing Console projection.
 } from "@vxture/service-subscription";
 import type {
   DeclarePaymentResult,
@@ -1446,67 +1447,8 @@ export class SubscriptionRouter {
     const workspaceId = await this.resolveRequestWorkspace(req.tenant);
     const favorites = await this.safeFavoriteIds(req.user.id);
 
-    const res = await this.pool.query<{
-      subscription_id: string;
-      product_id: string | null;
-      product_code: string | null;
-      product_name: string | null;
-      product_nick: string | null;
-      icon_url: string | null;
-      icon_version: string | null;
-      home_url: string | null;
-      release_version: string | null;
-      released_at: Date | null;
-      plan_name: string;
-      tier: string | null;
-      seats: string | null;
-      assigned_seats: string;
-      subscription_kind: string;
-      cycle_unit: string;
-      status: string;
-      start_at: Date | null;
-      end_at: Date | null;
-      auto_renew: boolean;
-      maintenance_window_id: string | null;
-      maintenance_until: Date | null;
-      suspension_reason: string | null;
-      suspension_expected_resume_at: Date | null;
-      suspension_extends_term: boolean | null;
-    }>(
-      `select ts.id as subscription_id,
-              prod.id as product_id, prod.product_code, prod.product_name,
-              prod.product_nick, prod.icon_url, pi.checksum as icon_version, pw.home_url, prod.release_version, prod.released_at,
-              prod.maintenance_window_id, prod.maintenance_until,
-              pl.plan_name, pc.tier, pc.quota->>'seat.max' as seats,
-              (select count(*) from metering.product_seats ps
-                where ps.workspace_id = ts.workspace_id and ps.product_id = prod.id
-                  and ps.revoked_at is null) as assigned_seats,
-              ts.subscription_kind, ts.cycle_unit, ts.status,
-              ts.start_at, ts.end_at, ts.auto_renew,
-              sus.suspension_reason, sus.suspension_expected_resume_at,
-              sus.suspension_extends_term
-         from metering.subscriptions ts
-         join product.plan_versions pv on pv.id = ts.plan_version_id
-         join product.plans pl on pl.id = pv.plan_id
-         left join lateral (
-           select tier, quota, product_id from product.plan_components
-            where plan_version_id = ts.plan_version_id and component_role = 'primary'
-            limit 1
-         ) pc on true
-         left join product.products prod on prod.id = pc.product_id
-         left join product.product_webhooks pw on pw.product_id = prod.id
-         left join product.product_icons pi on pi.product_id = prod.id
-         ${openSuspensionLateralSql("ts")}
-        where ts.workspace_id = $1 and ts.deleted_at is null
-          -- 下单只建 billing.orders（product_330 P1-b2），订阅行只在履约后存在；旧模型的
-          -- 待收款壳已在 P2 迁移里软删。页头「未支付、未开通的订单不在此列」由此成立。
-          -- cancelled 不展示：从未生效或已终止的意愿态（含 P1-b1 双写期的升级镜像行）。
-          and ts.status <> 'cancelled'
-        order by coalesce(ts.start_at, ts.created_at) desc
-        limit 100`,
-      [workspaceId],
-    );
-    return res.rows.map((r) => ({
+    const rows = await readSubscribedProducts(this.pool, workspaceId);
+    return rows.map((r) => ({
       subscriptionId: r.subscription_id,
       productId: r.product_id,
       productCode: r.product_code,

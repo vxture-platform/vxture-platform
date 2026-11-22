@@ -64,3 +64,25 @@ load_compose_env() {
     echo "      补法：把两行写进该文件，键名已在 39-audit-env.mjs 白名单内。" >&2
   fi
 }
+
+# Desktop is a module of the existing workbench-bff, not an additional service.
+load_workbench_desktop_env() {
+  local runtime_file="$COMPOSE_ENV_RUNTIME_DIR/.env.workbench-bff" value=''
+  if [ -f "$runtime_file" ]; then
+    value="$(grep -E '^WORKBENCH_DESKTOP_ENABLED=' "$runtime_file" | tail -n 1 | cut -d= -f2- || true)"
+    value="$(printf '%s' "$value" | tr -d '\r\042\047')"
+  fi
+  [ -n "$value" ] || value=0
+  WORKBENCH_DESKTOP_ENABLED="$value"
+  case "$WORKBENCH_DESKTOP_ENABLED" in 0|1) ;; *) echo 'WORKBENCH_DESKTOP_ENABLED must be 0 or 1.' >&2; return 1 ;; esac
+}
+
+validate_workbench_desktop_runtime() {
+  local deploy_dir="$1"
+  [ "$WORKBENCH_DESKTOP_ENABLED" = 1 ] || return 0
+  if ! command -v node >/dev/null 2>&1 || [ ! -f "$deploy_dir/guardrails/39-audit-env.mjs" ]; then
+    echo 'Enabled desktop access requires the existing environment audit.' >&2; return 1
+  fi
+  env VX_ENV_AUDIT_STRICT_RUNTIME=1 VX_WORKER_DIR="$deploy_dir" VX_RUNTIME_DIR="$COMPOSE_ENV_RUNTIME_DIR" \
+    node "$deploy_dir/guardrails/39-audit-env.mjs" --desktop-only
+}

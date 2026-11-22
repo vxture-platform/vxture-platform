@@ -18,6 +18,7 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
 . "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
+load_workbench_desktop_env
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 NGINX_COMPOSE_FILE="/srv/vxture/data/nginx/compose.yml"

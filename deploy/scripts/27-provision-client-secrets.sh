@@ -47,6 +47,18 @@ PROVISION_TIMEOUT_SECONDS="${PROVISION_TIMEOUT_SECONDS:-300}"
 AUTH_ENV_FILE="${AUTH_ENV_FILE:-$RUNTIME_DIR/.env.auth-bff}"
 SECRETS_DIR="${SECRETS_DIR:-$RUNTIME_DIR/secrets}"
 FORCE="${FORCE_PROVISION_SECRETS:-0}"
+# A targeted activation must never enter the platform-wide key setup below.
+DESKTOP_ONLY=0
+case "${1:-}" in
+  '') [ "$#" -eq 0 ] || exit 2 ;;
+  --ruyin-desktop-only)
+    [ "$#" -eq 1 ] || exit 2
+    DESKTOP_ONLY=1
+    export CLIENT_IDS_OVERRIDE=ruyin-desktop
+    umask 077
+    ;;
+  *) echo 'Unknown provisioning option.' >&2; exit 2 ;;
+esac
 # ── Client set: read from the database, never from a list in this file ───────
 # (2026-08-10, owner directive: provision every registered client — prod AND
 # beta — in one run, and stop editing lists on every new product.)
@@ -82,26 +94,30 @@ FORCE="${FORCE_PROVISION_SECRETS:-0}"
 env_file_for() {
   if [ "$1" = "platform-api" ]; then
     printf '%s' "${PLATFORM_API_ENV_FILE:-$RUNTIME_DIR/.env.platform-api}"
+  elif [ "$1" = "ruyin-desktop" ]; then
+    # The confidential client identifies the desktop backend, not the native app.
+    printf '%s' "${WORKBENCH_BFF_ENV_FILE:-$RUNTIME_DIR/.env.workbench-bff}"
   else
     printf '%s' "$RUNTIME_DIR/.env.${1}-bff"
   fi
+}
+
+secret_key_for() {
+  if [ "$1" = ruyin-desktop ]; then printf '%s' RUYIN_DESKTOP_OIDC_CLIENT_SECRET; else printf '%s' OIDC_CLIENT_SECRET; fi
 }
 
 is_remote() {
   [ ! -f "$(env_file_for "$1")" ]
 }
 
-# All active clients from the live catalog, one per line. Runs in the same
+# Active confidential clients from the live catalog, one per line. Runs in the same
 # node+pg throwaway container the seed uses, so this adds no host dependency.
 discover_clients() {
-  if [ -n "${CLIENT_IDS_OVERRIDE:-}" ]; then
-    printf '%s\n' $CLIENT_IDS_OVERRIDE
-    return 0
-  fi
   mkdir -p "$DB_TOOL_CACHE_DIR"
   docker run --rm \
     --network vxture-prod \
     --env-file "$RUNTIME_DIR/secrets/platform.env" \
+    --env CLIENT_IDS_OVERRIDE="${CLIENT_IDS_OVERRIDE:-}" \
     -v "$DB_TOOL_CACHE_DIR:/tmp/vxture-db" \
     node:24-alpine \
     sh -lc '
@@ -111,10 +127,11 @@ discover_clients() {
       fi
       NODE_PATH=/tmp/vxture-db/node_modules node -e "
         const { Client } = require(\"pg\");
+        const ids = [...new Set((process.env.CLIENT_IDS_OVERRIDE || \"\").split(/\\s+/).filter(Boolean))];
         const c = new Client({ connectionString: process.env.DATABASE_URL });
         c.connect()
-          .then(() => c.query(\"select client_id from appoidc.oidc_clients where status = '\''active'\'' order by client_id\"))
-          .then(r => { r.rows.forEach(x => console.log(x.client_id)); return c.end(); })
+          .then(() => c.query(\"select client_id from appoidc.oidc_clients where status = '\''active'\'' and token_endpoint_auth_method = '\''client_secret_basic'\'' and (\$1::text[] is null or client_id = any(\$1::text[])) order by client_id\", [ids.length ? ids : null]))
+          .then(r => { if (ids.length && r.rows.length !== ids.length) throw new Error(\"Only registered active confidential clients can be provisioned\"); r.rows.forEach(x => console.log(x.client_id)); return c.end(); })
           .catch(e => { console.error(e.message); process.exit(1); });
       "
     '
@@ -170,6 +187,27 @@ is_unset() {
 
 echo "=== Vxture OIDC Client Secret Provision ==="
 check_file "$DATABASE_PRISMA_DIR/provision-client-secrets.mjs"
+
+if [ "$DESKTOP_ONLY" = 1 ]; then
+  check_file "$AUTH_ENV_FILE"
+  desktop_env_file="$(env_file_for ruyin-desktop)"
+  check_file "$desktop_env_file"
+  desktop_client_id="$(read_kv "$desktop_env_file" OIDC_CLIENT_ID)"
+  desktop_client_id="${desktop_client_id%\'}"; desktop_client_id="${desktop_client_id#\'}"
+  desktop_client_id="${desktop_client_id%\"}"; desktop_client_id="${desktop_client_id#\"}"
+  if [ "$desktop_env_file" -ef "$AUTH_ENV_FILE" ] || [ "$desktop_client_id" != workbench ]; then
+    echo 'The targeted runtime file must identify workbench, separate from the IdP; native credentials use their own key.' >&2
+    exit 1
+  fi
+  check_file "$RUNTIME_DIR/secrets/platform.env"
+  CLIENTS_DISCOVERED="$(discover_clients)"
+  if [ "$CLIENTS_DISCOVERED" != ruyin-desktop ]; then
+    echo 'Targeted desktop provisioning requires exactly its active confidential registration.' >&2
+    exit 1
+  fi
+fi
+
+if [ "$DESKTOP_ONLY" = 0 ]; then
 
 # ── operator-MFA secret: OPERATOR_TOTP_ENC_KEY ───────────────────────────────
 # AES-256-GCM key for admin.operator_mfa.totp_secret at rest. Random, minted on the
@@ -229,15 +267,18 @@ if [ "$FORCE" = "1" ] || is_unset "$wh_key_api" || is_unset "$wh_key_opera"    |
 else
   echo "  [skip] PLATFORM_WEBHOOK_ENC_KEY — already set and matching"
 fi
+fi
 
 # Decide which clients still need a secret + hash pair.
-check_file "$RUNTIME_DIR/secrets/platform.env"
-CLIENTS_DISCOVERED="$(discover_clients)"
+if [ "$DESKTOP_ONLY" = 0 ]; then
+  check_file "$RUNTIME_DIR/secrets/platform.env"
+  CLIENTS_DISCOVERED="$(discover_clients)"
+fi
 if [ -z "$CLIENTS_DISCOVERED" ]; then
   echo "错误：未从 appoidc.oidc_clients 读到任何 active 客户端——库不可达或未 seed。" >&2
   exit 1
 fi
-echo "==> 目录中 active 客户端 $(printf '%s\n' "$CLIENTS_DISCOVERED" | wc -l) 个：$(printf '%s ' $CLIENTS_DISCOVERED)"
+echo "==> 目录中 active 机密客户端 $(printf '%s\n' "$CLIENTS_DISCOVERED" | wc -l) 个：$(printf '%s ' $CLIENTS_DISCOVERED)"
 
 NEED=()
 for c in $CLIENTS_DISCOVERED; do
@@ -253,7 +294,7 @@ for c in $CLIENTS_DISCOVERED; do
     fi
   else
     rp_file="$(env_file_for "$c")"
-    sec="$(read_kv "$rp_file" OIDC_CLIENT_SECRET)"
+    sec="$(read_kv "$rp_file" "$(secret_key_for "$c")")"
     if [ "$FORCE" = "1" ] || is_unset "$sec" || is_unset "$hash"; then
       NEED+=("$c")
     else
@@ -293,6 +334,20 @@ if [ -z "$PAIRS" ]; then
   exit 1
 fi
 
+if [ "$DESKTOP_ONLY" = 1 ]; then
+  pair_count=0
+  while IFS="$(printf '\t')" read -r pair_client pair_secret pair_hash; do
+    pair_count=$((pair_count + 1))
+    if [ "$pair_client" != ruyin-desktop ] ||
+       [[ ! "$pair_secret" =~ ^[A-Za-z0-9_-]{32,}$ ]] ||
+       [[ ! "$pair_hash" =~ ^\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}$ ]]; then
+      echo 'Invalid targeted desktop credential result; no runtime files were updated.' >&2
+      exit 1
+    fi
+  done <<< "$PAIRS"
+  [ "$pair_count" = 1 ] || { echo 'Unexpected targeted credential count.' >&2; exit 1; }
+fi
+
 REMOTE_HANDOFF=()
 while IFS="$(printf '\t')" read -r c secret hash; do
   [ -n "$c" ] || continue
@@ -313,7 +368,7 @@ while IFS="$(printf '\t')" read -r c secret hash; do
   else
     rp_file="$(env_file_for "$c")"
     # Plaintext (base64url, no '$') → local RP env, unquoted.
-    upsert_kv "$rp_file" OIDC_CLIENT_SECRET "$secret"
+    upsert_kv "$rp_file" "$(secret_key_for "$c")" "$secret"
     chmod 600 "$rp_file" 2>/dev/null || true
     echo "  [ok] $c — secret → $(basename "$rp_file"), hash → $(basename "$AUTH_ENV_FILE")"
   fi
@@ -322,6 +377,10 @@ $PAIRS
 EOF
 
 echo "=== Client secrets provisioned ==="
+if [ "$DESKTOP_ONLY" = 1 ]; then
+  echo 'Next: run the targeted desktop client seed; recreate only workbench-bff after reviewing the activated native module.'
+  exit 0
+fi
 echo "下一步：重新 seed（appoidc.oidc_clients 写入 hash），再 bash scripts/33-recreate-service.sh auth-bff website-bff console-bff admin-bff opera-bff arche-bff platform-api（db-init 的 provision-secrets 把三步串起来）。"
 if [ "${#REMOTE_HANDOFF[@]}" -gt 0 ]; then
   echo ""

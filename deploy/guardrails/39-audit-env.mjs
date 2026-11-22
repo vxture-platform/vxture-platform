@@ -134,6 +134,7 @@ const OIDC_CLIENT_SECRET_HASH_KEYS = new Set([
 // .env.auth-bff (above) vs merely allowed (here). Keeping a product here is a
 // statement that its RP is not live yet, which is a judgement, not an inventory.
 const OIDC_FUTURE_APP_HASH_KEYS = new Set([
+  "OIDC_CLIENT_SECRET_HASH_RUYIN_DESKTOP",
   "OIDC_CLIENT_SECRET_HASH_WORKBENCH",
   // opera = Capability Console shell, second workforce RP (product_250 M-4
   // batch C); local RP on the deploy host like admin. Becomes REQUIRED (move to
@@ -585,6 +586,10 @@ const ENV_FILE_RULES = [
     // DB/Redis are intentionally scoped here instead of injecting platform.env.
     allowedKeys: new Set([
       "NODE_ENV",
+      "WORKBENCH_DESKTOP_ENABLED",
+      "RUYIN_BFF_BASE",
+      "RUYIN_DESKTOP_OIDC_CLIENT_SECRET",
+      "RUYIN_DESKTOP_SESSION_TTL",
       "WORKBENCH_BFF_PORT",
       "WORKBENCH_BASE_URL",
       "OIDC_ISSUER",
@@ -615,7 +620,10 @@ const ENV_FILE_RULES = [
       "WORKBENCH_ACTIVITY_DATABASE_URL",
       "REDIS_URL",
     ]),
-    placeholderOptionalKeys: new Set(["REPORTING_RO_DATABASE_URL"]),
+    placeholderOptionalKeys: new Set([
+      "REPORTING_RO_DATABASE_URL",
+      "RUYIN_DESKTOP_OIDC_CLIENT_SECRET",
+    ]),
   },
   {
     label: "platform-api env",
@@ -1489,12 +1497,76 @@ function auditLegacyReferences() {
  *
  * @returns {ReturnType<typeof diagnostic>[]} 诊断列表�?
  */
+/** Native module settings share the existing workbench runtime and read sources. */
+function auditWorkbenchDesktop() {
+  if (!STRICT_RUNTIME) return [];
+  const file = RUNTIME_DIR + "/.env.workbench-bff";
+  const value = (key) =>
+    (parseEnvFile(file).byKey.get(key)?.at(-1)?.value ?? "")
+      .trim()
+      .replace(/^(?:"(.*)"|'(.*)')$/u, "$1$2");
+  const fail = (message) =>
+    diagnostic("error", "env/desktop-runtime", message, file);
+  const flag = value("WORKBENCH_DESKTOP_ENABLED");
+  if (!["", "0", "1"].includes(flag))
+    return [fail("WORKBENCH_DESKTOP_ENABLED must be 0 or 1.")];
+  if (flag !== "1") return [];
+  const issues = [];
+  if (
+    value("RUYIN_BFF_BASE") !== "https://api.ruyin.work" ||
+    value("WORKBENCH_BFF_PORT") !== "3061" ||
+    value("OIDC_CLIENT_ID") !== "workbench" ||
+    value("OIDC_ISSUER") !== "https://accounts.vxture.com"
+  )
+    issues.push(
+      fail(
+        "Desktop requires the existing workbench listener, browser identity and confirmed public origin.",
+      ),
+    );
+  const secret = value("RUYIN_DESKTOP_OIDC_CLIENT_SECRET");
+  if (isPlaceholder(secret) || secret === value("OIDC_CLIENT_SECRET"))
+    issues.push(
+      fail(
+        "Desktop requires a separately provisioned RP secret; the browser secret must remain independent.",
+      ),
+    );
+  const ttl = value("RUYIN_DESKTOP_SESSION_TTL");
+  if (ttl && (!/^\d+$/u.test(ttl) || Number(ttl) < 300 || Number(ttl) > 86400))
+    issues.push(
+      fail("Desktop session TTL must be between 300 and 86400 seconds."),
+    );
+  const records = parseEnvFile(file).records;
+  for (const key of [
+    "WORKBENCH_DESKTOP_ENABLED",
+    "RUYIN_BFF_BASE",
+    "RUYIN_DESKTOP_OIDC_CLIENT_SECRET",
+    "RUYIN_DESKTOP_SESSION_TTL",
+  ])
+    if (records.filter((record) => record.key === key).length > 1)
+      issues.push(fail("Duplicate desktop setting: " + key));
+  const hash = (
+    parseEnvFile(RUNTIME_DIR + "/.env.auth-bff")
+      .byKey.get("OIDC_CLIENT_SECRET_HASH_RUYIN_DESKTOP")
+      ?.at(-1)?.value ?? ""
+  )
+    .trim()
+    .replace(/^["']|["']$/gu, "");
+  if (!/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/u.test(hash))
+    issues.push(
+      fail(
+        "Enabled desktop access requires its separately provisioned IdP hash.",
+      ),
+    );
+  return issues;
+}
+
 function audit() {
   return [
     ...ENV_FILE_RULES.flatMap(auditEnvFileRule),
     ...auditRuntimeSecretFiles(),
     ...auditDeployBundleRealRuntimeFiles(),
     ...auditCompose(),
+    ...auditWorkbenchDesktop(),
     ...auditGenerateEnvScript(),
     ...auditLegacyReferences(),
   ].sort((left, right) => {
@@ -1539,7 +1611,16 @@ function printResults(diagnostics) {
 // Entrypoint
 // ============================================================================
 
-const diagnostics = audit();
+const auditArgs = process.argv.slice(2);
+if (
+  auditArgs.length &&
+  (auditArgs.length !== 1 || auditArgs[0] !== "--desktop-only")
+) {
+  console.error("[env-audit] Unknown audit option.");
+  process.exit(2);
+}
+const diagnostics =
+  auditArgs[0] === "--desktop-only" ? auditWorkbenchDesktop() : audit();
 printResults(diagnostics);
 
 const hasErrors = diagnostics.some((item) => item.severity === "error");

@@ -2738,6 +2738,9 @@ export async function seedCatalog(client) {
     );
   }
 
+  // Existing RP registrations must be visible before desktop callback collision checks.
+  await seedRuyinDesktopClient(client);
+
   /*
    * 每个产品的回调**路径**（域名各自不同，路径不是）。
    *
@@ -4026,6 +4029,76 @@ export async function seedCatalog(client) {
   );
 }
 
+// ── Independent desktop backend RP; no product or commercial identity ────────
+export async function seedRuyinDesktopClient(client, env = process.env) {
+  const raw = env.RUYIN_BFF_BASE?.trim();
+  if (!raw) return;
+  let base;
+  try {
+    base = new URL(raw);
+  } catch {
+    throw new Error(
+      "RUYIN_BFF_BASE must be an HTTPS origin or loopback HTTP origin",
+    );
+  }
+  if (
+    base.username ||
+    base.password ||
+    base.pathname !== "/" ||
+    base.search ||
+    base.hash ||
+    (base.protocol !== "https:" &&
+      !(
+        base.protocol === "http:" &&
+        ["127.0.0.1", "localhost", "[::1]"].includes(base.hostname)
+      ))
+  )
+    throw new Error(
+      "RUYIN_BFF_BASE must be an HTTPS origin or loopback HTTP origin",
+    );
+  // An empty bootstrap hash cannot authenticate. Preserve provisioned hashes on reseed.
+  const hash = env.OIDC_CLIENT_SECRET_HASH_RUYIN_DESKTOP?.trim() || null;
+  if (hash && !/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(hash))
+    throw new Error("A bcrypt RUYIN desktop client secret hash is required");
+  const callback = `${base.origin}/auth/callback`;
+  const backchannel = `${base.origin}/auth/backchannel-logout`;
+  const conflict = await client.query(
+    `select client_id from appoidc.oidc_clients
+      where client_id <> 'ruyin-desktop' and $1 = any(redirect_uris) limit 1`,
+    [callback],
+  );
+  if (conflict.rows.length)
+    throw new Error("Desktop callback is already registered to another client");
+  const result = await client.query(
+    `insert into appoidc.oidc_clients as existing
+       (client_id, realm, client_kind, product_id, release_channel, name, display_name,
+        client_secret_hash, redirect_uris, post_logout_redirect_uris,
+        allowed_scopes, pkce_required, token_endpoint_auth_method,
+        slo_participation, back_channel_logout_uri)
+     values ('ruyin-desktop', 'customer', 'platform', null, 'stable', 'RUYIN Desktop', 'RUYIN',
+        $1, $2, '{}'::text[], array['openid','profile','email','phone'],
+        true, 'client_secret_basic', 'back_channel', $3)
+     on conflict (client_id) do update set
+        client_secret_hash = coalesce(excluded.client_secret_hash, existing.client_secret_hash),
+        redirect_uris = excluded.redirect_uris,
+        post_logout_redirect_uris = excluded.post_logout_redirect_uris,
+        allowed_scopes = excluded.allowed_scopes,
+        pkce_required = true,
+        slo_participation = excluded.slo_participation,
+        back_channel_logout_uri = excluded.back_channel_logout_uri,
+        updated_at = now()
+     where existing.client_kind = 'platform' and existing.product_id is null
+       and existing.realm = 'customer' and existing.release_channel = 'stable'
+       and existing.token_endpoint_auth_method = 'client_secret_basic'`,
+    [hash, [callback], backchannel],
+  );
+  if (result.rowCount !== 1)
+    throw new Error(
+      "Existing ruyin-desktop client conflicts with the independent registration",
+    );
+  console.log("✓ ruyin-desktop platform client registered (no product SKU)");
+}
+
 // ── Dedicated first-party RP registration ────────────────────────────────────
 // Run independently so adding a host does not re-seed unrelated catalog rows.
 export async function seedCustomerPortalClient(client, env = process.env) {
@@ -4299,7 +4372,19 @@ export async function seedCustomerPortalClient(client, env = process.env) {
 }
 
 if (isMain(import.meta.url)) {
-  if (process.argv[2] === "--customer-portal-only") {
+  const args = process.argv.slice(2);
+  if (
+    args.length > 1 ||
+    (args.length === 1 &&
+      !["--ruyin-desktop-only", "--customer-portal-only"].includes(args[0]))
+  ) {
+    console.error(
+      "Unknown catalog seed option; no database connection was opened.",
+    );
+    process.exitCode = 2;
+  } else if (args[0] === "--ruyin-desktop-only") {
+    runSeed("ruyin-desktop", seedRuyinDesktopClient);
+  } else if (args[0] === "--customer-portal-only") {
     runSeed("customer-portal", seedCustomerPortalClient);
   } else {
     runSeed("catalog", seedCatalog);

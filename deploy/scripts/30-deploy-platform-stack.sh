@@ -24,6 +24,8 @@ NGINX_COMPOSE_FILE="${NGINX_COMPOSE_FILE:-/srv/vxture/data/nginx/compose.yml}"
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
 . "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
+load_workbench_desktop_env
+validate_workbench_desktop_runtime "$COMPOSE_DIR"
 
 IMAGE_REGISTRY="$VX_IMAGE_REGISTRY"
 IMAGE_NAMESPACE="$VX_IMAGE_NAMESPACE"

@@ -8,10 +8,13 @@
  */
 import { rpSessionCookieName, type OidcRpConfig } from "@vxture/core-oidc-rp"; // ⚠️ 跨层引用: reuse the platform RP contract.
 
+import { desktopConfig, type DesktopConfig } from "./desktop/runtime";
+
 // ============================================================================
 // Private runtime contract and origin validation
 // ============================================================================
 export interface WorkbenchConfig {
+  desktop?: DesktopConfig;
   origin: string;
   port: number;
   secure: boolean;
@@ -54,7 +57,15 @@ function origin(value: string): string {
  * @throws {Error} When required configuration is absent or unsafe.
  */
 export function loadConfig(env: NodeJS.ProcessEnv): WorkbenchConfig {
+  const desktopFlag = env.WORKBENCH_DESKTOP_ENABLED?.trim() || "0";
+  if (!["0", "1"].includes(desktopFlag))
+    throw new Error("WORKBENCH_DESKTOP_ENABLED must be 0 or 1");
+  const desktop = desktopFlag === "1" ? desktopConfig(env) : undefined;
   const base = origin(required(env, "WORKBENCH_BASE_URL"));
+  if (desktop?.base === base)
+    throw new Error("Desktop and browser origins must be distinct");
+  if (desktop && desktop.oidc.clientSecret === env.OIDC_CLIENT_SECRET?.trim())
+    throw new Error("Desktop and browser RP secrets must be distinct");
   const issuer = origin(required(env, "OIDC_ISSUER"));
   const secure = env.RP_COOKIE_INSECURE !== "true";
   const production = env.NODE_ENV === "production";
@@ -96,6 +107,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): WorkbenchConfig {
       );
   }
   return {
+    ...(desktop ? { desktop } : {}),
     activityDatabaseUrl,
     origin: base,
     port,

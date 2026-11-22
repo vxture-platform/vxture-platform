@@ -16,12 +16,14 @@ interface CatalogRow {
   productType: string;
   description: string | null;
   iconUrl: string | null;
+  iconVersion?: string | null;
   releaseVersion: string | null;
   releaseStage: string;
   status: string;
   maintenance: { until: string | null } | null;
 }
 interface SubscriptionRow {
+  subscriptionId?: string;
   productCode: string;
   status: string;
   tier: string | null;
@@ -38,11 +40,15 @@ interface SubscriptionRow {
 // ============================================================================
 const MAINTENANCE = `case when p.maintenance_window_id is not null
   then jsonb_build_object('until', p.maintenance_until) else null end`;
-const CATALOG = `select p.product_code as "productCode", p.product_name as "productName",
+const CATALOG = (
+  includeBranding = false,
+) => `select p.product_code as "productCode", p.product_name as "productName",
   p.product_nick as "productNick", p.product_type as "productType", p.description,
   p.icon_url as "iconUrl", p.release_version as "releaseVersion", p.release_stage as "releaseStage",
+  ${includeBranding ? 'pi.checksum as "iconVersion",' : ""}
   p.status, ${MAINTENANCE} as maintenance
   from product.products p
+  ${includeBranding ? "left join product.product_icons pi on pi.product_id=p.id" : ""}
   where p.deleted_at is null and p.is_customer_visible and p.status in ('active', 'developing')
   order by p.sort, p.product_code`;
 const SUBSCRIPTIONS = `select distinct p.product_code as "productCode", s.status,
@@ -76,21 +82,26 @@ export class CatalogService {
     private readonly pool: Pick<Pool, "query">,
     private readonly seats?: Pick<ProductSeatService, "hasUserAccess">,
   ) {}
-  async catalog(): Promise<CatalogRow[]> {
-    return (await this.pool.query<CatalogRow>(CATALOG)).rows;
+  async catalog(includeBranding = false): Promise<CatalogRow[]> {
+    return (await this.pool.query<CatalogRow>(CATALOG(includeBranding))).rows;
   }
   async subscriptions(
     workspace: string,
     tenant: string,
     user: string,
     authorize: boolean | string = true,
+    includeIdentity = false,
   ): Promise<SubscriptionRow[]> {
     const rows = (
-      await this.pool.query<SubscriptionRow>(SUBSCRIPTIONS, [
-        workspace,
-        tenant,
-        user,
-      ])
+      await this.pool.query<SubscriptionRow>(
+        includeIdentity
+          ? SUBSCRIPTIONS.replace(
+              "select distinct p.",
+              'select distinct s.id as "subscriptionId", p.',
+            )
+          : SUBSCRIPTIONS,
+        [workspace, tenant, user],
+      )
     ).rows;
     const access = new Map<string, "allowed" | "denied" | "unknown">();
     const codes =
