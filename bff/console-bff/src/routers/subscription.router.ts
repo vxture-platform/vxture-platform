@@ -48,6 +48,7 @@ import {
   OrderService,
   SubscriptionService,
   readSubscribedProducts, // ⚠️ 跨层引用: Reuse the public domain read without changing Console projection.
+  readRecommendedProducts, // ⚠️ 跨层引用: Reuse candidate eligibility and preserve the Console price projection.
 } from "@vxture/service-subscription";
 import type {
   DeclarePaymentResult,
@@ -1497,58 +1498,8 @@ export class SubscriptionRouter {
     if (!req.user) throw new UnauthorizedException("No active session");
     const favorites = await this.safeFavoriteIds(req.user.id);
 
-    const res = await this.pool.query<{
-      product_id: string;
-      product_code: string;
-      product_name: string;
-      product_nick: string | null;
-      description: string | null;
-      release_version: string | null;
-      released_at: Date | null;
-      icon_url: string | null;
-      tags: string[] | null;
-      min_price: string;
-      currency: string;
-    }>(
-      `select prod.id as product_id, prod.product_code, prod.product_name,
-              prod.product_nick, prod.description, prod.release_version,
-              prod.released_at,
-              prod.icon_url, prod.tags,
-              to_char(coalesce(min(pp.price), 0), 'FM999999999990.00') as min_price,
-              coalesce(min(pp.currency), 'CNY') as currency
-         from product.products prod
-         join product.plan_components pc
-           on pc.product_id = prod.id and pc.component_role = 'primary'
-         join product.plan_versions pv
-           on pv.id = pc.plan_version_id and pv.is_locked = true
-         join product.plans pl
-           on pl.id = pv.plan_id and pl.current_version_id = pv.id
-          and pl.deleted_at is null and pl.status = 'active'
-          and pl.is_public = true and pl.is_customer_visible = true
-         left join product.plan_prices pp on pp.plan_version_id = pv.id
-        where prod.deleted_at is null and prod.status = 'active'
-          and prod.is_customer_visible = true
-          and prod.standalone_subscribable = true
-          /* 预览版与停售中的不进推荐位：前者还不能订（下单路径同步卡着），
-             推了只会把人送到一个按不下去的按钮前；后者只接受老客户续订，
-             而推荐位面向的恰恰是尚未订阅这个产品的租户。
-             （2026-10-29 承诺等级改名：developing → preview。） */
-          and prod.release_stage not in ('preview', 'sunset')
-          and not exists (
-            select 1 from metering.subscriptions ts
-              join product.plan_components sub_pc
-                on sub_pc.plan_version_id = ts.plan_version_id
-             where ts.tenant_id = $1 and ts.deleted_at is null
-               and sub_pc.product_id = prod.id
-          )
-        group by prod.id, prod.product_code, prod.product_name, prod.product_nick,
-                 prod.description, prod.release_version, prod.released_at,
-                 prod.icon_url, prod.tags, prod.sort
-        order by prod.sort asc, prod.product_code asc
-        limit 6`,
-      [req.tenant.id],
-    );
-    return res.rows.map((r) => ({
+    const rows = await readRecommendedProducts(this.pool, req.tenant.id);
+    return rows.map((r) => ({
       productId: r.product_id,
       productCode: r.product_code,
       productName: r.product_name,

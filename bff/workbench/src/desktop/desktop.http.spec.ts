@@ -594,7 +594,9 @@ describe("minimal desktop backend", () => {
   // Shared subscription reads and public branding
   // ========================================================================
 
-  function applications() {
+  function applications(
+    scope?: ConstructorParameters<typeof ApplicationReader>[2],
+  ) {
     const query = vi.fn().mockResolvedValue({ rows: [] });
     const subscriptions = vi.fn().mockResolvedValue([]);
     const catalog = vi.fn().mockResolvedValue([]);
@@ -602,9 +604,169 @@ describe("minimal desktop backend", () => {
     rt.applications = new ApplicationReader(
       { subscriptions, catalog, entries },
       { query },
+      scope,
     );
     return { query, subscriptions, catalog, entries };
   }
+
+  // ========================================================================
+  // Recommendation reads require a tenant-level grant for subscription history.
+  // ========================================================================
+
+  const recommendationsPath = "/api/subscription/recommended-products";
+
+  it("returns only ordered codes bound to the native tenant", async () => {
+    const session = await login();
+    const assertRead = vi.fn().mockResolvedValue(undefined);
+    const { query, subscriptions, catalog } = applications({ assertRead });
+    query.mockResolvedValue({
+      rows: [
+        { productCode: "beta-agent", minPrice: "19.00", favorite: true },
+        { productCode: "stable-agent", minPrice: "0.00" },
+      ],
+    });
+
+    const response = await request(
+      `${recommendationsPath}?tenantId=attacker&workspaceId=other`,
+      { headers: { "x-vxture-session": session.rpsid } },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(await response.json()).toEqual([
+      { productCode: "beta-agent" },
+      { productCode: "stable-agent" },
+    ]);
+    expect(query).toHaveBeenCalledExactlyOnceWith(expect.any(String), [ORG]);
+    expect(subscriptions).not.toHaveBeenCalled();
+    expect(catalog).not.toHaveBeenCalled();
+    expect(assertRead.mock.calls).toEqual(
+      Array.from({ length: 2 }, () => [
+        expect.objectContaining({
+          userId: SUB.slice(4),
+          activeOrg: ORG,
+          activeWorkspace: WORKSPACE,
+        }),
+        "tenant.billing.read",
+        true,
+      ]),
+    );
+  });
+
+  it("rejects missing, browser-only and invalid credentials before reading", async () => {
+    const assertRead = vi.fn();
+    const { query } = applications({ assertRead });
+    expect((await request(recommendationsPath)).status).toBe(400);
+    expect(
+      (
+        await request(recommendationsPath, {
+          headers: { cookie: "vx_rp_session=browser-only" },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(recommendationsPath, {
+          headers: { "x-vxture-session": "invalid-session" },
+        })
+      ).status,
+    ).toBe(401);
+    expect(assertRead).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("blocks tenant history on denied permission without ending the session", async () => {
+    const session = await login();
+    const assertRead = vi
+      .fn()
+      .mockRejectedValue(
+        failure(403, "WORKBENCH_READ_FORBIDDEN", "Read forbidden"),
+      );
+    const { query } = applications({ assertRead });
+    const headers = { "x-vxture-session": session.rpsid };
+    const response = await request(recommendationsPath, { headers });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: "WORKBENCH_READ_FORBIDDEN",
+      retryable: false,
+    });
+    expect(query).not.toHaveBeenCalled();
+    expect((await request("/api/me", { headers })).status).toBe(200);
+  });
+
+  it("distinguishes empty results, unavailable permission wiring and source failure", async () => {
+    const session = await login();
+    const headers = { "x-vxture-session": session.rpsid };
+    applications();
+    const missing = await request(recommendationsPath, { headers });
+    expect(missing.status).toBe(503);
+    expect(await missing.json()).toMatchObject({
+      code: "WORKBENCH_RECOMMENDATIONS_UNAVAILABLE",
+      retryable: true,
+    });
+
+    const { query } = applications({
+      assertRead: vi.fn().mockResolvedValue(undefined),
+    });
+    const empty = await request(recommendationsPath, { headers });
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual([]);
+
+    query.mockRejectedValueOnce(new Error("postgres://private-source"));
+    const unavailable = await request(recommendationsPath, { headers });
+    expect(unavailable.status).toBe(503);
+    expect(await unavailable.json()).toEqual({
+      code: "WORKBENCH_RECOMMENDATIONS_UNAVAILABLE",
+      message: "Agent recommendations are temporarily unavailable",
+      retryable: true,
+    });
+  });
+
+  it("discards results when the tenant permission is removed during the read", async () => {
+    const session = await login();
+    const assertRead = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(
+        failure(403, "WORKBENCH_READ_FORBIDDEN", "Read forbidden"),
+      );
+    const { query } = applications({ assertRead });
+    query.mockResolvedValue({ rows: [{ productCode: "unreturned-agent" }] });
+    const response = await request(recommendationsPath, {
+      headers: { "x-vxture-session": session.rpsid },
+    });
+    expect(response.status).toBe(403);
+    expect(await response.text()).not.toContain("unreturned-agent");
+    expect(assertRead).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards results when the native session ends during the read", async () => {
+    const session = await login();
+    const headers = { "x-vxture-session": session.rpsid };
+    const { query } = applications({
+      assertRead: vi.fn().mockResolvedValue(undefined),
+    });
+    type CandidateResult = { rows: { productCode: string }[] };
+    let finishRead!: (result: CandidateResult) => void;
+    const pending = new Promise<CandidateResult>((resolve) => {
+      finishRead = resolve;
+    });
+    query.mockReturnValueOnce(pending);
+    const reading = request(recommendationsPath, { headers });
+    try {
+      await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(1));
+      expect((await post("/auth/native/logout", {}, headers)).status).toBe(204);
+    } finally {
+      finishRead({ rows: [{ productCode: "unreturned-agent" }] });
+    }
+    const response = await reading;
+    expect(response.status).toBe(401);
+    expect(await response.text()).not.toContain("unreturned-agent");
+  });
+
+  // ========================================================================
+  // Subscribed application and branding response contracts
+  // ========================================================================
+
   it("uses the existing member catalog with real primary and bundled identities, without billing permission", async () => {
     const session = await login(),
       source = applications();

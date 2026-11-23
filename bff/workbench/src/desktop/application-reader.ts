@@ -10,9 +10,12 @@ import { ServiceUnavailableException } from "@nestjs/common";
 import type { RpUser } from "@vxture/core-oidc-rp"; // ⚠️ 跨层引用: verified RP identity.
 import {
   readProductIcon,
+  readRecommendedAgentCodes,
   type SubscriptionReadPool,
-} from "@vxture/service-subscription"; // ⚠️ 跨层引用: public branding query.
+} from "@vxture/service-subscription"; // ⚠️ 跨层引用: Public branding and shared recommendation reads.
 import type { CatalogService } from "../catalog-service";
+import { failure } from "../errors";
+import type { ScopeService } from "../scope-service";
 
 // ============================================================================
 // Existing workbench read models, projected without a second authorization rule
@@ -23,6 +26,15 @@ function unavailable(): never {
     message: "Agent information is temporarily unavailable",
   });
 }
+
+function recommendationUnavailable(): never {
+  throw failure(
+    503,
+    "WORKBENCH_RECOMMENDATIONS_UNAVAILABLE",
+    "Agent recommendations are temporarily unavailable",
+  );
+}
+
 export class ApplicationReader {
   constructor(
     private readonly catalog: Pick<
@@ -30,6 +42,7 @@ export class ApplicationReader {
       "subscriptions" | "catalog" | "entries"
     >,
     private readonly pool: SubscriptionReadPool,
+    private readonly scope?: Pick<ScopeService, "assertRead">,
   ) {}
   async subscribed(user: RpUser) {
     try {
@@ -73,6 +86,24 @@ export class ApplicationReader {
       unavailable();
     }
   }
+
+  /**
+   * Tenant-wide subscription history requires a tenant-level grant.
+   * @param user - Verified identity and active scope from the desktop session.
+   * @returns Ordered candidate codes for public catalog enrichment.
+   * @throws When the scope, permission or recommendation source is unavailable.
+   */
+  async recommended(user: RpUser): Promise<{ productCode: string }[]> {
+    if (!this.scope) recommendationUnavailable();
+    await this.scope.assertRead(user, "tenant.billing.read", true);
+    const rows = await readRecommendedAgentCodes(
+      this.pool,
+      user.activeOrg!,
+    ).catch(recommendationUnavailable);
+    await this.scope.assertRead(user, "tenant.billing.read", true);
+    return rows.map(({ productCode }) => ({ productCode }));
+  }
+
   icon(code: string) {
     return readProductIcon(this.pool, code).catch(unavailable);
   }

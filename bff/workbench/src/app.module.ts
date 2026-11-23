@@ -120,7 +120,7 @@ class HealthRouter implements OnModuleInit {
           ? {
               ...createDesktopRuntime(config.desktop, redis),
               workspaces: new WorkspaceReader(organization, scopes),
-              applications: new ApplicationReader(catalog, pool),
+              applications: new ApplicationReader(catalog, pool, scopes),
               resources: new ResourceReader(scopes, overview),
             }
           : null,
