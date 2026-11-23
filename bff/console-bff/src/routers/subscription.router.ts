@@ -48,6 +48,7 @@ import {
   OrderService,
   SubscriptionService,
   readSubscribedProducts, // ⚠️ 跨层引用: Reuse the public domain read without changing Console projection.
+  readWorkspaceEntitlementProductCodes, // ⚠️ 跨层引用: Reuse historical coverage selection.
   readRecommendedProducts, // ⚠️ 跨层引用: Reuse candidate eligibility and preserve the Console price projection.
 } from "@vxture/service-subscription";
 import type {
@@ -950,35 +951,15 @@ export class SubscriptionRouter {
   private async resolveWorkspaceEntitlements(
     workspaceId: string,
   ): Promise<Record<string, ProductEntitlementView> | null> {
-    const productCodes = await this.queryWorkspaceProductCodes(workspaceId);
+    const productCodes = await readWorkspaceEntitlementProductCodes(
+      this.pool,
+      workspaceId,
+    );
     if (productCodes.length === 0) return {};
     return this.entitlementsClient.resolveWorkspaceEntitlements(
       workspaceId,
       productCodes,
     );
-  }
-
-  /**
-   * Distinct product codes this workspace has ever had ANY plan_component
-   * coverage for — primary (standalone purchase) OR bundled (product_220
-   * §2: a product can carry real entitlement, e.g. `bundled: true`, with no
-   * primary subscription of its own ever existing). Restricting to
-   * `component_role = 'primary'` would silently hide bundled-only coverage
-   * from the entitlements panel — the exact "both facts survive" case §2
-   * calls out as the reason the bundled boolean exists in the first place.
-   */
-  private async queryWorkspaceProductCodes(
-    workspaceId: string,
-  ): Promise<string[]> {
-    const res = await this.pool.query<{ product_code: string }>(
-      `select distinct prod.product_code
-         from metering.subscriptions ts
-         join product.plan_components pc on pc.plan_version_id = ts.plan_version_id
-         join product.products prod on prod.id = pc.product_id
-        where ts.workspace_id = $1 and ts.deleted_at is null`,
-      [workspaceId],
-    );
-    return res.rows.map((r) => r.product_code);
   }
 
   // --------------------------------------------------------------------------

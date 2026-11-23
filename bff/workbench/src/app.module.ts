@@ -41,6 +41,7 @@ import { DESKTOP_RUNTIME, createDesktopRuntime } from "./desktop/runtime";
 import { WorkspaceReader } from "./desktop/workspace-reader";
 import { ApplicationReader } from "./desktop/application-reader";
 import { ResourceReader } from "./desktop/resource-reader";
+import { EntitlementReader } from "./desktop/entitlement-reader";
 import { BillingService, PgBillingRepository } from "@vxture/service-billing"; // ⚠️ 跨层引用: inject the existing read-only pool into domain readers.
 import {
   MeteringReadService,
@@ -122,6 +123,7 @@ class HealthRouter implements OnModuleInit {
               workspaces: new WorkspaceReader(organization, scopes),
               applications: new ApplicationReader(catalog, pool, scopes),
               resources: new ResourceReader(scopes, overview),
+              entitlements: new EntitlementReader(pool, scopes),
             }
           : null,
     },
