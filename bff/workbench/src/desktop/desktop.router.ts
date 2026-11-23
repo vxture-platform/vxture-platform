@@ -38,9 +38,7 @@ import { requireWorkspaceReader } from "./workspace-reader";
 import { requireApplicationReader } from "./application-reader";
 import { requireResourceReader } from "./resource-reader";
 import { failure } from "../errors";
-
-const DONE_HTML =
-  '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RUYIN</title><body><main><h1>登录已完成</h1><p>请返回 RUYIN 桌面应用继续。</p></main></body></html>';
+import { NATIVE_DONE_CSP, NATIVE_DONE_HTML } from "./native-done-page";
 
 @Controller("desktop")
 @UseGuards(DesktopEnabledGuard)
@@ -88,15 +86,12 @@ export class DesktopRouter {
 
   @Get("auth/native/done")
   @Header("Cache-Control", "no-store")
-  @Header(
-    "Content-Security-Policy",
-    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
-  )
+  @Header("Content-Security-Policy", NATIVE_DONE_CSP)
   @Header("Referrer-Policy", "no-referrer")
   @Header("X-Content-Type-Options", "nosniff")
   @Header("Content-Type", "text/html; charset=utf-8")
   done(): string {
-    return DONE_HTML;
+    return NATIVE_DONE_HTML;
   }
 
   @Post("auth/native/claim")
