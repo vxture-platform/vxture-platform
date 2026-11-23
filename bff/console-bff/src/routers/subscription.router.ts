@@ -378,6 +378,10 @@ interface MyOrderRecord {
   tier: string | null;
   cycleUnit: string;
   amount: string;
+  /** Non-voucher amount due; after settlement, the original collected amount. */
+  settlementAmount: string;
+  /** Paid non-voucher legs, without subtracting subsequent refunds. */
+  settledPaymentAmount: string;
   currency: string;
   /** Six-state contract (product_321 P1) — replaces pending/confirmed/closed. */
   orderStatus: OrderState;
@@ -469,6 +473,8 @@ interface OrderDetailResult {
   /** Base list price (pre-discount), yuan string. */
   listPrice: string;
   paidAmount: string;
+  settlementAmount: string;
+  settledPaymentAmount: string;
   /** Latest reject reason to surface in the banner (P2), if any. */
   rejectReason: string | null;
   vouchers: OrderVoucherOption[];
@@ -2104,6 +2110,7 @@ export class SubscriptionRouter {
       expireAt: deriveExpireAt(row, state),
       listPrice: baseListPrice(row),
       paidAmount: row.paid_amount ?? "0",
+      ...orderSettlementAmounts(row),
       rejectReason,
       vouchers: vouchers.map(mapVoucherOption),
       legs,
@@ -2837,6 +2844,7 @@ interface OrderRow {
   paid_amount: string | null;
   discount_amount: string | null;
   voucher_paid: string | null;
+  settled_payment_amount: string | null;
   ttl_anchor: Date;
   /** 有退款单在审或在执行（`audit_status='pending'`，或已通过但还没落 success/failed）。 */
   refund_in_flight: boolean;
@@ -2887,6 +2895,10 @@ select
     select sum(p.paid_amount) from billing.payments p
      where p.bill_id = inv.id and p.pay_status = 'paid' and p.pay_source = 'voucher'
   ), 0)                as voucher_paid,
+  coalesce((
+    select sum(p.paid_amount) from billing.payments p
+     where p.bill_id = inv.id and p.pay_status = 'paid' and p.pay_source <> 'voucher'
+  ), 0)::text          as settled_payment_amount,
   greatest(
     o.created_at,
     coalesce((
@@ -3083,6 +3095,28 @@ function mapVoucherOption(v: AvailableVoucher): OrderVoucherOption {
 
 // buildPaymentChannels: see ../lib/payment-channels (shared with addon flow).
 
+/** Keep partial collections separate from the whole order's settlement amount. */
+function orderSettlementAmounts(r: OrderRow): {
+  settlementAmount: string;
+  settledPaymentAmount: string;
+} {
+  const settledPaymentAmount = r.settled_payment_amount ?? "0";
+  const settled = ["paid", "fulfilled", "refunded"].includes(r.order_status);
+  return {
+    settlementAmount:
+      settled && r.invoice_id
+        ? settledPaymentAmount
+        : centsToYuan(
+            Math.max(
+              0,
+              yuanToCents(r.total_amount ?? r.payable_amount) -
+                yuanToCents(r.voucher_paid ?? "0"),
+            ),
+          ),
+    settledPaymentAmount,
+  };
+}
+
 function mapMyOrderRow(r: OrderRow): MyOrderRecord {
   const state = deriveOrderState(r);
   return {
@@ -3096,6 +3130,7 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     cycleUnit: r.cycle_unit,
     // 订单金额 = 订单实体应付（product_330）；不看订阅行 pay_amount（履约后会被改写）。
     amount: r.payable_amount,
+    ...orderSettlementAmounts(r),
     currency: r.currency ?? "CNY",
     orderStatus: state,
     /* 服务在不在：读订阅，不读订单（见 ORDER_ROW_SELECT 里那段注释）。 */

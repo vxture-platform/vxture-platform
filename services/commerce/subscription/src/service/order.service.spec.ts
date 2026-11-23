@@ -127,6 +127,9 @@ function transferringView(over: Partial<RefundRecordView> = {}) {
 function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
   const orders = {
     getById: vi.fn(async () => orderRow),
+    getSettledPaymentAmount: vi.fn(
+      async (_orderId: string) => orderRow.payableAmount,
+    ),
     createOrder: vi.fn(async () => ({
       order: orderRow,
       invoiceId: "inv-1",
@@ -1553,6 +1556,81 @@ describe("OrderService refund transfer step（2026-12-01）", () => {
 });
 
 describe("OrderService.fulfill", () => {
+  // Settlement notifications report collected money without changing subscription terms.
+  describe.each(["new", "renew"] as const)(
+    "%s settlement notification",
+    (intent) => {
+      it.each([
+        ["no voucher", "1.00", "1.00", "¥1.00"],
+        ["discount", "1.00", "0.80", "¥0.80"],
+        ["credit voucher and mixed payments", "100.00", "60.00", "¥60.00"],
+        ["full voucher", "100.00", "0.00", "¥0.00"],
+        ["zero order", "0.00", "0.00", "¥0.00"],
+      ])(
+        "%s uses paid non-voucher legs",
+        async (_label, payable, collected, expected) => {
+          const { service, orders } = build(
+            order({
+              intent,
+              payableAmount: payable,
+              fromSubscriptionId: intent === "renew" ? "sub-1" : null,
+            }),
+            intent === "renew" ? sub({ planVersionId: PV_PRO }) : null,
+          );
+          orders.getSettledPaymentAmount.mockResolvedValueOnce(collected);
+          const notify = vi.fn(
+            async (_input: CustomerNotifyInput) => undefined,
+          );
+          service.setCustomerNotifier({ notify });
+          await service.fulfill("ord-1", {
+            actorType: "customer",
+            actorId: "u-1",
+          });
+          expect(
+            orders.getSettledPaymentAmount,
+          ).toHaveBeenCalledExactlyOnceWith("ord-1");
+          expect(notify).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({
+              templateCode:
+                intent === "renew" ? "subscription.renewed" : "order.fulfilled",
+              params: expect.objectContaining({ amount: expected }),
+            }),
+          );
+          expect(orders.applySubscriptionTerms).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({ payAmount: payable }),
+          );
+        },
+      );
+
+      it("does not report the nominal price when settlement cannot be read", async () => {
+        const { service, orders } = build(order({ intent }), null);
+        orders.getSettledPaymentAmount.mockRejectedValueOnce(
+          new Error("settlement unavailable"),
+        );
+        const notify = vi.fn(async (_input: CustomerNotifyInput) => undefined);
+        service.setCustomerNotifier({ notify });
+        await expect(
+          service.fulfill("ord-1", { actorType: "system", actorId: null }),
+        ).resolves.toBeDefined();
+        expect(orders.markFulfilled).toHaveBeenCalledOnce();
+        expect(notify).not.toHaveBeenCalled();
+      });
+    },
+  );
+
+  it("does not reload settlement or resend a notification for an already fulfilled order", async () => {
+    const { service, orders } = build(
+      order({ status: "fulfilled", subscriptionId: "sub-new" }),
+      null,
+    );
+    const notify = vi.fn(async (_input: CustomerNotifyInput) => undefined);
+    service.setCustomerNotifier({ notify });
+    await service.fulfill("ord-1", { actorType: "system", actorId: null });
+    expect(orders.getSettledPaymentAmount).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
   it("does not create a duplicate after payment when another subscription is already held", async () => {
     const { service, orders, subscriptions } = build(
       order({ intent: "new" }),

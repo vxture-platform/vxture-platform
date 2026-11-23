@@ -401,6 +401,157 @@ describe("subscription_changed → C2 entitlement invalidate (P2.4 debt)", () =>
     expect(m.provisioning.enqueueEvent).not.toHaveBeenCalled();
   });
 
+  // ========================================================================
+  // A changed term invalidates C2 without repeating lifecycle provisioning.
+  // ========================================================================
+  it("invalidates a same-status same-version renewal once per covered product", async () => {
+    const before = {
+      ...SUB,
+      endAt: new Date("2027-11-11T16:49:05.065Z"),
+      autoRenew: false,
+    };
+    const after = { ...before, endAt: new Date("2028-11-11T16:49:05.065Z") };
+    m.repo.getById.mockResolvedValue(before);
+    m.repo.update.mockResolvedValue(after);
+    m.repo.listVersionProducts.mockResolvedValue([ARDA, RUNOS, ARDA]);
+
+    await expect(
+      m.service.updateSubscription("sub-1", { endAt: after.endAt }),
+    ).resolves.toEqual(after);
+
+    expect(m.provisioning.enqueueEvent).toHaveBeenCalledTimes(2);
+    for (const product of [ARDA, RUNOS]) {
+      expect(m.provisioning.enqueueEvent).toHaveBeenCalledWith({
+        workspaceId: before.workspaceId,
+        tenantId: before.tenantId,
+        applicationId: product.productId,
+        appCode: product.productCode,
+        event: "subscription_changed",
+        idempotencyKey: expect.stringContaining(
+          `subchg:${before.id}:${product.productId}:`,
+        ),
+        data: { products: [product.productCode], subscription_id: before.id },
+      });
+    }
+    expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
+    expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+    expect(m.repo.update).toHaveBeenCalledExactlyOnceWith("sub-1", before, {
+      endAt: after.endAt,
+    });
+  });
+
+  it.each([
+    [
+      "limited to later",
+      new Date("2027-01-01T00:00:00Z"),
+      new Date("2028-01-01T00:00:00Z"),
+    ],
+    [
+      "limited to earlier",
+      new Date("2027-01-01T00:00:00Z"),
+      new Date("2026-12-01T00:00:00Z"),
+    ],
+    ["unlimited to limited", null, new Date("2027-01-01T00:00:00Z")],
+    ["limited to unlimited", new Date("2027-01-01T00:00:00Z"), null],
+  ])(
+    "invalidates the committed term change: %s",
+    async (_label, endAt, nextEndAt) => {
+      m.repo.getById.mockResolvedValue({ ...SUB, endAt });
+      m.repo.update.mockResolvedValue({ ...SUB, endAt: nextEndAt });
+      await m.service.updateSubscription("sub-1", {});
+      expect(m.provisioning.enqueueEvent).toHaveBeenCalledOnce();
+      expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
+      expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+    },
+  );
+
+  it("compares timestamp values instead of Date object identity", async () => {
+    const iso = "2028-11-11T16:49:05.065Z";
+    m.repo.getById.mockResolvedValue({ ...SUB, endAt: new Date(iso) });
+    m.repo.update.mockResolvedValue({
+      ...SUB,
+      endAt: new Date(iso),
+      autoRenew: false,
+    });
+    await m.service.updateSubscription("sub-1", {
+      endAt: new Date(iso),
+      autoRenew: false,
+    });
+    expect(m.provisioning.enqueueEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not enqueue again when the same committed renewal is applied sequentially", async () => {
+    let current = { ...SUB, endAt: new Date("2027-11-11T16:49:05.065Z") };
+    const target = new Date("2028-11-11T16:49:05.065Z");
+    m.repo.getById.mockImplementation(async () => current);
+    m.repo.update.mockImplementation(async () => {
+      current = { ...current, endAt: new Date(target) };
+      return current;
+    });
+    await m.service.updateSubscription("sub-1", { endAt: target });
+    await m.service.updateSubscription("sub-1", { endAt: new Date(target) });
+    expect(m.provisioning.enqueueEvent).toHaveBeenCalledOnce();
+  });
+
+  it("emits one invalidation when status and term change together", async () => {
+    m.repo.getById.mockResolvedValue({
+      ...SUB,
+      status: "expired",
+      endAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    const after = { ...SUB, endAt: new Date("2027-01-01T00:00:00Z") };
+    m.repo.update.mockResolvedValue(after);
+    await m.service.updateSubscription("sub-1", {
+      status: "active",
+      endAt: after.endAt,
+    });
+    expect(m.provisioning.enqueueEvent).toHaveBeenCalledOnce();
+    expect(m.provisioning.onSubscriptionActivated).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a committed renewal successful when invalidation enqueue fails", async () => {
+    m.repo.getById.mockResolvedValue(SUB);
+    const after = { ...SUB, endAt: new Date("2028-11-11T16:49:05.065Z") };
+    m.repo.update.mockResolvedValue(after);
+    m.provisioning.enqueueEvent.mockRejectedValue(
+      new Error("queue unavailable"),
+    );
+    await expect(
+      m.service.updateSubscription("sub-1", { endAt: after.endAt }),
+    ).resolves.toEqual(after);
+    expect(m.provisioning.enqueueEvent).toHaveBeenCalledOnce();
+  });
+
+  it.each(["missing", "failed"])(
+    "does not enqueue after a %s write",
+    async (failure) => {
+      m.repo.getById.mockResolvedValue(SUB);
+      if (failure === "missing") m.repo.update.mockResolvedValue(null);
+      else m.repo.update.mockRejectedValue(new Error("write failed"));
+      await expect(
+        m.service.updateSubscription("sub-1", {
+          endAt: new Date("2028-01-01T00:00:00Z"),
+        }),
+      ).rejects.toThrow();
+      expect(m.provisioning.enqueueEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not infer a term change for an external status-only snapshot", async () => {
+    m.repo.getById.mockResolvedValue({
+      ...SUB,
+      status: "suspended",
+      endAt: new Date("2028-01-01T00:00:00Z"),
+    });
+    await m.service.applyExternalStatusChange("sub-1", {
+      status: "active",
+      planVersionId: SUB.planVersionId,
+    });
+    expect(m.provisioning.enqueueEvent).toHaveBeenCalledOnce();
+    expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
+    expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+  });
+
   it("an enqueue failure never fails the committed write", async () => {
     m.repo.create.mockResolvedValue(SUB);
     m.provisioning.enqueueEvent.mockRejectedValue(new Error("db"));

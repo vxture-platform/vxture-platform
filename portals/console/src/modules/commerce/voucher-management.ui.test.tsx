@@ -929,13 +929,121 @@ it("preserves zero-value settlement history and shows noncash reversal in the or
 });
 
 // ============================================================================
+// Verify settlement display without mutating payments or subscription terms.
+// ============================================================================
+it.each([
+  {
+    name: "no voucher",
+    settlement: "1.00",
+    collected: "1.00",
+    off: "0.00",
+    status: "completed",
+  },
+  {
+    name: "discount",
+    settlement: "0.80",
+    collected: "0.80",
+    off: "0.20",
+    status: "completed",
+  },
+  {
+    name: "credit voucher",
+    settlement: "0.70",
+    collected: "0.70",
+    off: "0.30",
+    status: "completed",
+  },
+  {
+    name: "full voucher",
+    settlement: "0.00",
+    collected: "0.00",
+    off: "1.00",
+    status: "completed",
+  },
+  {
+    name: "zero order",
+    settlement: "0.00",
+    collected: "0.00",
+    off: "0.00",
+    status: "completed",
+  },
+  {
+    name: "partial payment",
+    settlement: "0.80",
+    collected: "0.20",
+    off: "0.20",
+    status: "partially_paid",
+  },
+  {
+    name: "refund",
+    settlement: "0.80",
+    collected: "0.80",
+    off: "0.20",
+    status: "refunded",
+  },
+  { name: "old BFF", off: "0.00", status: "completed" },
+])("$name shows the settlement amount in both order views", async (test) => {
+  const order = {
+    orderId: "order",
+    orderNo: "ORD-01",
+    planName: "Plan",
+    productName: "Product",
+    currency: "CNY",
+    amount: test.name === "zero order" ? "0.00" : "1.00",
+    listPrice: "1.00",
+    voucherOff: test.off,
+    ...(test.settlement !== undefined
+      ? {
+          settlementAmount: test.settlement,
+          settledPaymentAmount: test.collected,
+        }
+      : {}),
+    paidAmount: test.collected ?? "1.00",
+    orderStatus: test.status,
+    subscriptionStatus: "active",
+    cycleUnit: "year",
+    createdAt: "2026-11-01T00:00:00Z",
+    confirmedAt: "2026-11-01T00:00:00Z",
+    activatedAt: "2026-11-01T00:00:00Z",
+  } as MyOrder;
+  const expected = test.settlement ?? order.amount;
+  await render(
+    <OrderDetailPanel order={order} countdown={null} fmtLocale="en-US" />,
+  );
+  const payable = Array.from(host.querySelectorAll("span")).find(
+    (node) => node.textContent === messages.subscriptionHub.detail.payable,
+  );
+  expect(payable?.nextElementSibling?.textContent).toContain(expected);
+  if (test.name === "full voucher")
+    expect(host.textContent).toContain(
+      messages.subscriptionHub.detail.step.settleZero,
+    );
+  mocks.orders.mockResolvedValueOnce([order]);
+  await render(<OrdersSection />);
+  const tableRow = host.querySelector('[role="row"]')!;
+  expect(tableRow.querySelector(".font-semibold")?.textContent).toContain(
+    expected,
+  );
+  if (test.name === "full voucher")
+    expect(tableRow.textContent).toContain(
+      messages.subscriptionHub.payAxis.settledZero,
+    );
+  if (test.name === "partial payment")
+    expect(tableRow.textContent).toContain(
+      messages.subscriptionHub.payAxis.partial,
+    );
+  expect(mocks.order).not.toHaveBeenCalled();
+});
+
+// ============================================================================
 // Render the business preview again with installed design-system primitives.
 // ============================================================================
+// Load installed primitives during collection, before the assertion time budget.
+vi.doUnmock("@vxture/design-system");
+vi.resetModules();
+const { RechargeCardDialog: RealDialog } = await import("./RechargeCardDialog");
+
 it("renders a real design-system recharge preview with principal, bonus and wallet destination", async () => {
-  vi.doUnmock("@vxture/design-system");
-  vi.resetModules();
-  const { RechargeCardDialog: RealDialog } =
-    await import("./RechargeCardDialog");
   await render(
     <RealDialog voucherId="voucher" onClose={close} onRedeemed={changed} />,
   );

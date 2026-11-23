@@ -1175,6 +1175,10 @@ export interface MyOrder {
   tier: string | null;
   cycleUnit: string;
   amount: string;
+  /** Non-voucher settlement amount; optional for older BFF deployments. */
+  settlementAmount?: string;
+  /** Original collected non-voucher amount, before refunds. */
+  settledPaymentAmount?: string;
   currency: string;
   orderStatus: OrderState;
   /**
@@ -1308,6 +1312,8 @@ export interface OrderDetail {
   expireAt: string | null;
   listPrice: string;
   paidAmount: string;
+  settlementAmount?: string;
+  settledPaymentAmount?: string;
   rejectReason: string | null;
   vouchers: OrderVoucherOption[];
   legs: OrderPaymentLeg[];

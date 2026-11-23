@@ -431,20 +431,20 @@ export class SubscriptionService {
    * Shared write-completion tail for updateSubscription() and
    * sweepLapsedTrials() (post-review dedup, 2026-07-12 — the two used to
    * hand-copy this sequence): fire the status-transition hook, then — only
-   * when status or plan_version actually changed — the entitlement-
+   * when status, plan_version or a known term end actually changed — the entitlement-
    * invalidate hook. `hookPrefix` becomes each safeProvisioningHook op
    * label ("update"/"update:invalidate" vs "sweep:<id>"/"sweep:<id>:invalidate"),
    * unchanged from each caller's prior inline behavior.
    */
   /**
-   * `before` 只收它真正用到的两个字段（状态与版本）。收窄是有意的：外部写路径
-   * （admin-bff 的裸 SQL 事务）只能拿到锁行时读到的那几列，给不出整条
-   * `SubscriptionRecord`；把依赖写在签名上，比让调用方去凑一个假记录好。
+   * External status writers provide only status/version. A missing prior endAt
+   * is unknown, not an unlimited term; compare dates only for complete snapshots.
    */
   private async applyTransitionHooks(
     hookPrefix: string,
     id: string,
-    before: Pick<SubscriptionRecord, "status" | "planVersionId">,
+    before: Pick<SubscriptionRecord, "status" | "planVersionId"> &
+      Partial<Pick<SubscriptionRecord, "endAt">>,
     result: SubscriptionRecord,
   ): Promise<void> {
     await this.safeProvisioningHook(hookPrefix, id, () =>
@@ -452,7 +452,9 @@ export class SubscriptionService {
     );
     if (
       before.status !== result.status ||
-      before.planVersionId !== result.planVersionId
+      before.planVersionId !== result.planVersionId ||
+      (before.endAt !== undefined &&
+        (before.endAt?.getTime() ?? null) !== (result.endAt?.getTime() ?? null))
     ) {
       await this.safeProvisioningHook(`${hookPrefix}:invalidate`, id, () =>
         this.fireEntitlementInvalidate(result, [

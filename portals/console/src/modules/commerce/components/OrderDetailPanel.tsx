@@ -50,7 +50,7 @@ interface Step {
  * 迫使人回答「这一档的时间线长什么样」。写了 default 就会静默落到一条错的时间线上。
  */
 function buildSteps(order: MyOrder, countdown: string | null): Step[] {
-  const zero = Number.parseFloat(order.amount) === 0;
+  const zero = Number.parseFloat(order.settlementAmount ?? order.amount) === 0;
   const submitted: Step = { key: "submitted", at: order.createdAt };
   if (order.noncashReversed)
     return [
@@ -232,7 +232,9 @@ export function OrderDetailPanel({
         footer={
           <span className="flex w-full items-baseline justify-between gap-md text-body font-semibold text-foreground">
             <span>{t("payable")}</span>
-            <span className="tabular-nums">{money(order.amount)}</span>
+            <span className="tabular-nums">
+              {money(order.settlementAmount ?? order.amount)}
+            </span>
           </span>
         }
       >

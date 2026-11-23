@@ -372,6 +372,26 @@ export class PgOrderRepository {
     return row ? this.mapOrder(row) : null;
   }
 
+  /** Read original collected money, excluding voucher legs and refund offsets. */
+  async getSettledPaymentAmount(orderId: string): Promise<string> {
+    const result = await this.pool.query<{ amount: string }>(
+      `select coalesce(sum(p.paid_amount), 0)::text as amount
+         from (
+           select id from billing.invoices
+            where order_id = $1 and deleted_at is null
+            order by created_at desc limit 1
+         ) i
+         left join billing.payments p on p.bill_id = i.id
+          and p.pay_status = 'paid' and p.pay_source <> 'voucher'
+        group by i.id`,
+      [orderId],
+    );
+    const row = result.rows[0];
+    if (!row)
+      throw new ConflictException("Order settlement invoice is missing");
+    return row.amount;
+  }
+
   /** 同工作区同产品的在途订单（pending_payment / pending_verify / paid）。 */
   async findOpenOrderForProduct(
     workspaceId: string,
