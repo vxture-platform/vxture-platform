@@ -59,6 +59,15 @@ function billStatusTone(status: BillingBillStatus) {
   return "warning";
 }
 
+// The invoice total is already discounted; voucher tenders are not discounts.
+function originalBillAmount(record: PromotionRedemptionRecord): number {
+  return (
+    (Math.round(record.orderAmount * 100) +
+      Math.round(record.discountAmount * 100)) /
+    100
+  );
+}
+
 function redemptionSearchText(
   record: PromotionRedemptionRecord,
   billStatusLabels: Record<BillStatus, string>,
@@ -161,7 +170,7 @@ function redemptionCsvColumns(
     },
     {
       label: tShared("voucherManagement.redemptions.orderAmount"),
-      value: (record) => (record.billId ? record.orderAmount : ""),
+      value: (record) => (record.billId ? originalBillAmount(record) : ""),
     },
     {
       label: tShared("voucherManagement.redemptions.discountAmount"),
@@ -332,7 +341,10 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
                     record.payableAmount,
                     record.currency,
                   ),
-                  original: formatCurrency(record.orderAmount, record.currency),
+                  original: formatCurrency(
+                    originalBillAmount(record),
+                    record.currency,
+                  ),
                 })
               : tShared("voucherManagement.redemptions.noAmount")}
           </span>

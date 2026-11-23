@@ -2144,6 +2144,7 @@
         "confirm": "Payment confirmed",
         "settleZero": "Auto-settled (¥0)",
         "provision": "Service provisioned",
+        "fulfillment": "Order fulfilled",
         "cancelled": "Order cancelled",
         "expiredClosed": "Closed on timeout",
         "noncashReversed": "Noncash settlement reversed (no cash refund)"

@@ -425,6 +425,8 @@ interface MyOrderRecord {
   declaredAt: string | null;
   /** 服务开通时刻（completed 单 = 订阅 start_at，周期起算锚点）。 */
   activatedAt: string | null;
+  /** When this order fulfilled, independent of the subscription cycle. */
+  fulfilledAt: string | null;
   /** 履约后挂上的订阅 id（订单菜单「退订」要对它落锤，不能拿 orderId 冒充）；未履约 null。 */
   subscriptionId: string | null;
 }
@@ -471,6 +473,7 @@ interface OrderDetailResult {
   orderState: OrderState;
   orderType: "subscription";
   createdAt: string;
+  fulfilledAt: string | null;
   expireAt: string | null;
   /** Base list price (pre-discount), yuan string. */
   listPrice: string;
@@ -2039,6 +2042,7 @@ export class SubscriptionRouter {
       orderState: state,
       orderType: "subscription",
       createdAt: row.created_at.toISOString(),
+      fulfilledAt: row.fulfilled_at?.toISOString() ?? null,
       expireAt: deriveExpireAt(row, state),
       listPrice: baseListPrice(row),
       paidAmount: row.paid_amount ?? "0",
@@ -2783,6 +2787,7 @@ interface OrderRow {
   /** 已退成功金额合计（NUMERIC 字符串）；没退过是 "0"。 */
   refunded_amount: string | null;
   paid_at: Date | null;
+  fulfilled_at: Date | null;
   created_at: Date;
   /** 履约订阅的周期（new 新建 / upgrade、renew 原订阅）；未履约 null */
   start_at: Date | null;
@@ -2858,6 +2863,7 @@ select
      where r.order_id = o.id and r.refund_status = 'success'
   ), 0)                as refunded_amount,
   inv.paid_at,
+  o.fulfilled_at,
   o.created_at,
   sub.start_at,
   sub.end_at,
@@ -3096,6 +3102,7 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     startAt: r.start_at?.toISOString() ?? null,
     endAt: r.end_at?.toISOString() ?? null,
     declaredAt: r.declared_at?.toISOString() ?? null,
+    fulfilledAt: r.fulfilled_at?.toISOString() ?? null,
     subscriptionId: r.subscription_id,
     // 服务开通时刻 = 订阅周期起算锚点（owner 口径：自服务开通,非确认收款）。
     // 认整个已履约族：退款中/已退款的单也开通过，开通时间不会因为退款而消失。

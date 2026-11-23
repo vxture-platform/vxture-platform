@@ -2144,6 +2144,7 @@
         "confirm": "确认收款",
         "settleZero": "自动结清（¥0）",
         "provision": "服务开通",
+        "fulfillment": "履约完成",
         "cancelled": "取消订单",
         "expiredClosed": "超时关闭",
         "noncashReversed": "非现金结算已冲回（未发起现金退款）"

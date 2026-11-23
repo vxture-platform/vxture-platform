@@ -833,6 +833,49 @@ it("keeps noncash reversal distinct from an actual cash refund in the order time
     messages.subscriptionHub.detail.step.refunded,
   );
 });
+it.each([true, false])(
+  "does not use the old subscription start in renewal progress (has fulfillment: %s)",
+  async (hasFulfillment) => {
+    const subscriptionStart = "2026-11-11T16:49:05.065Z";
+    const fulfillment = "2026-11-22T19:10:10.000Z";
+    const order = {
+      orderId: "order",
+      orderNo: "ORD-01",
+      planName: "Plan",
+      productName: "Product",
+      currency: "CNY",
+      amount: "1.00",
+      listPrice: "1.00",
+      voucherOff: "0.20",
+      settlementAmount: "0.80",
+      orderStatus: "completed",
+      startAt: subscriptionStart,
+      endAt: "2028-11-11T16:49:05.065Z",
+      activatedAt: subscriptionStart,
+      createdAt: "2026-11-22T19:08:36.000Z",
+      confirmedAt: "2026-11-22T19:10:06.000Z",
+      ...(hasFulfillment ? { fulfilledAt: fulfillment } : {}),
+    } as MyOrder;
+    await render(
+      <OrderDetailPanel order={order} countdown={null} fmtLocale="en-US" />,
+    );
+    const timeline = host.querySelector("ol");
+    expect(timeline?.textContent).not.toContain(subscriptionStart);
+    const fulfillmentStep = Array.from(
+      timeline?.querySelectorAll("li") ?? [],
+    ).find((step) =>
+      step.textContent?.includes(
+        messages.subscriptionHub.detail.step.fulfillment,
+      ),
+    );
+    expect(fulfillmentStep?.classList.contains("text-foreground")).toBe(true);
+    expect(fulfillmentStep?.lastElementChild?.textContent).toBe(
+      hasFulfillment ? fulfillment : "—",
+    );
+    expect(host.textContent).toContain("0.80");
+  },
+);
+
 it("retries invitation order creation with the same key after an uncertain response", async () => {
   mocks.order.mockRejectedValueOnce(new Error("response lost"));
   await render(<SubscribePage />);
