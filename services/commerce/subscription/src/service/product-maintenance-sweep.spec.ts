@@ -1,14 +1,13 @@
 /**
- * product-maintenance-sweep.spec.ts —— 产品级维护窗口的批量暂停 / 恢复（2026-09-27）。
- *
- * owner 定：窗口进行中，该产品所有已订阅租户给时间补偿（暂停期间不计入有效期），恢复后
- * 结算；个例暂停机制不变。作业每 tick 对账，这一层要钉的是**顺序**与**幂等**，两件都不报错：
- *   ① 进窗口：CAS → 开 episode → 钩子 → 通知。episode 必须在 CAS 赢了之后才开（输了竞态
- *      还开一条，那条订阅会挂着一次「进行中」的暂停而状态不是 suspended）；episode 记的
- *      auto_renew_before 必须是暂停**那一刻**的值，expected_resume_at = 产品上的 maintenance_until。
- *   ② 出窗口：CAS → 闭合 → 钩子 → 结算 → 通知。先闭合再结算（结算的判据是「已闭合且未
- *      结算」），恢复要还原暂停那一刻的续费意愿，episode 没记（null）就不动。
- *   ③ 幂等靠判据：仓储按「有无未闭合 episode」筛候选，第二趟 0 条；单行失败不中断整趟。
+ * product-maintenance-sweep.spec.ts - Maintenance transition and notice regressions.
+ * Entry persists CAS, renewal snapshot, episode and product events before commit.
+ * Release closes the episode and settles compensation before deriving product events.
+ * Customer notices follow commit; manual episodes, window identities and deduplication stay protected.
+ * @package @vxture/service-subscription
+ * @layer Domain
+ * @category test
+ * @author AI-Generated
+ * @date 2026-11-23
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -133,17 +132,20 @@ describe("进窗口：产品名下在服务中的订阅批量暂停", () => {
       subscriptionFixture({ id: "s-1", status: "suspended" }),
     );
     await m.service.sweepProductMaintenance();
-    expect(m.repo.openSuspension).toHaveBeenCalledWith({
-      subscriptionId: "s-1",
-      tenantId: "org-1",
-      reason: "platform_ops",
-      extendsTerm: true,
-      // false 也要记 false：恢复时无脑置 true 会给关着自动续费的客户悄悄打开它。
-      autoRenewBefore: false,
-      expectedResumeAt: UNTIL,
-      actorType: "system",
-      maintenanceWindowId: WINDOW,
-    });
+    expect(m.repo.openSuspension).toHaveBeenCalledWith(
+      {
+        subscriptionId: "s-1",
+        tenantId: "org-1",
+        reason: "platform_ops",
+        extendsTerm: true,
+        // false 也要记 false：恢复时无脑置 true 会给关着自动续费的客户悄悄打开它。
+        autoRenewBefore: false,
+        expectedResumeAt: UNTIL,
+        actorType: "system",
+        maintenanceWindowId: WINDOW,
+      },
+      m.transaction,
+    );
   });
 
   it("扫到之后状态变了（别的路径动过）→ 跳过，不 clobber", async () => {
@@ -314,7 +316,7 @@ describe("出窗口：产品不再打着那个窗口 → 恢复并结算", () =>
     );
   });
 
-  it("顺序：CAS 到 active → 闭合 episode → 钩子 → 结算 → 通知", async () => {
+  it("顺序：CAS 到 active → 闭合 episode → 结算 → 钩子 → 提交后通知", async () => {
     const order: string[] = [];
     m.repo.findMaintenanceReleases.mockResolvedValue([release()]);
     m.repo.update.mockImplementation(async () => {
@@ -341,11 +343,14 @@ describe("出窗口：产品不再打着那个窗口 → 恢复并结算", () =>
     await expect(m.service.sweepProductMaintenance()).resolves.toMatchObject({
       resumed: 1,
     });
-    expect(order).toEqual(["cas", "close", "hooks", "settle", "notify"]);
-    expect(m.repo.settleResumedSuspensions).toHaveBeenCalledWith({
-      subscriptionId: "s-1",
-      limit: 100,
-    });
+    expect(order).toEqual(["cas", "close", "settle", "hooks", "notify"]);
+    expect(m.repo.settleResumedSuspensions).toHaveBeenCalledWith(
+      {
+        subscriptionId: "s-1",
+        limit: 100,
+      },
+      m.transaction,
+    );
   });
 
   it("CAS 从 suspended 出发，还原暂停那一刻的续费意愿（false 也还原成 false）", async () => {
@@ -557,4 +562,92 @@ describe("顺延同步：窗口 maintenance_until 变了", () => {
       synced: 0,
     });
   });
+});
+
+// ============================================================================
+// Locked maintenance predicates and per-row rollback preserve the pass boundary.
+// ============================================================================
+describe("maintenance transaction failures and stale candidates", () => {
+  it.each(["entry", "release"] as const)(
+    "%s rolls back failed notification persistence and continues a later row",
+    async (mode) => {
+      const m = buildSweepMocks(VXTPL);
+      if (mode === "entry")
+        m.repo.findMaintenanceCandidates.mockResolvedValue([
+          candidate({ subscriptionId: "bad" }),
+          candidate({ subscriptionId: "good" }),
+        ]);
+      else
+        m.repo.findMaintenanceReleases.mockResolvedValue([
+          release({ id: "bad-episode", subscriptionId: "bad" }),
+          release({ id: "good-episode", subscriptionId: "good" }),
+        ]);
+      m.repo.getById.mockImplementation(async (id: string) =>
+        subscriptionFixture({
+          id,
+          status: mode === "entry" ? "active" : "suspended",
+        }),
+      );
+      m.repo.update.mockImplementation(async (id: string) =>
+        subscriptionFixture({
+          id,
+          status: mode === "entry" ? "suspended" : "active",
+        }),
+      );
+      m.provisioning.enqueueEvent.mockRejectedValueOnce(
+        new Error("outbox unavailable"),
+      );
+      m.repo.getNotifyDisplay.mockImplementation(async (id: string) => ({
+        ...display(mode === "entry" ? "suspended" : "active"),
+        id,
+      }));
+      m.notifier.notify.mockImplementation(async () => {
+        expect(m.transactionEvents.at(-1)).toBe("commit");
+      });
+      expect(await m.service.sweepProductMaintenance()).toEqual({
+        suspended: mode === "entry" ? 1 : 0,
+        resumed: mode === "release" ? 1 : 0,
+        synced: 0,
+      });
+      expect(m.transactionEvents).toEqual([
+        "begin",
+        "rollback",
+        "begin",
+        "commit",
+      ]);
+      expect(m.notifier.notify).toHaveBeenCalledOnce();
+      expect(m.notifier.notify.mock.calls[0]![0].reference.id).toContain(
+        "good:",
+      );
+    },
+  );
+
+  it.each(["entry", "release"] as const)(
+    "%s skips a candidate whose locked predicate no longer matches",
+    async (mode) => {
+      const m = buildSweepMocks(VXTPL);
+      m.repo.getById.mockResolvedValue(
+        subscriptionFixture({
+          status: mode === "entry" ? "active" : "suspended",
+        }),
+      );
+      if (mode === "entry")
+        m.repo.findMaintenanceCandidates
+          .mockResolvedValueOnce([candidate()])
+          .mockResolvedValueOnce([]);
+      else
+        m.repo.findMaintenanceReleases
+          .mockResolvedValueOnce([release()])
+          .mockResolvedValueOnce([]);
+      expect(await m.service.sweepProductMaintenance()).toEqual({
+        suspended: 0,
+        resumed: 0,
+        synced: 0,
+      });
+      expect(m.repo.update).not.toHaveBeenCalled();
+      expect(m.repo.openSuspension).not.toHaveBeenCalled();
+      expect(m.repo.closeSuspension).not.toHaveBeenCalled();
+      expect(m.notifier.notify).not.toHaveBeenCalled();
+    },
+  );
 });

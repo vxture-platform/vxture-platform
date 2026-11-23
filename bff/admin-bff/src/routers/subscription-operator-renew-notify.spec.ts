@@ -73,7 +73,7 @@ function harness(options: HarnessOptions = {}) {
       };
     }
     if (/update metering\.subscription_suspensions/.test(text)) {
-      return { rows: [{ extends_term: true, auto_renew_before: true }] };
+      return { rows: [{ id: "episode-1", auto_renew_before: true }] };
     }
     return { rows: [] };
   });
@@ -88,8 +88,11 @@ function harness(options: HarnessOptions = {}) {
     txCallsWhenNotified.push([...txCalls]);
   });
   const settleAfterCancel = vi.fn(async () => undefined);
+  const complete = vi.fn(async () => {
+    expect(txCalls).not.toContain("commit");
+  });
   const subscriptions = {
-    applyExternalStatusChange: vi.fn(async () => undefined),
+    applyExternalStatusChange: complete,
     notifyOperatorStatusChange,
     settleSuspensionExtension: vi.fn(async () => 0),
     reanchorAfterPeriodRestart: vi.fn(async () => 0),
@@ -108,6 +111,7 @@ function harness(options: HarnessOptions = {}) {
 
   return {
     router,
+    complete,
     notify: notifyOperatorStatusChange,
     settleAfterCancel,
     txCalls,
@@ -208,5 +212,15 @@ describe("运营代客续期 → 客户通知", () => {
         actorType: "operator",
       }),
     );
+  });
+  it("required product enqueue failure rolls back before customer notification", async () => {
+    const h = harness();
+    h.complete.mockRejectedValue(new Error("outbox unavailable"));
+    const error = await run(h, { action: "renew" });
+    expect(error).toBeInstanceOf(Error);
+    expect(h.txCalls).toContain("rollback");
+    expect(h.txCalls).not.toContain("commit");
+    expect(h.notify).not.toHaveBeenCalled();
+    expect(h.settleAfterCancel).not.toHaveBeenCalled();
   });
 });

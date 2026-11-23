@@ -7,13 +7,10 @@
  *   聚合 metering.quota_pools 出配额快照；详情附 plan_components 权益、subscription_histories/
  *   subscription_renewals 运营时间线。
  *
- *   写路径（续订/暂停/恢复/取消）：状态改动仍是本文件的裸 SQL 事务（它带着三件服务层
- *   表达不出来的东西——renew 的 change_type='renewed'、试用转付费的 subscription_kind
- *   翻转、在库里按 cycle_unit×cycle_count 算 end_at），但**副作用一律走
- *   SubscriptionService**：提交后调 applyExternalStatusChange（provisioning /
- *   权益缓存失效）、notifyOperatorStatusChange（冻结 / 恢复 / 代客续期通知）、settleAfterCancel
- *   （退订即退款）。三条都在事务外、都 best-effort——运营动作已经生效，通知产品侧或
- *   客户失败不该让请求失败。
+ *   Operator writes retain the original history and calendar-cycle SQL. On the
+ *   locked connection the domain service settles the closed episode, reanchors
+ *   periodic quota when the term restarts, and persists required product events.
+ *   Customer notices and independent refund settlement follow a successful commit.
  *
  *   18-schema 备忘：旧 commerce.subscription → metering.subscriptions；tenant.tenant → tenancy.tenants
  *   （展示字段迁 tenancy.tenant_profiles）；套餐取 product.plans，方案归属经 product.solution_plans
@@ -245,24 +242,6 @@ export class SubscriptionsRouter {
     let notify: "suspended" | "resumed" | "renewed" | null = null;
     /** 提交成功后要做的退款结算（仅退订，且这次真的终止了）。同样在事务外。 */
     let settle: { subscriptionId: string; tenantId: string } | null = null;
-    /**
-     * 提交成功后要补跑的「写完成尾」（批 5）：本路由用裸 SQL 改状态，绕过了
-     * SubscriptionService 的 provisioning 钩子——退订不发 deprovision、暂停/恢复不失效
-     * C2 权益缓存，于是**产品侧照旧按旧状态服务**。`before` 是锁行时读到的那两件事。
-     */
-    let hooksBefore: { status: string; planVersionId: string } | null = null;
-    /** 提交后要结算的顺延（步骤三）：这次动作闭合了一条 episode。 */
-    let settleSuspension = false;
-    /**
-     * 提交后要不要把配额周期锚点拨到现在（owner 2026-09-26）。
-     *
-     * 配额锚点 ≡ 服务期起点。「续期确认」有两种：到期日还在未来 = 接着延，**这一期的
-     * 起点没变，刷新日不该动**；已经过期 = 新的一期从现在开始，锚点跟着走。此前这条
-     * 裸 SQL 路径从不重锚，于是后一种情形一直是错的。
-     * 判据走 `@shared` 那一份，与客户自助续订（订单履约）同源。
-     */
-    let reanchorPools = false;
-
     const client = await this.rwPool.connect();
     try {
       await client.query("begin");
@@ -278,18 +257,17 @@ export class SubscriptionsRouter {
 
       const fromStatus = current.status;
       const toStatus = resolveTargetStatus(action, current);
-      hooksBefore = {
+      const hooksBefore = {
         status: fromStatus,
         planVersionId: current.plan_version_id,
+        endAt: current.end_at === null ? null : new Date(current.end_at),
       };
 
-      /* 锁行时读到的 end_at 就是「续期前」的那个值——判据要在 UPDATE 之前取。 */
-      if (action === "renew") {
-        reanchorPools = renewalRestartsPeriod(
-          current.end_at === null ? null : new Date(current.end_at),
-          new Date(),
-        );
-      }
+      // A renewal within the current term keeps the existing quota refresh dates.
+      const reanchorPools =
+        action === "renew" &&
+        renewalRestartsPeriod(hooksBefore.endAt, new Date());
+      let settleSuspensionId: string | undefined;
 
       await client.query(SUBSCRIPTION_ACTION_UPDATE_SQL, [
         subscriptionId,
@@ -336,7 +314,7 @@ export class SubscriptionsRouter {
         ]);
       } else if (fromStatus === "suspended" && toStatus !== "suspended") {
         const closed = await client.query<{
-          extends_term: boolean;
+          id: string;
           auto_renew_before: boolean | null;
         }>(SUSPENSION_CLOSE_SQL, [subscriptionId]);
         const episode = closed.rows[0];
@@ -352,12 +330,19 @@ export class SubscriptionsRouter {
             episode.auto_renew_before,
           ]);
         }
-        /* 顺延要结算（步骤三）。不在这笔事务里算：离开 suspended 的路有四条（恢复 / 续期 /
-           退订 / 到点强制恢复），四个写入方各写一份同样的算式必然漂移。这里只闭合 episode，
-           结算交给提交后那一次调用与作业兜底——判据是「已闭合且未结算」，失败会自愈。 */
-        settleSuspension = episode !== undefined;
+        // Settle this episode before enqueue; the job owns any historical backlog.
+        settleSuspensionId = episode?.id;
       }
 
+      await this.subscriptions.applyExternalStatusChange(
+        subscriptionId,
+        hooksBefore,
+        client,
+        {
+          ...(settleSuspensionId === undefined ? {} : { settleSuspensionId }),
+          reanchorPools,
+        },
+      );
       await client.query("commit");
 
       /*
@@ -402,33 +387,12 @@ export class SubscriptionsRouter {
       client.release();
     }
 
-    /*
-     * 顺序有意：先把产品侧的状态对齐（deprovision / 权益缓存失效），再发消息与结算钱。
-     * 反过来的话，客户先收到「已退订」，而产品那边还在服务——那比晚一点通知更糟。
-     * 本调用自己吞异常（service 内 try/catch + safeProvisioningHook），不会让请求失败。
-     */
-    if (hooksBefore) {
-      await this.subscriptions.applyExternalStatusChange(
-        subscriptionId,
-        hooksBefore,
-      );
-    }
+    // Customer messages and independent money settlement run only after commit.
     if (notify) {
       await this.subscriptions.notifyOperatorStatusChange(
         subscriptionId,
         notify,
       );
-    }
-    /*
-     * 顺延结算（步骤三）。在这里调是为了**客户马上就能在页面上看到新的到期日**；作业每趟
-     * 还会扫一遍兜底。服务层自己吞异常（顺延是欠客户的账，不能因为一次失败就丢，但也不该
-     * 让已经生效的恢复动作失败）。
-     */
-    if (settleSuspension) {
-      await this.subscriptions.settleSuspensionExtension(subscriptionId);
-    }
-    if (reanchorPools) {
-      await this.subscriptions.reanchorAfterPeriodRestart(subscriptionId);
     }
     if (settle && actorId) {
       /* settleAfterCancel 自己吞掉一切异常（只记日志）——退订已经生效，钱的那一步失败
@@ -1214,8 +1178,7 @@ select
   s.cycle_count,
   s.end_at,
   s.subscription_kind,
-  -- 写完之后要把「从哪到哪」交给 SubscriptionService 的写完成尾（批 5），它判的是
-  -- 状态 + 版本两件事，所以版本在这里一起读出来。
+  -- Capture the locked plan version alongside status and the original term.
   s.plan_version_id,
   /*
    * **有效到期日**（2026-09-25 步骤三）：end_at 加上进行中那一次暂停已经累计的时长。
@@ -1242,8 +1205,8 @@ for update of s
 
 // $1 id / $2 target status / $3 action。
 //   auto_renew：suspend/cancel 关闭，其余保持。
-//   end_at：cancel 落到 now()；renew 从 max(end_at, now()) 按 cycle_unit×cycle_count 延长
-//     （perpetual 保持 NULL，遵守 chk_subscriptions_perpetual_open）；其余保持。
+// Bounded cancellations end now and renewals extend from max(end_at, now()).
+// Perpetual subscriptions keep a NULL end_at, even after cancellation.
 //   subscription_kind：renew 把 trial 行翻成 paid（D10 不变量，product_220 §3）——
 //     "试用转正必须新建 paid 行或翻转 kind"，否则续订后再流失会被 C2 的
 //     trial-exclusion 谓词误判回 null（付费流失口径污染）。非 trial 行不受影响。
@@ -1260,7 +1223,7 @@ set
     else s.auto_renew
   end,
   end_at = case
-    when $3 = 'cancel' then now()
+    when $3 = 'cancel' and s.cycle_unit <> 'perpetual' then now()
     when $3 = 'renew' and s.cycle_unit <> 'perpetual'
       then coalesce(greatest(s.end_at, now()), now()) + make_interval(
         years  => case when s.cycle_unit = 'year'  then s.cycle_count else 0 end,
@@ -1354,7 +1317,7 @@ const SUSPENSION_CLOSE_SQL = `
 update metering.subscription_suspensions
    set resumed_at = now(), updated_at = now()
  where subscription_id = $1 and resumed_at is null
-returning extends_term, auto_renew_before
+returning id, auto_renew_before
 `;
 
 /**

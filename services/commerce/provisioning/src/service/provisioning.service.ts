@@ -8,6 +8,7 @@
  * responsibility (delivery_id + seq). See identity-platform-rp-integration.md §4–§6.
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import type { PoolClient } from "pg";
 import { decryptSecret, deriveSecretKey } from "@vxture/core-utils";
 import { PgProvisioningRepository } from "../repository/pg-provisioning.repository";
 import { backoffSeconds } from "../backoff";
@@ -61,8 +62,9 @@ export class ProvisioningService {
   /** Enqueue a provisioning event (bumps state/version + queues a delivery). */
   async enqueue(
     input: EnqueueProvisioningInput,
+    transaction?: PoolClient,
   ): Promise<{ deliveryId: string; seq: number }> {
-    return this.repo.enqueue(input);
+    return this.repo.enqueue(input, ...(transaction ? [transaction] : []));
   }
 
   /**
@@ -71,8 +73,11 @@ export class ProvisioningService {
    * key; returns null when the product has no webhook registration or the
    * event was already enqueued.
    */
-  async enqueueEvent(input: EnqueueEventInput): Promise<string | null> {
-    return this.repo.enqueueEvent(input);
+  async enqueueEvent(
+    input: EnqueueEventInput,
+    transaction?: PoolClient,
+  ): Promise<string | null> {
+    return this.repo.enqueueEvent(input, ...(transaction ? [transaction] : []));
   }
 
   /**
@@ -90,25 +95,37 @@ export class ProvisioningService {
     return this.repo.recordAck(input);
   }
   /** Convenience: a (workspace, product) subscription became active/trial. */
-  async onSubscriptionActivated(args: {
-    workspaceId: string;
-    tenantId: string;
-    applicationId: string;
-    appCode: string;
-    planId?: string | null;
-    plan?: string | null;
-  }): Promise<{ deliveryId: string; seq: number }> {
-    return this.enqueue({ ...args, event: "tenant.provisioned" });
+  async onSubscriptionActivated(
+    args: {
+      workspaceId: string;
+      tenantId: string;
+      applicationId: string;
+      appCode: string;
+      planId?: string | null;
+      plan?: string | null;
+    },
+    transaction?: PoolClient,
+  ): Promise<{ deliveryId: string; seq: number }> {
+    return this.enqueue(
+      { ...args, event: "tenant.provisioned" },
+      ...(transaction ? [transaction] : []),
+    );
   }
 
   /** Convenience: a (workspace, product) entitlement lapsed (grace ended). */
-  async onSubscriptionDeactivated(args: {
-    workspaceId: string;
-    tenantId: string;
-    applicationId: string;
-    appCode: string;
-  }): Promise<{ deliveryId: string; seq: number }> {
-    return this.enqueue({ ...args, event: "tenant.deprovisioned" });
+  async onSubscriptionDeactivated(
+    args: {
+      workspaceId: string;
+      tenantId: string;
+      applicationId: string;
+      appCode: string;
+    },
+    transaction?: PoolClient,
+  ): Promise<{ deliveryId: string; seq: number }> {
+    return this.enqueue(
+      { ...args, event: "tenant.deprovisioned" },
+      ...(transaction ? [transaction] : []),
+    );
   }
 
   /**

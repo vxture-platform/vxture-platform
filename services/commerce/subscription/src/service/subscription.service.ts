@@ -238,8 +238,11 @@ export class SubscriptionService {
   async getSubscription(
     id: string,
     client?: PoolClient,
+    lock = false,
   ): Promise<SubscriptionRecord> {
-    const record = await this.repo.getById(id, client);
+    const record = lock
+      ? await this.repo.getById(id, client, true)
+      : await this.repo.getById(id, client);
     if (!record) throw new NotFoundException(`订阅 ${id} 不存在`);
     return record;
   }
@@ -252,21 +255,32 @@ export class SubscriptionService {
 
   async createSubscription(
     input: CreateSubscriptionInput,
+    transaction?: PoolClient,
   ): Promise<SubscriptionRecord> {
     // Multiple subscriptions per workspace are allowed (ADR-11 §8: a product can be
     // bundled + separately subscribed) — no single-active constraint. quota_pool
     // rows are materialized from the plan_version's components on create.
-    await this.assertNoTierConflict(input.workspaceId, input.planVersionId);
-    const record = await this.repo.create(input);
-    if (ACTIVATED.has(record.status)) {
-      await this.safeProvisioningHook("create", record.id, () =>
-        this.fireProvisioned(record, record.planVersionId),
+    const create = async (client: PoolClient) => {
+      await this.assertNoTierConflict(
+        input.workspaceId,
+        input.planVersionId,
+        undefined,
+        client,
       );
-    }
-    await this.safeProvisioningHook("create:invalidate", record.id, () =>
-      this.fireEntitlementInvalidate(record, [record.planVersionId]),
-    );
-    return record;
+      const record = await this.repo.create(input, client);
+      if (ACTIVATED.has(record.status)) {
+        await this.fireProvisioned(record, record.planVersionId, client);
+      }
+      await this.fireEntitlementInvalidate(
+        record,
+        [record.planVersionId],
+        client,
+      );
+      return record;
+    };
+    return transaction
+      ? create(transaction)
+      : this.repo.withTransaction(create);
   }
 
   async cancelSubscription(
@@ -277,36 +291,52 @@ export class SubscriptionService {
     actorType: "operator" | "customer" | "system" = "operator",
     expectedCurrentOrderId?: string,
   ): Promise<SubscriptionRecord> {
-    const subscription = await this.getSubscription(id);
-    if (subscription.status === "cancelled")
-      throw new ConflictException("订阅已取消");
-    if (subscription.status === "expired")
-      throw new ConflictException("订阅已过期");
+    return this.repo.withLockedSubscription(
+      id,
+      async (subscription, client) => {
+        if (!subscription) throw new NotFoundException(`订阅 ${id} 不存在`);
+        if (subscription.status === "cancelled")
+          throw new ConflictException("订阅已取消");
+        if (subscription.status === "expired")
+          throw new ConflictException("订阅已过期");
 
-    const result = await this.repo.update(id, subscription, {
-      ...(expectedCurrentOrderId
-        ? { expectedCurrentOrderId, expectedStatus: subscription.status }
-        : {}),
-      status: "cancelled",
-      endAt: new Date(),
-      // 取消同时关自动续费(对齐 admin 侧 SQL 的既有行为;此前 service 路径
-      // 漏掉这一步,取消件仍挂 auto_renew=true 的矛盾态)。
-      autoRenew: false,
-      operatorType: actorType,
-      ...(operatorId !== undefined
-        ? { operatorId, updatedBy: operatorId }
-        : {}),
-      ...(remark !== undefined ? { operatorRemark: remark } : {}),
-    });
-    if (!result)
-      throw new ConflictException("订阅已发生后续变更，退款撤销需人工核对");
-    await this.safeProvisioningHook("cancel", id, () =>
-      this.fireDeprovisionIfUncovered(result!, subscription.planVersionId),
+        const result = await this.repo.update(
+          id,
+          subscription,
+          {
+            ...(expectedCurrentOrderId
+              ? { expectedCurrentOrderId, expectedStatus: subscription.status }
+              : {}),
+            status: "cancelled",
+            // Perpetual subscriptions have no end date even in a terminal state.
+            ...(subscription.cycleType === "perpetual"
+              ? {}
+              : { endAt: new Date() }),
+            // Cancellation also disables renewal, matching the existing admin path.
+            autoRenew: false,
+            operatorType: actorType,
+            ...(operatorId !== undefined
+              ? { operatorId, updatedBy: operatorId }
+              : {}),
+            ...(remark !== undefined ? { operatorRemark: remark } : {}),
+          },
+          client,
+        );
+        if (!result)
+          throw new ConflictException("订阅已发生后续变更，退款撤销需人工核对");
+        await this.fireDeprovisionIfUncovered(
+          result,
+          subscription.planVersionId,
+          client,
+        );
+        await this.fireEntitlementInvalidate(
+          result,
+          [subscription.planVersionId],
+          client,
+        );
+        return result;
+      },
     );
-    await this.safeProvisioningHook("cancel:invalidate", id, () =>
-      this.fireEntitlementInvalidate(result!, [subscription.planVersionId]),
-    );
-    return result!;
   }
 
   /**
@@ -324,37 +354,51 @@ export class SubscriptionService {
       actorType?: "operator" | "customer" | "system";
       remark?: string;
     },
+    transaction?: PoolClient,
   ): Promise<SubscriptionRecord> {
-    const subscription = await this.getSubscription(id);
-    if (
-      subscription.status === "cancelled" ||
-      subscription.status === "expired"
-    ) {
-      throw new ConflictException("订阅已终止,无法变更续费设置");
-    }
-    if (enabled && subscription.subscriptionKind === "trial") {
-      throw new ConflictException("试用订阅不支持自动续费");
-    }
-    if (subscription.autoRenew === enabled) return subscription;
+    return this.repo.withLockedSubscription(
+      id,
+      async (subscription, client) => {
+        if (!subscription) throw new NotFoundException(`订阅 ${id} 不存在`);
+        if (
+          subscription.status === "cancelled" ||
+          subscription.status === "expired"
+        ) {
+          throw new ConflictException("订阅已终止,无法变更续费设置");
+        }
+        if (enabled && subscription.subscriptionKind === "trial") {
+          throw new ConflictException("试用订阅不支持自动续费");
+        }
+        if (subscription.autoRenew === enabled) return subscription;
 
-    const result = await this.repo.update(id, subscription, {
-      autoRenew: enabled,
-      operatorType: params.actorType ?? "customer",
-      ...(params.actorId !== null
-        ? { operatorId: params.actorId, updatedBy: params.actorId }
-        : {}),
-      operatorRemark:
-        params.remark ??
-        (enabled
-          ? "customer resumed auto-renew"
-          : "customer opted out of renewal"),
-    });
-    // 纯路由/续费策略变化,不触发 deprovision;C2 信封的 cancel_at_period_end
-    // 派生字段随之翻转,失效一次缓存让产品侧尽快看到。
-    await this.safeProvisioningHook("auto-renew:invalidate", id, () =>
-      this.fireEntitlementInvalidate(result!, [subscription.planVersionId]),
+        const result = await this.repo.update(
+          id,
+          subscription,
+          {
+            autoRenew: enabled,
+            operatorType: params.actorType ?? "customer",
+            ...(params.actorId !== null
+              ? { operatorId: params.actorId, updatedBy: params.actorId }
+              : {}),
+            operatorRemark:
+              params.remark ??
+              (enabled
+                ? "customer resumed auto-renew"
+                : "customer opted out of renewal"),
+          },
+          client,
+        );
+        if (!result) throw new NotFoundException(`订阅 ${id} 不存在`);
+        // Renewal policy invalidates C2 without sending lifecycle provisioning.
+        await this.fireEntitlementInvalidate(
+          result,
+          [subscription.planVersionId],
+          client,
+        );
+        return result;
+      },
+      ...(transaction ? [transaction] : []),
     );
-    return result!;
   }
 
   async upgradeSubscription(
@@ -362,69 +406,116 @@ export class SubscriptionService {
     newPlanVersionId: string,
     operatorId?: string,
     remark?: string,
+    transaction?: PoolClient,
   ): Promise<SubscriptionRecord> {
-    const subscription = await this.getSubscription(id);
-    if (
-      !["active", "trialing", "expiring", "overdue"].includes(
-        subscription.status,
-      )
-    )
-      throw new ConflictException("只有服务中的订阅可以升级");
-    await this.assertNoTierConflict(
-      subscription.workspaceId,
-      newPlanVersionId,
+    return this.repo.withLockedSubscription(
       id,
-    );
+      async (subscription, client) => {
+        if (!subscription) throw new NotFoundException(`订阅 ${id} 不存在`);
+        if (
+          !["active", "trialing", "expiring", "overdue"].includes(
+            subscription.status,
+          )
+        )
+          throw new ConflictException("只有服务中的订阅可以升级");
+        await this.assertNoTierConflict(
+          subscription.workspaceId,
+          newPlanVersionId,
+          id,
+          client,
+        );
 
-    const result = await this.repo.update(id, subscription, {
-      toPlanVersionId: newPlanVersionId,
-      status: "active",
-      expectedStatus: subscription.status,
-      operatorType: "operator",
-      ...(operatorId !== undefined
-        ? { operatorId, updatedBy: operatorId }
-        : {}),
-      ...(remark !== undefined ? { operatorRemark: remark } : {}),
-    });
-    if (!result) {
-      throw new ConflictException("订阅状态已变化，请刷新后重新确认升级");
-    }
-    await this.safeProvisioningHook("upgrade", id, () =>
-      this.fireVersionChange(result!, subscription.planVersionId),
+        const result = await this.repo.update(
+          id,
+          subscription,
+          {
+            toPlanVersionId: newPlanVersionId,
+            status: "active",
+            expectedStatus: subscription.status,
+            operatorType: "operator",
+            ...(operatorId !== undefined
+              ? { operatorId, updatedBy: operatorId }
+              : {}),
+            ...(remark !== undefined ? { operatorRemark: remark } : {}),
+          },
+          client,
+        );
+        if (!result) {
+          throw new ConflictException("订阅状态已变化，请刷新后重新确认升级");
+        }
+        await this.fireVersionChange(
+          result,
+          subscription.planVersionId,
+          client,
+        );
+        await this.fireEntitlementInvalidate(
+          result,
+          [subscription.planVersionId, result.planVersionId],
+          client,
+        );
+        return result;
+      },
+      ...(transaction ? [transaction] : []),
     );
-    await this.safeProvisioningHook("upgrade:invalidate", id, () =>
-      this.fireEntitlementInvalidate(result!, [
-        subscription.planVersionId,
-        result!.planVersionId,
-      ]),
-    );
-    return result!;
   }
 
   async updateSubscription(
     id: string,
     input: UpdateSubscriptionInput,
+    transaction?: PoolClient,
   ): Promise<SubscriptionRecord> {
-    const subscription = await this.getSubscription(id);
-    // Stacking guardrail on every write that creates/expands live coverage:
-    // a plan change, or a revival transition into a live status (resume /
-    // admin renew) — both can otherwise smuggle a second tier in.
-    const targetVersion = input.toPlanVersionId ?? subscription.planVersionId;
-    const becomesLive =
-      input.status !== undefined &&
-      ACTIVATED.has(input.status) &&
-      !ACTIVATED.has(subscription.status);
-    if (input.toPlanVersionId !== undefined || becomesLive) {
-      await this.assertNoTierConflict(
-        subscription.workspaceId,
-        targetVersion,
-        id,
-      );
-    }
-    const result = await this.repo.update(id, subscription, input);
-    if (!result) throw new NotFoundException(`订阅 ${id} 不存在`);
-    await this.applyTransitionHooks("update", id, subscription, result);
-    return result;
+    return this.repo.withLockedSubscription(
+      id,
+      async (subscription, client) => {
+        if (!subscription) throw new NotFoundException(`订阅 ${id} 不存在`);
+        // Stacking guardrail on every write that creates/expands live coverage:
+        // a plan change, or a revival transition into a live status (resume /
+        // admin renew) — both can otherwise smuggle a second tier in.
+        const targetVersion =
+          input.toPlanVersionId ?? subscription.planVersionId;
+        const becomesLive =
+          input.status !== undefined &&
+          ACTIVATED.has(input.status) &&
+          !ACTIVATED.has(subscription.status);
+        if (input.toPlanVersionId !== undefined || becomesLive) {
+          await this.assertNoTierConflict(
+            subscription.workspaceId,
+            targetVersion,
+            id,
+            client,
+          );
+        }
+        const result = await this.repo.update(id, subscription, input, client);
+        if (!result) throw new NotFoundException(`订阅 ${id} 不存在`);
+        await this.applyTransitionHooks(
+          "update",
+          id,
+          subscription,
+          result,
+          client,
+        );
+        return result;
+      },
+      ...(transaction ? [transaction] : []),
+    );
+  }
+
+  /**
+   * Invalidate entitlements after order terms change without a version switch.
+   * @param subscription - Final subscription state read on the order transaction.
+   * @param transaction - Caller-owned fulfillment transaction.
+   * @returns Resolves after the required cache invalidation is persisted.
+   * @throws {Error} When persisting the required product notification fails.
+   */
+  async notifyOrderTermsChanged(
+    subscription: SubscriptionRecord,
+    transaction: PoolClient,
+  ): Promise<void> {
+    await this.fireEntitlementInvalidate(
+      subscription,
+      [subscription.planVersionId],
+      transaction,
+    );
   }
 
   /**
@@ -434,7 +525,9 @@ export class SubscriptionService {
    * when status, plan_version or a known term end actually changed — the entitlement-
    * invalidate hook. `hookPrefix` becomes each safeProvisioningHook op
    * label ("update"/"update:invalidate" vs "sweep:<id>"/"sweep:<id>:invalidate"),
-   * unchanged from each caller's prior inline behavior.
+   * unchanged from each caller's prior inline behavior. A caller transaction
+   * makes enqueue failures fatal so that no subscription update commits alone;
+   * legacy post-commit writers retain their existing logged-failure behavior.
    */
   /**
    * External status writers provide only status/version. A missing prior endAt
@@ -446,22 +539,31 @@ export class SubscriptionService {
     before: Pick<SubscriptionRecord, "status" | "planVersionId"> &
       Partial<Pick<SubscriptionRecord, "endAt">>,
     result: SubscriptionRecord,
+    transaction?: PoolClient,
   ): Promise<void> {
-    await this.safeProvisioningHook(hookPrefix, id, () =>
-      this.fireStatusTransition(before, result),
-    );
+    const transition = () =>
+      this.fireStatusTransition(before, result, transaction);
+    if (transaction) await transition();
+    else await this.safeProvisioningHook(hookPrefix, id, transition);
     if (
       before.status !== result.status ||
       before.planVersionId !== result.planVersionId ||
       (before.endAt !== undefined &&
         (before.endAt?.getTime() ?? null) !== (result.endAt?.getTime() ?? null))
     ) {
-      await this.safeProvisioningHook(`${hookPrefix}:invalidate`, id, () =>
-        this.fireEntitlementInvalidate(result, [
-          before.planVersionId,
-          result.planVersionId,
-        ]),
-      );
+      const invalidate = () =>
+        this.fireEntitlementInvalidate(
+          result,
+          [before.planVersionId, result.planVersionId],
+          transaction,
+        );
+      if (transaction) await invalidate();
+      else
+        await this.safeProvisioningHook(
+          `${hookPrefix}:invalidate`,
+          id,
+          invalidate,
+        );
     }
   }
 
@@ -492,6 +594,7 @@ export class SubscriptionService {
       ids.map((id) => ({ id, status: "trialing" })),
       "trial expiry sweep",
       "trial ended without conversion (expiry sweep)",
+      true,
     );
     /*
      * 试用到期通知（2026-09-28 批 5）。此前这一趟把 rows 丢掉只返回条数，于是
@@ -519,34 +622,64 @@ export class SubscriptionService {
   }
 
   /**
-   * 共享的"→ expired"扫描循环（trial 与付费/免费到期共用）：每行 CAS 到读到的当前状态，
-   * 输了竞态的行 0 行 no-op 静默跳过；单行失败只记日志，趟不中断。
+   * Expire each scanned row and persist its product notifications together.
+   * A lost CAS is a no-op; a failed row rolls back without aborting the pass.
    */
   private async sweepToExpired(
     rows: { id: string; status: string; endAt?: Date | null }[],
     label: string,
     remark: string,
+    trialExpiry = false,
   ): Promise<{ id: string; from: string }[]> {
     const transitioned: { id: string; from: string }[] = [];
     for (const { id, status, endAt } of rows) {
       try {
-        const before = await this.getSubscription(id);
-        if (before.status !== status) continue; // moved since the scan
-        const result = await this.repo.update(id, before, {
-          status: "expired",
-          operatorType: "system",
-          operatorRemark: remark,
-          expectedStatus: status,
-          ...(endAt !== undefined ? { expectedEndAt: endAt } : {}),
-        });
-        if (!result) {
-          this.logger.debug(
-            `${label}: subscription ${id} changed under us, skipped (lost race)`,
-          );
-          continue;
-        }
-        await this.applyTransitionHooks(`sweep:${id}`, id, before, result);
-        // 带上「从哪一档来的」：调用方要按它决定通知发不发（冻结中到期不发）。
+        const changed = await this.repo.withLockedSubscription(
+          id,
+          async (before, client) => {
+            if (!before) throw new NotFoundException(`订阅 ${id} 不存在`);
+            if (before.status !== status) return false;
+            // Trial candidates carry ids only. Recheck their current cutoff under
+            // the lock so an extended or converted trial cannot expire from a stale scan.
+            if (
+              trialExpiry &&
+              (before.subscriptionKind !== "trial" ||
+                before.trialEndAt === null ||
+                before.trialEndAt.getTime() > Date.now())
+            )
+              return false;
+            if (!trialExpiry && before.subscriptionKind === "trial")
+              return false;
+            const result = await this.repo.update(
+              id,
+              before,
+              {
+                status: "expired",
+                operatorType: "system",
+                operatorRemark: remark,
+                expectedStatus: status,
+                ...(endAt !== undefined ? { expectedEndAt: endAt } : {}),
+              },
+              client,
+            );
+            if (!result) {
+              this.logger.debug(
+                `${label}: subscription ${id} changed under us, skipped (lost race)`,
+              );
+              return false;
+            }
+            await this.applyTransitionHooks(
+              `sweep:${id}`,
+              id,
+              before,
+              result,
+              client,
+            );
+            return true;
+          },
+        );
+        if (!changed) continue;
+        // Count only committed rows; callers retain the suspended-notice policy.
         transitioned.push({ id, from: status });
       } catch (err) {
         this.logger.error(
@@ -611,27 +744,7 @@ export class SubscriptionService {
     }
   }
 
-  /**
-   * 顺延结算（2026-09-25 步骤三）。把已闭合但还没结算的暂停 episode 结成天数，加到订阅
-   * 的 `end_at` 上。
-   *
-   * owner 定的三条前提里，「不做退钱」+「客户不承担暂停期间的代价」合起来就是这件事：
-   * 不退钱，就把停掉的那些天还回去。还多少由那一次暂停的原因决定（`extends_term`），
-   * 在暂停发生时就定了。
-   *
-   * 两个调用点、一段结算：运营恢复之后 admin-bff 立刻带 `subscriptionId` 调一次（客户
-   * 马上就能在页面上看到新到期日），作业每趟不带参数扫一遍兜底。**幂等靠
-   * `granted_seconds is null`**，所以两边同时跑也只结一次；某一次失败下一趟自愈——顺延
-   * 是欠客户的账，不能静默丢。
-   */
-  /**
-   * 暂停半态对账（只读）。详见 `PgSubscriptionRepository.countSuspensionHalfStates`。
-   *
-   * 这里不做任何修复动作 —— 两种半态的根治是把「改状态」与「开/闭 episode」并进一个
-   * 事务，那是 `repo.update` 的事务边界重构（碰钱、调用方众多），单独一轮做。
-   * 本方法只负责让它们**不再隐身**：三条恢复判据都从 episode 或 status 起算，
-   * 没有一条看得见这两种形状。
-   */
+  /** Read-only visibility of historical half states; this method never repairs them. */
   async countSuspensionHalfStates(): Promise<{
     suspendedWithoutEpisode: number;
     resumedWithOpenEpisode: number;
@@ -640,28 +753,97 @@ export class SubscriptionService {
     return this.repo.countSuspensionHalfStates();
   }
 
+  /**
+   * Settle at most 100 selected episodes, with compensation and required invalidation
+   * committed together for each subscription. Failures remain eligible next pass.
+   * @param subscriptionId - Restrict immediate settlement to this subscription when set.
+   * @returns Committed episode count; a failed group does not stop later groups.
+   */
   async settleSuspensionExtension(subscriptionId?: string): Promise<number> {
     try {
-      const settled = await this.repo.settleResumedSuspensions(
-        // exactOptionalPropertyTypes：不带 subscriptionId 时**整个键不能出现**，
-        // 传 undefined 与不传在这里是两种类型。
+      const candidates = await this.repo.findUnsettledSuspensions(
         subscriptionId ? { subscriptionId, limit: 100 } : { limit: 100 },
       );
-      for (const row of settled) {
-        if (row.grantedSeconds > 0 && !row.extended) {
-          // 永久订阅没有到期日可顺延。记下来而不是静默跳过：将来若要换别的补偿方式，
-          // 账在 granted_seconds 里。
-          this.logger.log(
-            `suspension settle: subscription ${row.subscriptionId} has no end_at, ` +
-              `${row.grantedSeconds}s recorded but not applied`,
+      const groups = new Map<string, string[]>();
+      for (const row of candidates) {
+        const ids = groups.get(row.subscriptionId) ?? [];
+        ids.push(row.id);
+        groups.set(row.subscriptionId, ids);
+      }
+      let count = 0;
+      for (const [id, episodeIds] of groups) {
+        try {
+          const result = await this.repo.withLockedSubscription(
+            id,
+            async (before, client) => {
+              if (!before) throw new NotFoundException(`订阅 ${id} 不存在`);
+              const terms = await this.settleSuspensionTerms(
+                before,
+                client,
+                episodeIds,
+              );
+              await this.applyTransitionHooks(
+                `suspension-settle:${id}`,
+                id,
+                before,
+                terms.after,
+                client,
+              );
+              return terms;
+            },
+          );
+          count += result.settled.length;
+          this.logUnappliedSuspensions(result.settled);
+        } catch (error) {
+          this.logger.error(
+            `suspension settle ${id} failed — ${String(error)}`,
           );
         }
       }
-      return settled.length;
-    } catch (err) {
-      // 结算失败不该让恢复订阅这个动作失败（它已经生效了），下一趟作业会自愈。
-      this.logger.error(`suspension settle failed — ${String(err)}`);
+      return count;
+    } catch (error) {
+      this.logger.error(`suspension settle failed — ${String(error)}`);
       return 0;
+    }
+  }
+
+  /**
+   * Keep existing compensation math inside the caller's subscription transaction.
+   * @throws {NotFoundException} When the locked subscription cannot be reread.
+   */
+  private async settleSuspensionTerms(
+    subscription: SubscriptionRecord,
+    client: PoolClient,
+    episodeIds?: string[],
+  ) {
+    const settled = await this.repo.settleResumedSuspensions(
+      {
+        subscriptionId: subscription.id,
+        limit: 100,
+        ...(episodeIds ? { episodeIds } : {}),
+      },
+      client,
+    );
+    const after = settled.some((row) => row.extended)
+      ? await this.repo.getById(subscription.id, client)
+      : subscription;
+    if (!after) throw new NotFoundException(`订阅 ${subscription.id} 不存在`);
+    return { after, settled };
+  }
+
+  /** Report unapplied compensation only after its transaction has committed. */
+  private logUnappliedSuspensions(
+    rows: {
+      subscriptionId: string;
+      grantedSeconds: number;
+      extended: boolean;
+    }[],
+  ): void {
+    for (const row of rows) {
+      if (row.grantedSeconds > 0 && !row.extended)
+        this.logger.log(
+          `suspension settle: subscription ${row.subscriptionId} has no end_at, ${row.grantedSeconds}s recorded but not applied`,
+        );
     }
   }
 
@@ -712,54 +894,77 @@ export class SubscriptionService {
        * 真要让处置与顺延分家（比如新增一个原因，或者处置不再等于 `!extendsTerm`），
        * 那需要一张自己的处置映射表 + owner 裁定，不是在这里改一个取值。
        */
-      const terminate = !row.extendsTerm;
       try {
-        const before = await this.getSubscription(row.subscriptionId);
-        if (before.status !== "suspended") continue; // moved since the scan
-        // 终止不还原续费意愿（终态本来就不续）；恢复才还原，而存量 episode 的
-        // auto_renew_before 为 NULL ⇒ 整个键不出现（= 不动它），不是传 undefined。
-        const autoRenew = terminate ? false : row.autoRenewBefore;
-        const result = await this.repo.update(row.subscriptionId, before, {
-          status: terminate ? "cancelled" : "active",
-          ...(autoRenew === null ? {} : { autoRenew }),
-          operatorType: "system",
-          operatorRemark: terminate
-            ? `suspension exceeded ${maxDays} days (reason=${row.reason}) — terminated`
-            : `suspension exceeded ${maxDays} days (reason=${row.reason}) — force resumed`,
-          expectedStatus: "suspended",
-        });
-        if (!result) {
-          this.logger.debug(
-            `suspension deadline: subscription ${row.subscriptionId} changed under us, skipped`,
-          );
-          continue;
-        }
-        // 先闭合 episode 再结算：结算的判据是「已闭合且未结算」，顺序反了这一趟捞不到它
-        // （下一趟会捞到，但客户要多等一个 tick 才看到新到期日）。
-        await this.repo.closeSuspension(row.subscriptionId);
-        await this.applyTransitionHooks(
-          `suspension-deadline:${row.subscriptionId}`,
+        const committed = await this.repo.withLockedSubscription(
           row.subscriptionId,
-          before,
-          result,
+          async (before, client) => {
+            if (!before)
+              throw new NotFoundException(`订阅 ${row.subscriptionId} 不存在`);
+            if (before.status !== "suspended") return null;
+            const current = (
+              await this.repo.findOverdueSuspensions(maxDays, 1, client, row.id)
+            ).find(
+              (candidate) =>
+                candidate.id === row.id &&
+                candidate.subscriptionId === row.subscriptionId,
+            );
+            if (
+              !current ||
+              current.id !== row.id ||
+              current.subscriptionId !== row.subscriptionId
+            )
+              return null;
+            const terminate = !current.extendsTerm;
+            const autoRenew = terminate ? false : current.autoRenewBefore;
+            const result = await this.repo.update(
+              row.subscriptionId,
+              before,
+              {
+                status: terminate ? "cancelled" : "active",
+                ...(autoRenew === null ? {} : { autoRenew }),
+                operatorType: "system",
+                operatorRemark: terminate
+                  ? `suspension exceeded ${maxDays} days (reason=${current.reason}) — terminated`
+                  : `suspension exceeded ${maxDays} days (reason=${current.reason}) — force resumed`,
+                expectedStatus: "suspended",
+              },
+              client,
+            );
+            if (!result) return null;
+            await this.repo.closeSuspension(
+              row.subscriptionId,
+              client,
+              current.id,
+            );
+            const terms = await this.settleSuspensionTerms(result, client);
+            await this.applyTransitionHooks(
+              `suspension-deadline:${row.subscriptionId}`,
+              row.subscriptionId,
+              before,
+              terms.after,
+              client,
+            );
+            return { ...terms, terminate };
+          },
         );
-        await this.settleSuspensionExtension(row.subscriptionId);
-        // 客户侧要知道：服务被停了很久之后，它是恢复了还是彻底结束了。
+        if (!committed) continue;
+        this.logUnappliedSuspensions(committed.settled);
+        if (committed.terminate) terminated += 1;
+        else resumed += 1;
         await this.emit(
           `suspension deadline ${row.subscriptionId}`,
           async () => {
             const d = await this.repo.getNotifyDisplay(row.subscriptionId);
-            if (!d) return null;
-            return this.subscriptionNotice(
-              terminate
-                ? "subscription.suspension_ended"
-                : "subscription.resumed",
-              d,
-            );
+            return d
+              ? this.subscriptionNotice(
+                  committed.terminate
+                    ? "subscription.suspension_ended"
+                    : "subscription.resumed",
+                  d,
+                )
+              : null;
           },
         );
-        if (terminate) terminated += 1;
-        else resumed += 1;
       } catch (err) {
         this.logger.error(
           `suspension deadline: subscription ${row.subscriptionId} failed — ${String(err)}`,
@@ -770,31 +975,13 @@ export class SubscriptionService {
   }
 
   /**
-   * 产品级维护窗口对账（2026-09-27，owner 定「窗口进行中，该产品所有已订阅租户给时间补偿，
-   * 恢复后结算；个例暂停机制不变」）。
-   *
-   * 不在 opera-bff 的窗口事务里做：一个窗口可能挂几百条订阅，每条要 CAS、开 episode、跑
-   * provisioning 钩子、发通知，那不是一笔运营请求该等的事；而且窗口期间新履约开通的订阅
-   * 也要补偿——放在作业里下一 tick 自然捞到（开通即补偿），履约路径不必加钩子。
-   *
-   * 与 sweepOverdueSuspensions 同一条路：`repo.update` CAS + episode 开 / 闭 +
-   * `applyTransitionHooks` + `settleSuspensionExtension` + 通知。三段：
-   *   1. 进窗口：产品打着窗口、订阅在服务中、没有未闭合 episode → suspended，开一条
-   *      reason=platform_ops（顺延由 @shared 的政策表派生，落库）、actor=system、带窗口 id
-   *      的 episode，expected_resume_at = 产品上的 maintenance_until，**通知维护暂停**
-   *      （`subscription.suspended_maintenance`，不是人工暂停那条）。
-   *   2. 出窗口：未闭合 episode 带窗口 id、产品已不再打着同一个窗口 → active（还原暂停那
-   *      一刻的 auto_renew）、闭合、结算顺延、通知恢复。
-   *   3. 顺延同步：窗口 maintenance_until 变了 → 同窗口未闭合 episode 的预计恢复跟着改。
-   *      **这一段不自己发通知，但延长确实会通知到客户**：第 1 段那条的去重锚带着预计恢复
-   *      日期（见 `maintenancePauseNotice`），日期一变收件箱唯一键就不再命中，下一 tick
-   *      同一条模板自然再发一条带新日期的。承诺的回来时间变了而当事人不知道，靠的是键的
-   *      粒度而不是这里再加一个 emit——两个发信点会各自漏各自的。
-   * 幂等靠判据本身（状态 + 有无未闭合 episode + 窗口 id 是否仍打在产品上），重跑不重复。
-   * 运营手工暂停的（episode 没有窗口 id）不受影响；窗口期间运营手工恢复某条订阅，下一 tick
-   * 会再次被暂停——产品确实还在维护，这是对的。
-   *
-   * 单行失败只记日志，趟不中断（同其它 sweep）。
+   * Reconcile product maintenance without touching manual suspension episodes.
+   * Entry commits the status, renewal snapshot, episode and required invalidation.
+   * Release commits the restored status, episode closure, compensation and product
+   * events together. Locked predicates reject stale window or episode identities.
+   * Customer notices run after commit; expected-resume synchronization keeps its
+   * existing single-statement update and date-based notification deduplication.
+   * One row's failure never aborts the remaining candidates.
    */
   async sweepProductMaintenance(): Promise<{
     suspended: number;
@@ -808,52 +995,75 @@ export class SubscriptionService {
     const candidates = await this.repo.findMaintenanceCandidates();
     for (const c of candidates) {
       try {
-        const before = await this.getSubscription(c.subscriptionId);
-        if (before.status !== c.status) continue; // moved since the scan
-        const result = await this.repo.update(c.subscriptionId, before, {
-          status: "suspended",
-          // 冻结期间不该自动续上一期（同 admin-bff 暂停那条 UPDATE）；恢复时按 episode
-          // 记下的 auto_renew_before 还原。
-          autoRenew: false,
-          operatorType: "system",
-          operatorRemark: `product maintenance window ${c.maintenanceWindowId}`,
-          expectedStatus: c.status,
-        });
-        if (!result) {
-          this.logger.debug(
-            `product maintenance: subscription ${c.subscriptionId} changed under us, skipped (lost race)`,
-          );
-          continue;
-        }
-        await this.repo.openSuspension({
-          subscriptionId: c.subscriptionId,
-          tenantId: before.tenantId,
-          reason: "platform_ops",
-          extendsTerm: SUSPENSION_REASON_EXTENDS_TERM.platform_ops,
-          autoRenewBefore: before.autoRenew,
-          expectedResumeAt: c.maintenanceUntil,
-          actorType: "system",
-          maintenanceWindowId: c.maintenanceWindowId,
-        });
-        await this.applyTransitionHooks(
-          `maintenance:${c.subscriptionId}`,
+        const committed = await this.repo.withLockedSubscription(
           c.subscriptionId,
-          before,
-          result,
+          async (before, client) => {
+            if (!before)
+              throw new NotFoundException(`订阅 ${c.subscriptionId} 不存在`);
+            if (before.status !== c.status) return null;
+            const current = (
+              await this.repo.findMaintenanceCandidates(
+                1,
+                client,
+                c.subscriptionId,
+              )
+            ).find(
+              (candidate) => candidate.subscriptionId === c.subscriptionId,
+            );
+            if (
+              !current ||
+              current.subscriptionId !== c.subscriptionId ||
+              current.productId !== c.productId ||
+              current.maintenanceWindowId !== c.maintenanceWindowId
+            )
+              return null;
+            const result = await this.repo.update(
+              c.subscriptionId,
+              before,
+              {
+                status: "suspended",
+                autoRenew: false,
+                operatorType: "system",
+                operatorRemark: `product maintenance window ${current.maintenanceWindowId}`,
+                expectedStatus: c.status,
+              },
+              client,
+            );
+            if (!result) return null;
+            await this.repo.openSuspension(
+              {
+                subscriptionId: c.subscriptionId,
+                tenantId: before.tenantId,
+                reason: "platform_ops",
+                extendsTerm: SUSPENSION_REASON_EXTENDS_TERM.platform_ops,
+                autoRenewBefore: before.autoRenew,
+                expectedResumeAt: current.maintenanceUntil,
+                actorType: "system",
+                maintenanceWindowId: current.maintenanceWindowId,
+              },
+              client,
+            );
+            await this.applyTransitionHooks(
+              `maintenance:${c.subscriptionId}`,
+              c.subscriptionId,
+              before,
+              result,
+              client,
+            );
+            return current;
+          },
         );
-        /* 维护专属的那条，不是人工暂停那条：说清「为什么停 / 预计什么时候回来 / 回来
-           不用你操作」，去重锚带预计恢复日期（见 maintenancePauseNotice）。
-           `emit` 自己吞异常 ⇒ 通知失败不会把这条订阅算成失败、更不会中断整趟。 */
+        if (!committed) continue;
+        suspended += 1;
         await this.emit(
           `maintenance suspended ${c.subscriptionId}`,
           async () => {
             const d = await this.repo.getNotifyDisplay(c.subscriptionId);
             return d
-              ? this.maintenancePauseNotice(d, c.maintenanceUntil)
+              ? this.maintenancePauseNotice(d, committed.maintenanceUntil)
               : null;
           },
         );
-        suspended += 1;
       } catch (err) {
         this.logger.error(
           `product maintenance: subscription ${c.subscriptionId} failed to suspend — ${String(err)}`,
@@ -865,38 +1075,66 @@ export class SubscriptionService {
     const releases = await this.repo.findMaintenanceReleases();
     for (const r of releases) {
       try {
-        const before = await this.getSubscription(r.subscriptionId);
-        if (before.status !== "suspended") continue; // moved since the scan
-        // 还原暂停那一刻的续费意愿；episode 没记（null）⇒ 整个键不出现（= 不动它）。
-        const result = await this.repo.update(r.subscriptionId, before, {
-          status: "active",
-          ...(r.autoRenewBefore === null
-            ? {}
-            : { autoRenew: r.autoRenewBefore }),
-          operatorType: "system",
-          operatorRemark: `product maintenance window ${r.maintenanceWindowId} ended — resumed`,
-          expectedStatus: "suspended",
-        });
-        if (!result) {
-          this.logger.debug(
-            `product maintenance: subscription ${r.subscriptionId} changed under us, skipped (lost race)`,
-          );
-          continue;
-        }
-        // 先闭合再结算：结算的判据是「已闭合且未结算」（同到点处置）。
-        await this.repo.closeSuspension(r.subscriptionId);
-        await this.applyTransitionHooks(
-          `maintenance-release:${r.subscriptionId}`,
+        const committed = await this.repo.withLockedSubscription(
           r.subscriptionId,
-          before,
-          result,
+          async (before, client) => {
+            if (!before)
+              throw new NotFoundException(`订阅 ${r.subscriptionId} 不存在`);
+            if (before.status !== "suspended") return null;
+            const current = (
+              await this.repo.findMaintenanceReleases(1, client, {
+                subscriptionId: r.subscriptionId,
+                episodeId: r.id,
+              })
+            ).find(
+              (candidate) =>
+                candidate.id === r.id &&
+                candidate.subscriptionId === r.subscriptionId,
+            );
+            if (
+              !current ||
+              current.id !== r.id ||
+              current.maintenanceWindowId !== r.maintenanceWindowId
+            )
+              return null;
+            const result = await this.repo.update(
+              r.subscriptionId,
+              before,
+              {
+                status: "active",
+                ...(current.autoRenewBefore === null
+                  ? {}
+                  : { autoRenew: current.autoRenewBefore }),
+                operatorType: "system",
+                operatorRemark: `product maintenance window ${current.maintenanceWindowId} ended — resumed`,
+                expectedStatus: "suspended",
+              },
+              client,
+            );
+            if (!result) return null;
+            await this.repo.closeSuspension(
+              r.subscriptionId,
+              client,
+              current.id,
+            );
+            const terms = await this.settleSuspensionTerms(result, client);
+            await this.applyTransitionHooks(
+              `maintenance-release:${r.subscriptionId}`,
+              r.subscriptionId,
+              before,
+              terms.after,
+              client,
+            );
+            return terms;
+          },
         );
-        await this.settleSuspensionExtension(r.subscriptionId);
+        if (!committed) continue;
+        this.logUnappliedSuspensions(committed.settled);
+        resumed += 1;
         await this.emit(`maintenance resumed ${r.subscriptionId}`, async () => {
           const d = await this.repo.getNotifyDisplay(r.subscriptionId);
           return d ? this.subscriptionNotice("subscription.resumed", d) : null;
         });
-        resumed += 1;
       } catch (err) {
         this.logger.error(
           `product maintenance: subscription ${r.subscriptionId} failed to resume — ${String(err)}`,
@@ -958,6 +1196,10 @@ export class SubscriptionService {
     let notified = 0;
     let marked = 0;
     for (const r of rows) {
+      if (r.status === "active") {
+        if (!(await this.markExpiring(r.id, r.endAt))) continue;
+        marked += 1;
+      }
       const days = Math.max(
         0,
         Math.ceil((r.endAt.getTime() - Date.now()) / 86_400_000),
@@ -966,7 +1208,6 @@ export class SubscriptionService {
         this.subscriptionNotice("subscription.expiring_soon", r, { days }),
       );
       if (ok) notified += 1;
-      if (r.status === "active" && (await this.markExpiring(r.id))) marked += 1;
     }
     return { notified, marked };
   }
@@ -1000,37 +1241,50 @@ export class SubscriptionService {
   }
 
   /**
-   * 外部写路径改完状态之后，补跑**与本服务同一套**写完成尾（2026-09-25 批 5）。
-   *
-   * 为什么需要它：admin-bff 的 `subscriptions.router` 用裸 SQL 事务改订阅状态——那条
-   * 路上整个文件搜不到一处 provisioning，于是运营暂停 / 恢复 / 退订 / 续期之后：
-   *   · 退订：**不发 deprovision**，产品侧从未被告知，服务可能还在给；
-   *   · 暂停 / 恢复：**不失效 C2 权益缓存**，产品侧照旧看到旧状态直到 TTL 到点。
-   * 客户自助那条路（走本服务）两样都做。同一件事只长在一条分支上，另一条就是洞。
-   *
-   * 为什么不把那条写路径整体搬进来：它的 SQL 还带着三件本服务今天表达不出来的东西
-   * ——`renew` 的 `change_type='renewed'`（本服务会按状态派生成 'resumed'）、试用转付费
-   * 的 `subscription_kind` 翻转、以及在库里按 `cycle_unit/cycle_count` 算 `end_at`。
-   * 照搬会动到审计轨迹与周期数学，那是另一次改动；本方法只补缺的那一半：**副作用**。
-   * hooks 仍然只有一份实现（`applyTransitionHooks`），不新造第二套。
-   *
-   * 由调用方在**事务提交之后**调；`before` 是它在事务里锁行时读到的状态与版本。
-   * 内部一律 best-effort（`safeProvisioningHook` 吞异常只记日志）：运营动作已经生效，
-   * 通知产品侧失败不该让那个请求失败。
+   * Complete an external SQL writer using the same lifecycle and outbox hooks.
+   * Caller transactions retain ownership of commit/rollback/release; required
+   * compensation, reanchoring and product enqueue failures abort that transaction.
+   * Legacy callers without a transaction retain their best-effort behavior.
+   * @param id - Subscription already locked and updated by the external writer.
+   * @param before - Locked pre-write state, including the term when available.
+   * @param transaction - Existing business transaction; never opened here.
+   * @param options - Tail work required by the caller's actual transition.
+   * @returns Resolves after the required database work completes.
+   * @throws {Error} When required work fails within a caller transaction.
    */
   async applyExternalStatusChange(
     id: string,
-    before: Pick<SubscriptionRecord, "status" | "planVersionId">,
+    before: Pick<SubscriptionRecord, "status" | "planVersionId"> &
+      Partial<Pick<SubscriptionRecord, "endAt">>,
+    transaction?: PoolClient,
+    options: { settleSuspensionId?: string; reanchorPools?: boolean } = {},
   ): Promise<void> {
-    try {
-      const after = await this.getSubscription(id);
-      if (
-        after.status === before.status &&
-        after.planVersionId === before.planVersionId
-      ) {
-        return; // 什么都没变（幂等重放）——不必打扰产品侧
+    const complete = async () => {
+      let after = await this.getSubscription(id, transaction);
+      if (transaction && options.settleSuspensionId) {
+        after = (
+          await this.settleSuspensionTerms(after, transaction, [
+            options.settleSuspensionId,
+          ])
+        ).after;
       }
-      await this.applyTransitionHooks(`external:${id}`, id, before, after);
+      if (transaction && options.reanchorPools) {
+        await this.repo.reanchorPeriodicPools(id, transaction);
+      }
+      await this.applyTransitionHooks(
+        `external:${id}`,
+        id,
+        before,
+        after,
+        transaction,
+      );
+    };
+    if (transaction) {
+      await complete();
+      return;
+    }
+    try {
+      await complete();
     } catch (err) {
       this.logger.error(
         `external status change hooks failed for ${id} — ${String(err)}`,
@@ -1038,20 +1292,47 @@ export class SubscriptionService {
     }
   }
 
-  /** active → expiring 的单行 CAS；输了竞态返回 false，不抛。 */
-  private async markExpiring(id: string): Promise<boolean> {
+  /** Mark the scanned term and persist its invalidation before sending a reminder. */
+  private async markExpiring(
+    id: string,
+    expectedEndAt: Date,
+  ): Promise<boolean> {
     try {
-      const before = await this.getSubscription(id);
-      if (before.status !== "active") return false;
-      const result = await this.repo.update(id, before, {
-        status: "expiring",
-        operatorType: "system",
-        operatorRemark: "entered expiry notice window (renewal reminder pass)",
-        expectedStatus: "active",
-      });
-      if (!result) return false;
-      await this.applyTransitionHooks(`expiring:${id}`, id, before, result);
-      return true;
+      return await this.repo.withLockedSubscription(
+        id,
+        async (before, client) => {
+          if (!before) throw new NotFoundException(`订阅 ${id} 不存在`);
+          if (
+            before.status !== "active" ||
+            before.autoRenew ||
+            before.subscriptionKind === "trial" ||
+            before.cycleType === "perpetual"
+          )
+            return false;
+          const result = await this.repo.update(
+            id,
+            before,
+            {
+              status: "expiring",
+              operatorType: "system",
+              operatorRemark:
+                "entered expiry notice window (renewal reminder pass)",
+              expectedStatus: "active",
+              expectedEndAt,
+            },
+            client,
+          );
+          if (!result) return false;
+          await this.applyTransitionHooks(
+            `expiring:${id}`,
+            id,
+            before,
+            result,
+            client,
+          );
+          return true;
+        },
+      );
     } catch (err) {
       this.logger.error(`mark expiring: ${id} failed — ${String(err)}`);
       return false;
@@ -1074,22 +1355,41 @@ export class SubscriptionService {
     let marked = 0;
     for (const r of rows) {
       try {
-        const before = await this.getSubscription(r.id);
-        if (before.status !== r.status) continue; // moved since the scan
-        const result = await this.repo.update(r.id, before, {
-          status: "overdue",
-          operatorType: "system",
-          operatorRemark: "renewal order unpaid past period end (grace window)",
-          expectedStatus: r.status,
-          expectedEndAt: r.endAt,
-        });
-        if (!result) continue;
-        await this.applyTransitionHooks(
-          `overdue:${r.id}`,
+        const changed = await this.repo.withLockedSubscription(
           r.id,
-          before,
-          result,
+          async (before, client) => {
+            if (!before) throw new NotFoundException(`订阅 ${r.id} 不存在`);
+            if (
+              before.status !== r.status ||
+              !before.autoRenew ||
+              before.subscriptionKind === "trial"
+            )
+              return false;
+            const result = await this.repo.update(
+              r.id,
+              before,
+              {
+                status: "overdue",
+                operatorType: "system",
+                operatorRemark:
+                  "renewal order unpaid past period end (grace window)",
+                expectedStatus: r.status,
+                expectedEndAt: r.endAt,
+              },
+              client,
+            );
+            if (!result) return false;
+            await this.applyTransitionHooks(
+              `overdue:${r.id}`,
+              r.id,
+              before,
+              result,
+              client,
+            );
+            return true;
+          },
         );
+        if (!changed) continue;
         marked += 1;
         await this.emit(`overdue ${r.id}`, async () =>
           this.subscriptionNotice("subscription.overdue", r, {
@@ -1168,8 +1468,13 @@ export class SubscriptionService {
   findUnclaimedLiveForProduct(
     workspaceId: string,
     planVersionId: string,
+    transaction?: PoolClient,
   ): Promise<SubscriptionRecord | null> {
-    return this.repo.findUnclaimedLiveForProduct(workspaceId, planVersionId);
+    return this.repo.findUnclaimedLiveForProduct(
+      workspaceId,
+      planVersionId,
+      transaction,
+    );
   }
 
   private async assertNoTierConflict(
@@ -1215,16 +1520,23 @@ export class SubscriptionService {
   private async fireProvisioned(
     sub: SubscriptionRecord,
     planVersionId: string,
+    transaction?: PoolClient,
   ): Promise<void> {
-    const products = await this.repo.listVersionProducts(planVersionId);
+    const products = await this.repo.listVersionProducts(
+      planVersionId,
+      ...(transaction ? [transaction] : []),
+    );
     for (const p of products) {
-      await this.provisioning.onSubscriptionActivated({
-        workspaceId: sub.workspaceId,
-        tenantId: sub.tenantId,
-        applicationId: p.productId,
-        appCode: p.productCode,
-        plan: p.planCode,
-      });
+      await this.provisioning.onSubscriptionActivated(
+        {
+          workspaceId: sub.workspaceId,
+          tenantId: sub.tenantId,
+          applicationId: p.productId,
+          appCode: p.productCode,
+          plan: p.planCode,
+        },
+        ...(transaction ? [transaction] : []),
+      );
     }
   }
 
@@ -1232,21 +1544,29 @@ export class SubscriptionService {
   private async fireDeprovisionIfUncovered(
     sub: SubscriptionRecord,
     planVersionId: string,
+    transaction?: PoolClient,
   ): Promise<void> {
-    const products = await this.repo.listVersionProducts(planVersionId);
+    const products = await this.repo.listVersionProducts(
+      planVersionId,
+      ...(transaction ? [transaction] : []),
+    );
     for (const p of products) {
       const covered = await this.repo.hasOtherActiveCoverage(
         sub.workspaceId,
         p.productId,
         sub.id,
+        ...(transaction ? [transaction] : []),
       );
       if (covered) continue;
-      await this.provisioning.onSubscriptionDeactivated({
-        workspaceId: sub.workspaceId,
-        tenantId: sub.tenantId,
-        applicationId: p.productId,
-        appCode: p.productCode,
-      });
+      await this.provisioning.onSubscriptionDeactivated(
+        {
+          workspaceId: sub.workspaceId,
+          tenantId: sub.tenantId,
+          applicationId: p.productId,
+          appCode: p.productCode,
+        },
+        ...(transaction ? [transaction] : []),
+      );
     }
   }
 
@@ -1254,6 +1574,7 @@ export class SubscriptionService {
   private async fireVersionChange(
     sub: SubscriptionRecord,
     oldPlanVersionId: string,
+    transaction?: PoolClient,
   ): Promise<void> {
     // 同一个缺口的第二处（2026-10-03）：这道门同时守着**两个方向** —— 下面既发新版本
     // 那批的 provisioned，也撤掉被移除产品的开通。原先判 ACTIVATED，于是一条处在
@@ -1261,10 +1582,16 @@ export class SubscriptionService {
     // 被移除的产品在产品侧永远留着。改判 heldCoverage —— 这几档仍占着产品，
     // 换版本该发的就得发。
     if (!heldCoverage(sub.status)) return;
-    await this.fireProvisioned(sub, sub.planVersionId);
+    await this.fireProvisioned(sub, sub.planVersionId, transaction);
     const [oldProducts, newProducts] = await Promise.all([
-      this.repo.listVersionProducts(oldPlanVersionId),
-      this.repo.listVersionProducts(sub.planVersionId),
+      this.repo.listVersionProducts(
+        oldPlanVersionId,
+        ...(transaction ? [transaction] : []),
+      ),
+      this.repo.listVersionProducts(
+        sub.planVersionId,
+        ...(transaction ? [transaction] : []),
+      ),
     ]);
     const kept = new Set(newProducts.map((p) => p.productId));
     for (const p of oldProducts) {
@@ -1273,14 +1600,18 @@ export class SubscriptionService {
         sub.workspaceId,
         p.productId,
         sub.id,
+        ...(transaction ? [transaction] : []),
       );
       if (covered) continue;
-      await this.provisioning.onSubscriptionDeactivated({
-        workspaceId: sub.workspaceId,
-        tenantId: sub.tenantId,
-        applicationId: p.productId,
-        appCode: p.productCode,
-      });
+      await this.provisioning.onSubscriptionDeactivated(
+        {
+          workspaceId: sub.workspaceId,
+          tenantId: sub.tenantId,
+          applicationId: p.productId,
+          appCode: p.productCode,
+        },
+        ...(transaction ? [transaction] : []),
+      );
     }
   }
 
@@ -1296,29 +1627,36 @@ export class SubscriptionService {
   private async fireEntitlementInvalidate(
     sub: SubscriptionRecord,
     planVersionIds: string[],
+    transaction?: PoolClient,
   ): Promise<void> {
     const changeId = randomUUID();
     const seen = new Set<string>();
     for (const versionId of new Set(planVersionIds)) {
-      const products = await this.repo.listVersionProducts(versionId);
+      const products = await this.repo.listVersionProducts(
+        versionId,
+        ...(transaction ? [transaction] : []),
+      );
       for (const p of products) {
         if (seen.has(p.productId)) continue;
         seen.add(p.productId);
-        await this.provisioning.enqueueEvent({
-          workspaceId: sub.workspaceId,
-          tenantId: sub.tenantId,
-          applicationId: p.productId,
-          appCode: p.productCode,
-          event: "subscription_changed",
-          // "subchg:" keeps it under the varchar(128) key column (four joined
-          // uuids overflow it); subscription id is globally unique, so no
-          // cross-workspace collision without carrying workspace_id here.
-          idempotencyKey: `subchg:${sub.id}:${p.productId}:${changeId}`,
-          data: {
-            products: [p.productCode],
-            subscription_id: sub.id,
+        await this.provisioning.enqueueEvent(
+          {
+            workspaceId: sub.workspaceId,
+            tenantId: sub.tenantId,
+            applicationId: p.productId,
+            appCode: p.productCode,
+            event: "subscription_changed",
+            // "subchg:" keeps it under the varchar(128) key column (four joined
+            // uuids overflow it); subscription id is globally unique, so no
+            // cross-workspace collision without carrying workspace_id here.
+            idempotencyKey: `subchg:${sub.id}:${p.productId}:${changeId}`,
+            data: {
+              products: [p.productCode],
+              subscription_id: sub.id,
+            },
           },
-        });
+          ...(transaction ? [transaction] : []),
+        );
       }
     }
   }
@@ -1328,18 +1666,23 @@ export class SubscriptionService {
     /* 同 applyTransitionHooks：这里只读状态与版本两件事，签名照实写。 */
     before: Pick<SubscriptionRecord, "status" | "planVersionId">,
     after: SubscriptionRecord,
+    transaction?: PoolClient,
   ): Promise<void> {
     if (before.planVersionId !== after.planVersionId) {
-      await this.fireVersionChange(after, before.planVersionId);
+      await this.fireVersionChange(after, before.planVersionId, transaction);
       return;
     }
     const isActive = ACTIVATED.has(after.status);
     if (!ACTIVATED.has(before.status) && isActive) {
-      await this.fireProvisioned(after, after.planVersionId);
+      await this.fireProvisioned(after, after.planVersionId, transaction);
     } else if (heldCoverage(before.status) && DEACTIVATED.has(after.status)) {
       // 判据是 heldCoverage 不是 ACTIVATED：经 expiring / overdue / suspended
       // 走到终态的那些订阅，before 不在 ACTIVATED 里，此前一个信号都不发。
-      await this.fireDeprovisionIfUncovered(after, after.planVersionId);
+      await this.fireDeprovisionIfUncovered(
+        after,
+        after.planVersionId,
+        transaction,
+      );
     }
   }
 }

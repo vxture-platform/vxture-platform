@@ -354,8 +354,11 @@ export class PgOrderRepository {
     this.walletSettlement = port;
   }
 
-  async getById(id: string): Promise<OrderRecord | null> {
-    const res = await this.pool.query<OrderRow>(
+  async getById(
+    id: string,
+    transaction?: PoolClient,
+  ): Promise<OrderRecord | null> {
+    const res = await (transaction ?? this.pool).query<OrderRow>(
       `select * from billing.orders where id = $1 limit 1`,
       [id],
     );
@@ -615,6 +618,22 @@ export class PgOrderRepository {
     }
   }
 
+  /**
+   * Serialize fulfillment with order creation and voucher acquisition.
+   * @param workspaceId - Cost center already bound to the locked order.
+   * @param transaction - Caller-owned order transaction.
+   * @returns Resolves once the workspace acquisition lock is held.
+   */
+  async lockFulfillmentWorkspace(
+    workspaceId: string,
+    transaction: PoolClient,
+  ): Promise<void> {
+    await transaction.query(
+      "select id from tenancy.workspaces where id=$1 for no key update",
+      [workspaceId],
+    );
+  }
+
   async lockInvoiceTx(
     client: PoolClient,
     orderId: string,
@@ -692,10 +711,11 @@ export class PgOrderRepository {
     orderId: string,
     subscriptionId: string,
     actor: OrderActor,
+    transaction?: PoolClient,
   ): Promise<boolean> {
-    const client = await this.pool.connect();
+    const client = transaction ?? (await this.pool.connect());
     try {
-      await client.query("begin");
+      if (!transaction) await client.query("begin");
       const res = await client.query<{ id: string }>(
         `update billing.orders
             set status = 'fulfilled', subscription_id = $2,
@@ -717,13 +737,13 @@ export class PgOrderRepository {
           clientIp: actor.clientIp ?? null,
         });
       }
-      await client.query("commit");
+      if (!transaction) await client.query("commit");
       return flipped;
     } catch (err) {
-      await client.query("rollback");
+      if (!transaction) await client.query("rollback");
       throw err;
     } finally {
-      client.release();
+      if (!transaction) client.release();
     }
   }
 
@@ -1030,10 +1050,11 @@ export class PgOrderRepository {
   async grantLeftoverToPrepaid(
     order: OrderRecord,
     actor: OrderActor,
+    transaction?: PoolClient,
   ): Promise<boolean> {
-    const client = await this.pool.connect();
+    const client = transaction ?? (await this.pool.connect());
     try {
-      await client.query("begin");
+      if (!transaction) await client.query("begin");
       const current = (
         await client.query<OrderRow>(
           "select * from billing.orders where id=$1 for update",
@@ -1044,7 +1065,7 @@ export class PgOrderRepository {
         throw new ConflictException("折抵订单归属不匹配");
       const cents = settlementCents(current.leftover_amount);
       if (!cents) {
-        await client.query("commit");
+        if (!transaction) await client.query("commit");
         return false;
       }
       if (
@@ -1064,7 +1085,7 @@ export class PgOrderRepository {
       if (prior) {
         if (settlementCents(prior.amount) !== cents)
           throw new ConflictException("原折抵来源金额不匹配");
-        await client.query("commit");
+        if (!transaction) await client.query("commit");
         return false;
       }
       const legacy = await client.query(
@@ -1083,13 +1104,13 @@ export class PgOrderRepository {
         },
         { action: "bonus", amountCents: cents, idempotencyKey: key },
       );
-      await client.query("commit");
+      if (!transaction) await client.query("commit");
       return true;
     } catch (error) {
-      await client.query("rollback");
+      if (!transaction) await client.query("rollback");
       throw error;
     } finally {
-      client.release();
+      if (!transaction) client.release();
     }
   }
 
@@ -1926,10 +1947,11 @@ export class PgOrderRepository {
        */
       restartsPeriod?: boolean;
     },
+    transaction?: PoolClient,
   ): Promise<void> {
-    const client = await this.pool.connect();
+    const client = transaction ?? (await this.pool.connect());
     try {
-      await client.query("begin");
+      if (!transaction) await client.query("begin");
       if (terms.mode === "upgrade") {
         // 周期区间单独传参（同一 $n 既当列值又当拼接字符串会让 pg 推不出类型）。
         await client.query(
@@ -1999,12 +2021,12 @@ export class PgOrderRepository {
           [subscriptionId, terms.payAmount, terms.orderId],
         );
       }
-      await client.query("commit");
+      if (!transaction) await client.query("commit");
     } catch (err) {
-      await client.query("rollback");
+      if (!transaction) await client.query("rollback");
       throw err;
     } finally {
-      client.release();
+      if (!transaction) client.release();
     }
   }
 
