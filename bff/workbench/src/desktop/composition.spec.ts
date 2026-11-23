@@ -18,6 +18,8 @@ import {
   ACTIVITY_WRITE_POOL,
 } from "../tokens";
 import { DESKTOP_RUNTIME, type DesktopRuntime } from "./runtime";
+import { ScopeService } from "../scope-service";
+import { ResourceOverview } from "../resource-overview";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -53,6 +55,12 @@ it.each(["0", "1"])(
       if (flag === "0") expect(native).toBeNull();
       else {
         expect(native!.redis).toBe(app.get(REDIS));
+        expect(Reflect.get(native!.resources!, "scope")).toBe(
+          app.get(ScopeService),
+        );
+        expect(Reflect.get(native!.resources!, "overview")).toBe(
+          app.get(ResourceOverview),
+        );
         expect(Reflect.get(native!.applications!, "pool")).toBe(
           app.get(READ_POOL),
         );

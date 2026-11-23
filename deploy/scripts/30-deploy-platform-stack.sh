@@ -11,6 +11,16 @@
 # 用途：docker compose pull + up -d；不执行数据库 migration 或 seed。
 set -euo pipefail
 
+# Preview is an explicit read-only mode, never a loosely interpreted flag.
+PREVIEW_ONLY=0
+if [ "$#" -gt 0 ]; then
+  if [ "$#" -ne 1 ] || [ "$1" != --preview ]; then
+    echo 'Usage: 30-deploy-platform-stack.sh [--preview]' >&2
+    exit 2
+  fi
+  PREVIEW_ONLY=1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
@@ -93,8 +103,10 @@ fi
 env VX_ENV_AUDIT_STRICT_RUNTIME=1 VX_WORKER_DIR="$COMPOSE_DIR" VX_RUNTIME_DIR="$RUNTIME_DIR" \
   node "$COMPOSE_DIR/guardrails/39-audit-env.mjs"
 
-echo "  Tailscale 状态:"
-tailscale status || echo "  !! Tailscale 未连接，外部业务 SSO / 内部调用链路可能不可用"
+if [ "$PREVIEW_ONLY" = 0 ]; then
+  echo "  Tailscale 状态:"
+  tailscale status || echo "  !! Tailscale 未连接，外部业务 SSO / 内部调用链路可能不可用"
+fi
 
 # ── 镜像仓库访问 ─────────────────────────────────────────────────────────────
 
@@ -116,9 +128,12 @@ echo "  如 registry 需要认证，请先在服务器上完成人工认证；�
 # 不到 digest 即中止（此刻尚未拉取/替换，安全）。
 cd "$COMPOSE_DIR"
 echo ""
-echo "==> [3/4] 生成 content-digest pin 覆盖（compose.pinned.yml）"
+echo "==> [3/4] Resolve pinned service images"
 . "$COMPOSE_DIR/scripts/lib/pin-image-digests.sh"
-PINNED_FILE="$COMPOSE_DIR/compose.pinned.yml"
+# An incomplete plan must never overwrite the last deployed pin file.
+PLAN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vx-stack-plan.XXXXXXXX")"
+trap 'rm -rf -- "$PLAN_DIR"' EXIT
+PINNED_FILE="$PLAN_DIR/compose.pinned.yml"
 svc_images_json="$(docker compose -f "$COMPOSE_FILE" config --format json)" || {
   echo "错误：docker compose config 失败，无法生成 pin 覆盖。" >&2
   exit 1
@@ -129,6 +144,16 @@ svc_images_json="$(docker compose -f "$COMPOSE_FILE" config --format json)" || {
   echo "# 每次部署按当前 VX_IMAGE_TAG（=$VX_IMAGE_TAG）重新生成。"
   echo "services:"
 } > "$PINNED_FILE"
+service_images="$(printf '%s' "$svc_images_json" | node -e '
+  let s = "";
+  process.stdin.on("data", d => (s += d));
+  process.stdin.on("end", () => {
+    let c;
+    try { c = JSON.parse(s); } catch { process.exit(1); }
+    const entries = Object.entries(c.services || {});
+    if (!entries.length || entries.some(([, v]) => !v || typeof v.image !== "string" || !v.image)) process.exit(1);
+    for (const [k, v] of entries) process.stdout.write(k + "\t" + v.image + "\n");
+  });')" || { echo 'Cannot read the complete service image plan.' >&2; exit 1; }
 while IFS=$'\t' read -r svc image; do
   [ -n "$svc" ] || continue
   case "$image" in
@@ -143,17 +168,39 @@ while IFS=$'\t' read -r svc image; do
   esac
   printf '  %s:\n    image: %s\n' "$svc" "$pinned" >> "$PINNED_FILE"
   echo "  -- $svc -> $pinned"
-done < <(printf '%s' "$svc_images_json" | node -e '
-  let s = "";
-  process.stdin.on("data", d => (s += d));
-  process.stdin.on("end", () => {
-    const c = JSON.parse(s);
-    for (const [k, v] of Object.entries(c.services || {})) {
-      if (v && v.image) process.stdout.write(k + "\t" + v.image + "\n");
-    }
-  });')
+done <<< "$service_images"
 
 # 此后所有 compose 调用都叠加 pin 覆盖：base 定义 + digest 钉死。
+COMPOSE_FILES=(-f "$COMPOSE_FILE" -f "$PINNED_FILE")
+
+# Compose sees configuration changes even when an image digest is unchanged.
+# Capture both streams privately: progress is on stderr and failures may echo env.
+echo '==> PREVIEW ONLY: planned container actions; nothing is being changed'
+compose_help="$(docker compose --help 2>/dev/null)" || { echo 'Compose preview is unavailable.' >&2; exit 1; }
+if [[ "$compose_help" != *--dry-run* ]]; then
+  echo 'Compose must support --dry-run before deployment can continue.' >&2
+  exit 1
+fi
+if ! docker compose --dry-run --ansi never "${COMPOSE_FILES[@]}" up -d --no-deps --remove-orphans > "$PLAN_DIR/preview.log" 2>&1; then
+  echo 'Compose preview failed; no container actions were executed.' >&2
+  exit 1
+fi
+# Show action lines only, never full rendered configurations or error details.
+node -e '
+  const fs = require("node:fs");
+  let count = 0;
+  for (const line of fs.readFileSync(process.argv[1], "utf8").split(/\r?\n/)) {
+    const action = line.match(/(?:^|\s)(Container|Network|Volume|Image)\s+(\S+)\s+(Running|Waiting|Healthy|Unhealthy|Recreate|Recreated|Create|Created|Starting|Started|Stopping|Stopped|Removing|Removed|Pulling|Pulled|Building|Built|Skipped|Error)(?:\s|$)/);
+    if (action) { count++; console.log("[preview] " + action.slice(1).join(" ")); }
+  }
+  if (!count) process.exit(1);
+' "$PLAN_DIR/preview.log" || { echo 'Compose preview returned no recognizable resource actions.' >&2; exit 1; }
+if [ "$PREVIEW_ONLY" = 1 ]; then
+  echo 'Preview complete. No images pulled, containers changed or release markers written.'
+  exit 0
+fi
+cp "$PINNED_FILE" "$COMPOSE_DIR/compose.pinned.yml"
+PINNED_FILE="$COMPOSE_DIR/compose.pinned.yml"
 COMPOSE_FILES=(-f "$COMPOSE_FILE" -f "$PINNED_FILE")
 
 # ── 拉取 + 替换（逐服务，2C2G 省内存）─────────────────────────────────────────

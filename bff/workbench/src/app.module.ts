@@ -40,6 +40,7 @@ import { DesktopEnabledGuard } from "./desktop/enabled.guard";
 import { DESKTOP_RUNTIME, createDesktopRuntime } from "./desktop/runtime";
 import { WorkspaceReader } from "./desktop/workspace-reader";
 import { ApplicationReader } from "./desktop/application-reader";
+import { ResourceReader } from "./desktop/resource-reader";
 import { BillingService, PgBillingRepository } from "@vxture/service-billing"; // ⚠️ 跨层引用: inject the existing read-only pool into domain readers.
 import {
   MeteringReadService,
@@ -104,6 +105,7 @@ class HealthRouter implements OnModuleInit {
         ScopeService,
         CatalogService,
         READ_POOL,
+        ResourceOverview,
       ],
       useFactory: (
         config: WorkbenchConfig,
@@ -112,12 +114,14 @@ class HealthRouter implements OnModuleInit {
         scopes: ScopeService,
         catalog: CatalogService,
         pool: Pool,
+        overview: ResourceOverview,
       ) =>
         config.desktop
           ? {
               ...createDesktopRuntime(config.desktop, redis),
               workspaces: new WorkspaceReader(organization, scopes),
               applications: new ApplicationReader(catalog, pool),
+              resources: new ResourceReader(scopes, overview),
             }
           : null,
     },

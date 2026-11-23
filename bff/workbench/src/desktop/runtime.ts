@@ -17,6 +17,7 @@ import {
 } from "@vxture/core-oidc-rp";
 import { ApplicationReader } from "./application-reader";
 import type { WorkspaceReader } from "./workspace-reader";
+import type { ResourceReader } from "./resource-reader";
 
 export const DESKTOP_RUNTIME = Symbol("DESKTOP_RUNTIME");
 export const PENDING_TTL_SEC = 300;
@@ -46,6 +47,7 @@ export interface DesktopRuntime {
   auth: RpAuthService;
   workspaces?: WorkspaceReader;
   applications?: ApplicationReader;
+  resources?: ResourceReader;
 }
 
 function required(env: NodeJS.ProcessEnv, key: string): string {

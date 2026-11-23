@@ -35,6 +35,8 @@ import {
 import { TestRedis } from "./test-redis";
 import { WorkspaceReader, type OrganizationReads } from "./workspace-reader";
 import { ApplicationReader } from "./application-reader";
+import { ResourceReader } from "./resource-reader";
+import { failure } from "../errors";
 
 const SUB = "usr_11111111-1111-4111-8111-111111111111";
 const ORG = "22222222-2222-4222-8222-222222222222";
@@ -915,6 +917,169 @@ describe("minimal desktop backend", () => {
     expect(await response.json()).toMatchObject({
       code: "SESSION_SCOPE_CHANGED",
     });
+  });
+
+  // ========================================================================
+  // Quota reads reuse the session scope and live domain permission checks.
+  // ========================================================================
+
+  it.each([0, 25])(
+    "reads quota including used=%s only for the bound workspace",
+    async (used) => {
+      const session = await login();
+      const usage = {
+        storage: { used, limit: 100 },
+        aiCredit: { used, limit: 200 },
+      };
+      const assertRead = vi.fn().mockResolvedValue(undefined);
+      const resources = vi.fn().mockResolvedValue(usage);
+      rt.resources = new ResourceReader({ assertRead }, { resources });
+      const response = await request(
+        "/api/subscription/quota-usage?workspaceId=other&tenantId=other",
+        {
+          headers: { "x-vxture-session": session.rpsid },
+        },
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(await response.json()).toEqual(usage);
+      expect(resources).toHaveBeenCalledExactlyOnceWith(WORKSPACE);
+      expect(assertRead).toHaveBeenCalledTimes(2);
+      for (const [user, permission] of assertRead.mock.calls) {
+        expect(user).toMatchObject({
+          userId: SUB.slice(4),
+          activeOrg: ORG,
+          activeWorkspace: WORKSPACE,
+        });
+        expect(permission).toBe("tenant.quota.read");
+      }
+    },
+  );
+
+  it("requires native identity before touching the quota source", async () => {
+    const assertRead = vi.fn(),
+      resources = vi.fn();
+    rt.resources = new ResourceReader({ assertRead }, { resources });
+    const missing = await request("/api/subscription/quota-usage");
+    expect(missing.status).toBe(400);
+    expect(await missing.json()).toMatchObject({
+      code: "NATIVE_REQUEST_INVALID",
+      retryable: false,
+    });
+    expect(
+      (
+        await request("/api/subscription/quota-usage", {
+          headers: { cookie: "vx_rp_session=browser-only" },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request("/api/subscription/quota-usage", {
+          headers: { "x-vxture-session": "invalid-session" },
+        })
+      ).status,
+    ).toBe(401);
+    expect(assertRead).not.toHaveBeenCalled();
+    expect(resources).not.toHaveBeenCalled();
+  });
+
+  it.each(["WORKBENCH_SCOPE_FORBIDDEN", "WORKBENCH_READ_FORBIDDEN"])(
+    "rejects quota on %s without ending a valid identity session",
+    async (code) => {
+      const session = await login();
+      const resources = vi.fn();
+      const assertRead = vi
+        .fn()
+        .mockRejectedValue(failure(403, code, "Read forbidden"));
+      rt.resources = new ResourceReader({ assertRead }, { resources });
+      const headers = { "x-vxture-session": session.rpsid };
+      const response = await request("/api/subscription/quota-usage", {
+        headers,
+      });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ code, retryable: false });
+      expect(resources).not.toHaveBeenCalled();
+      expect((await request("/api/me", { headers })).status).toBe(200);
+    },
+  );
+
+  it("returns unavailable rather than zero quota when the source is missing or fails", async () => {
+    const session = await login(),
+      headers = { "x-vxture-session": session.rpsid };
+    const missing = await request("/api/subscription/quota-usage", { headers });
+    expect(missing.status).toBe(503);
+    expect(await missing.json()).toMatchObject({
+      code: "WORKBENCH_RESOURCE_UNAVAILABLE",
+      retryable: true,
+    });
+    rt.resources = new ResourceReader(
+      { assertRead: vi.fn().mockResolvedValue(undefined) },
+      {
+        resources: vi
+          .fn()
+          .mockRejectedValue(new Error("postgres://private-source")),
+      },
+    );
+    const unavailable = await request("/api/subscription/quota-usage", {
+      headers,
+    });
+    expect(unavailable.status).toBe(503);
+    const body = await unavailable.text();
+    expect(body).not.toMatch(/private-source|storage|aiCredit/);
+    expect((await request("/api/me", { headers })).status).toBe(200);
+  });
+
+  it("discards quota when permission is removed while the source is reading", async () => {
+    const session = await login();
+    const assertRead = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(
+        failure(403, "WORKBENCH_READ_FORBIDDEN", "Read forbidden"),
+      );
+    rt.resources = new ResourceReader(
+      { assertRead },
+      {
+        resources: vi.fn().mockResolvedValue({
+          storage: { used: 1, limit: 2 },
+          aiCredit: { used: 3, limit: 4 },
+        }),
+      },
+    );
+    const response = await request("/api/subscription/quota-usage", {
+      headers: { "x-vxture-session": session.rpsid },
+    });
+    expect(response.status).toBe(403);
+    expect(await response.text()).not.toContain("storage");
+  });
+
+  it("discards an in-flight quota response after local native logout", async () => {
+    const session = await login(),
+      headers = { "x-vxture-session": session.rpsid };
+    const usage = {
+      storage: { used: 1, limit: 2 },
+      aiCredit: { used: 3, limit: 4 },
+    };
+    let release!: (value: typeof usage) => void;
+    const pending = new Promise<typeof usage>((resolve) => {
+      release = resolve;
+    });
+    const resources = vi.fn().mockReturnValue(pending);
+    rt.resources = new ResourceReader(
+      { assertRead: vi.fn().mockResolvedValue(undefined) },
+      { resources },
+    );
+    const reading = request("/api/subscription/quota-usage", { headers });
+    try {
+      await vi.waitFor(() => expect(resources).toHaveBeenCalledTimes(1));
+      expect((await post("/auth/native/logout", {}, headers)).status).toBe(204);
+    } finally {
+      release(usage);
+    }
+    const response = await reading;
+    expect(response.status).toBe(401);
+    expect(await response.text()).not.toContain("storage");
   });
 
   it("exposes standard build identity without contacting dependencies or requiring a session", async () => {
