@@ -24,7 +24,7 @@ WORKBENCH_BASE_URL=https://ruyin.work
 OIDC_CLIENT_ID=workbench
 OIDC_ISSUER=https://accounts.vxture.com
 OIDC_CLIENT_SECRET=fixture-browser-secret
-RUYIN_BFF_BASE=https://api.ruyin.work
+RUYIN_BFF_BASE=https://app.ruyin.work
 RUYIN_DESKTOP_OIDC_CLIENT_SECRET=fixture-native-secret
 RUYIN_DESKTOP_SESSION_TTL=86400
 EOF
@@ -34,6 +34,10 @@ test "$WORKBENCH_DESKTOP_ENABLED" = 1
 validate_workbench_desktop_runtime "$DEPLOY"
 test ! -e "$fixture/runtime/.env.ruyin-bff"
 printf 'PASS: native module uses the existing file and registered 3061 listener\n'
+sed -i 's#^RUYIN_BFF_BASE=.*#RUYIN_BFF_BASE=https://api.ruyin.work#' "$fixture/runtime/.env.workbench-bff"
+if validate_workbench_desktop_runtime "$DEPLOY" >/dev/null 2>&1; then exit 1; fi
+sed -i 's#^RUYIN_BFF_BASE=.*#RUYIN_BFF_BASE=https://app.ruyin.work#' "$fixture/runtime/.env.workbench-bff"
+printf 'PASS: the retired API origin cannot replace the app origin\n'
 sed -i 's/^RUYIN_DESKTOP_OIDC_CLIENT_SECRET=.*/RUYIN_DESKTOP_OIDC_CLIENT_SECRET=fixture-browser-secret/' "$fixture/runtime/.env.workbench-bff"
 if validate_workbench_desktop_runtime "$DEPLOY" >/dev/null 2>&1; then exit 1; fi
 printf 'PASS: sharing browser credentials is rejected\n'
@@ -41,7 +45,7 @@ printf 'WORKBENCH_DESKTOP_ENABLED=invalid\n' > "$fixture/runtime/.env.workbench-
 if load_workbench_desktop_env >/dev/null 2>&1; then exit 1; fi
 printf 'PASS: invalid activation flag fails closed\n'
 eval "$(sed -n '/^check_ruyin_public_health() {$/,/^}$/p' "$DEPLOY/scripts/40-verify-platform-runtime.sh")"
-curl() { printf '%s' "$health_fixture"; }
+curl() { [[ "$*" == *'https://app.ruyin.work/healthz'* ]] || return 1; printf '%s' "$health_fixture"; }
 mark_fail() { health_failed=1; }
 health_failed=0
 health_fixture='{"status":"ok","service":"workbench-bff","product":"vxture"}'

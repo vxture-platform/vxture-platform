@@ -137,8 +137,8 @@ check_nginx_runtime() {
 }
 
 check_ruyin_public_health() {
-  echo -n '  https://api.ruyin.work/healthz identity -> '
-  if curl -fsS --max-time 15 'https://api.ruyin.work/healthz' | node -e '
+  echo -n '  https://app.ruyin.work/healthz identity -> '
+  if curl -fsS --max-time 15 'https://app.ruyin.work/healthz' | node -e '
     let body="";process.stdin.on("data",chunk=>body+=chunk);process.stdin.on("end",()=>{
       try{const value=JSON.parse(body);if(value.status!=="ok"||value.service!=="workbench-bff"||value.product!=="vxture")process.exit(1);}catch{process.exit(1);}
     });'; then echo OK; else echo FAIL; mark_fail; fi

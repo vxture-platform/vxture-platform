@@ -348,7 +348,7 @@ function enableDesktop(root) {
     WORKBENCH_BFF_PORT: "3061",
     OIDC_CLIENT_ID: "workbench",
     OIDC_ISSUER: "https://accounts.vxture.com",
-    RUYIN_BFF_BASE: "https://api.ruyin.work",
+    RUYIN_BFF_BASE: "https://app.ruyin.work",
     RUYIN_DESKTOP_OIDC_CLIENT_SECRET: "fixture-distinct-desktop-secret",
     RUYIN_DESKTOP_SESSION_TTL: "86400",
   }))
@@ -369,6 +369,7 @@ test("desktop uses the existing workbench env without an additional service or r
 for (const [key, value] of [
   ["WORKBENCH_DESKTOP_ENABLED", "true"],
   ["RUYIN_BFF_BASE", "https://console.vxture.com"],
+  ["RUYIN_BFF_BASE", "https://api.ruyin.work"],
   ["RUYIN_DESKTOP_OIDC_CLIENT_SECRET", ""],
   ["RUYIN_DESKTOP_OIDC_CLIENT_SECRET", CLIENT_SECRET],
   ["RUYIN_DESKTOP_SESSION_TTL", "1"],

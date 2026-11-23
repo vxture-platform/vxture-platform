@@ -14,11 +14,16 @@ import { AppModule, configureHttp } from "@vxture/bff-workbench";
 | Public origin            | Internal paths                                     | RP identity     | Accepted credentials                           |
 | ------------------------ | -------------------------------------------------- | --------------- | ---------------------------------------------- |
 | `https://ruyin.work`     | Existing `/auth/*`, `/api/*`                       | `workbench`     | Host-only browser cookie, browser-bound state  |
-| `https://api.ruyin.work` | Approved paths map to `/desktop/*` on the same BFF | `ruyin-desktop` | Native approval/claim, then `X-Vxture-Session` |
+| `https://app.ruyin.work` | Approved paths map to `/desktop/*` on the same BFF | `ruyin-desktop` | Native approval/claim, then `X-Vxture-Session` |
 
 The browser ingress rejects `/desktop` and `/desktop/*`. The API ingress exposes
 only the approved native paths, removes browser cookies and preserves native
 session headers. The desktop guard additionally checks its configured host.
+The controlled ingress accepts only `app.ruyin.work`, including a check against
+mismatched HTTP Host headers when TLS SNI selected the app server. HTTP redirects
+to HTTPS on that host; HTTPS native requests retain their method, body and session
+header without a redirect. Login callbacks and completion pages use the app
+origin. The web host still cannot reach the internal desktop prefix.
 There is no peer-BFF business request or source dependency. Accounts remains the
 identity authority; Console owns organization administration, billing and orders.
 
@@ -34,7 +39,7 @@ All private settings stay in the existing `.env.workbench-bff`:
 | Setting                            | Meaning                                                                               |
 | ---------------------------------- | ------------------------------------------------------------------------------------- |
 | `WORKBENCH_DESKTOP_ENABLED`        | `0` by default; `1` explicitly enables native routes                                  |
-| `RUYIN_BFF_BASE`                   | Confirmed public native origin `https://api.ruyin.work`                               |
+| `RUYIN_BFF_BASE`                   | Canonical public client origin `https://app.ruyin.work`                               |
 | `RUYIN_DESKTOP_OIDC_CLIENT_SECRET` | Server-only secret for `ruyin-desktop`; must differ from browser `OIDC_CLIENT_SECRET` |
 | `RUYIN_DESKTOP_SESSION_TTL`        | 300–86400 seconds, default 86400                                                      |
 
@@ -49,6 +54,30 @@ Disabled native routes return 404 and do not need native credentials. Enabling
 the module requires valid independent settings. The deployment audit and ingress
 preflight verify the registered workbench listener and IdP hash; no new port is
 allocated. Browser-only deployments continue to use their existing configuration.
+
+The app domain leaves room for additional client surfaces; this release still
+enables only the reviewed desktop endpoints and `ruyin-desktop` identity. Mobile
+and mini-program authentication, sessions and device policies require their own
+reviewed adapters and registrations when implemented.
+
+## Origin migration
+
+Production `v0.33.8` was activated on the API origin and passed its real desktop
+account acceptance. This change prepares the app origin locally; it does not
+claim the production switch is already complete. Activate only after separately
+reviewing the deployed guardrails/ingress, runtime `RUYIN_BFF_BASE`, exact OIDC
+callback and back-channel logout URI as one coordinated change. Preserve the
+desktop secret, client identifier, session namespace and browser configuration.
+Let in-flight approval attempts finish or expire before changing the callback.
+
+The retired API host is not an alias or redirect in the target configuration.
+Remove its DNS only after the app production switch and acceptance succeed;
+retain the prior configuration and registration for a scoped rollback. Test the
+app host's path/method/body limits, Cookie removal and session isolation, and
+verify the retired host cannot reach it. Client persistence is origin-bound: a
+client moved to the app origin must sign in there instead of copying a stored
+API-origin session. Console management and Accounts authentication URLs do not
+change.
 
 ## Read models
 
