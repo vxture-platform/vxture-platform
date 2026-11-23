@@ -409,3 +409,11 @@ test("changed_files: 一次改名要同时报出原路径与新路径（回归 v
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test("desktop adapter selects only the existing workbench BFF image", () => {
+  assert.deepEqual(
+    builtImages(["bff/workbench/src/desktop/desktop.router.ts"]),
+    ["platform_bff-workbench"],
+  );
+  assert.ok(!ALL_IMAGES.includes("platform_bff-ruyin"));
+});

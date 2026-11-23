@@ -17,6 +17,7 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
 . "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
+load_workbench_desktop_env
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 
@@ -135,6 +136,14 @@ check_nginx_runtime() {
   docker exec vxture-nginx nginx -t
 }
 
+check_ruyin_public_health() {
+  echo -n '  https://api.ruyin.work/healthz identity -> '
+  if curl -fsS --max-time 15 'https://api.ruyin.work/healthz' | node -e '
+    let body="";process.stdin.on("data",chunk=>body+=chunk);process.stdin.on("end",()=>{
+      try{const value=JSON.parse(body);if(value.status!=="ok"||value.service!=="workbench-bff"||value.product!=="vxture")process.exit(1);}catch{process.exit(1);}
+    });'; then echo OK; else echo FAIL; mark_fail; fi
+}
+
 check_public_https() {
   local url="$1"
 
@@ -229,6 +238,7 @@ else
   echo "  [skip] admin public endpoint — ADMIN_BASE_URL not found in $RUNTIME_DIR/.env.admin-bff"
 fi
 check_public_https "https://api.vxture.com/healthz"
+if [ "$WORKBENCH_DESKTOP_ENABLED" = 1 ]; then check_ruyin_public_health; fi
 echo ""
 
 if [ "$FAILED" -eq 0 ]; then

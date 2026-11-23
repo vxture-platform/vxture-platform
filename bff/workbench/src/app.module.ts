@@ -34,6 +34,12 @@ import { InboxRouter } from "./inbox-router";
 import { ScopeService } from "./scope-service";
 import { CatalogService } from "./catalog-service";
 import { ResourceOverview } from "./resource-overview";
+import { DesktopRouter } from "./desktop/desktop.router";
+import { DesktopSessionService } from "./desktop/desktop-session.service";
+import { DesktopEnabledGuard } from "./desktop/enabled.guard";
+import { DESKTOP_RUNTIME, createDesktopRuntime } from "./desktop/runtime";
+import { WorkspaceReader } from "./desktop/workspace-reader";
+import { ApplicationReader } from "./desktop/application-reader";
 import { BillingService, PgBillingRepository } from "@vxture/service-billing"; // ⚠️ 跨层引用: inject the existing read-only pool into domain readers.
 import {
   MeteringReadService,
@@ -73,6 +79,7 @@ class HealthRouter implements OnModuleInit {
 @Module({
   imports: [PoolsModule],
   controllers: [
+    DesktopRouter,
     AuthRouter,
     ApiRouter,
     InboxRouter,
@@ -80,6 +87,40 @@ class HealthRouter implements OnModuleInit {
     HealthRouter,
   ],
   providers: [
+    DesktopSessionService,
+    DesktopEnabledGuard,
+    {
+      provide: OrganizationService,
+      inject: [PRIMARY_POOL],
+      useFactory: (pool: Pool) =>
+        new OrganizationService(new PgOrganizationRepository(pool)),
+    },
+    {
+      provide: DESKTOP_RUNTIME,
+      inject: [
+        CONFIG,
+        REDIS,
+        OrganizationService,
+        ScopeService,
+        CatalogService,
+        READ_POOL,
+      ],
+      useFactory: (
+        config: WorkbenchConfig,
+        redis: Redis,
+        organization: OrganizationService,
+        scopes: ScopeService,
+        catalog: CatalogService,
+        pool: Pool,
+      ) =>
+        config.desktop
+          ? {
+              ...createDesktopRuntime(config.desktop, redis),
+              workspaces: new WorkspaceReader(organization, scopes),
+              applications: new ApplicationReader(catalog, pool),
+            }
+          : null,
+    },
     {
       provide: SessionStore,
       inject: [REDIS, CONFIG],
@@ -102,12 +143,12 @@ class HealthRouter implements OnModuleInit {
     },
     {
       provide: ScopeService,
-      inject: [PRIMARY_POOL],
-      useFactory: (pool: Pool) => {
+      inject: [PRIMARY_POOL, OrganizationService],
+      useFactory: (pool: Pool, organization: OrganizationService) => {
         const repository = new PgOrganizationRepository(pool);
         return new ScopeService(
           new ActiveContextService(repository),
-          new OrganizationService(repository),
+          organization,
           new GovernanceService(repository),
         );
       },

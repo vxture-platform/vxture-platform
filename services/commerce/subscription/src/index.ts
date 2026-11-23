@@ -1,5 +1,14 @@
 export { SubscriptionModule } from "./module/subscription.module";
 export { SubscriptionService } from "./service/subscription.service";
+export {
+  readSubscribedProducts,
+  readProductIcon,
+} from "./repository/subscribed-products.read";
+export type {
+  SubscriptionReadPool,
+  SubscribedProductRow,
+  ProductIconRow,
+} from "./repository/subscribed-products.read";
 export { SubscriptionRedemption } from "./service/subscription-redemption";
 export type {
   RedemptionPlan,

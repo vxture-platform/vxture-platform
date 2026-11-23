@@ -11,7 +11,11 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
+// ⚠️ 跨层引用: Share the domain icon query; Console retains HTTP cache behavior.
+import {
+  COMMERCE_PG_POOL,
+  readProductIcon,
+} from "@vxture/service-subscription";
 import type { RequestContext } from "../types/console.types";
 import { SelfScope } from "../auth/capability";
 
@@ -100,18 +104,7 @@ export class ApplicationsRouter {
     @Res({ passthrough: true }) res: Response,
     @Headers("if-none-match") ifNoneMatch?: string,
   ): Promise<StreamableFile | undefined> {
-    const found = await this.pool.query<{
-      mime_type: string;
-      bytes: Buffer;
-      checksum: string;
-    }>(
-      `SELECT i.mime_type, i.bytes, i.checksum
-         FROM product.product_icons i
-         JOIN product.products p ON p.id = i.product_id
-        WHERE p.product_code = $1 AND p.deleted_at IS NULL`,
-      [appCode],
-    );
-    const row = found.rows[0];
+    const row = await readProductIcon(this.pool, appCode);
     if (!row) {
       /* 没有托管图标不是错误——界面本来就会回落到产品字母牌。回 404 让
          `<img>` 走它的 onError 分支，而不是渲染一个坏掉的图。 */

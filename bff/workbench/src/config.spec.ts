@@ -86,3 +86,37 @@ it("rejects a broad database role for activity writes", () => {
     }),
   ).toThrow();
 });
+
+describe("optional desktop module", () => {
+  const desktop = {
+    WORKBENCH_DESKTOP_ENABLED: "1",
+    RUYIN_BFF_BASE: "https://api.ruyin.work",
+    RUYIN_DESKTOP_OIDC_CLIENT_SECRET: "desktop-synthetic-secret",
+  };
+  it("preserves the browser-only configuration and ignores inactive desktop settings", () => {
+    expect(loadConfig(env).desktop).toBeUndefined();
+    expect(
+      loadConfig({ ...env, RUYIN_BFF_BASE: "invalid" }).desktop,
+    ).toBeUndefined();
+  });
+  it("adds a separate RP without changing the existing listener or browser secret", () => {
+    const config = loadConfig({ ...env, ...desktop });
+    expect(config.port).toBe(3061);
+    expect(config.oidc.clientId).toBe("workbench");
+    expect(config.oidc.clientSecret).toBe(env.OIDC_CLIENT_SECRET);
+    expect(config.desktop?.oidc).toMatchObject({
+      clientId: "ruyin-desktop",
+      clientSecret: desktop.RUYIN_DESKTOP_OIDC_CLIENT_SECRET,
+      redirectUri: "https://api.ruyin.work/auth/callback",
+    });
+  });
+  it.each([
+    { WORKBENCH_DESKTOP_ENABLED: "true" },
+    { RUYIN_DESKTOP_OIDC_CLIENT_SECRET: "" },
+    { RUYIN_DESKTOP_OIDC_CLIENT_SECRET: env.OIDC_CLIENT_SECRET },
+    { RUYIN_BFF_BASE: env.WORKBENCH_BASE_URL },
+    { RUYIN_DESKTOP_SESSION_TTL: "1" },
+  ])("rejects unsafe desktop configuration %j", (patch) => {
+    expect(() => loadConfig({ ...env, ...desktop, ...patch })).toThrow();
+  });
+});

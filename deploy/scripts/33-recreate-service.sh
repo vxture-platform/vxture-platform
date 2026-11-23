@@ -95,6 +95,14 @@ for svc in "$@"; do
   esac
 done
 
+# A broken optional adapter must not block repairs of unrelated platform services.
+case " ${TARGETS[*]} " in
+  *" workbench-bff "*)
+    load_workbench_desktop_env
+    validate_workbench_desktop_runtime "$COMPOSE_DIR"
+    ;;
+esac
+
 if [ ! -f "$COMPOSE_FILE" ]; then
   echo "错误：缺少 $COMPOSE_FILE" >&2
   exit 1

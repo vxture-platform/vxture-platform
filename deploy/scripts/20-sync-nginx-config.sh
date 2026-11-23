@@ -20,6 +20,8 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 . "$COMPOSE_DIR/scripts/lib/site-takeover.sh"
 . "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
+load_workbench_desktop_env
+validate_workbench_desktop_runtime "$COMPOSE_DIR"
 SRC="$COMPOSE_DIR/nginx"
 COMPOSE_SRC="$COMPOSE_DIR/compose.nginx.yml"
 DST=/srv/vxture/data/nginx/conf
@@ -55,6 +57,11 @@ render_nginx() {
   envsubst '${VX_WORKER01_TAILNET_IP} ${VX_WORKER02_TAILNET_IP}' < "$src" > "$dst"
   echo "  渲染 $(basename "$src") → $dst"
 }
+
+ruyin_template="$SRC/templates/ruyin-api.vhost.template"
+if [ "$WORKBENCH_DESKTOP_ENABLED" = 1 ] && [ ! -f "$ruyin_template" ]; then
+  echo 'Enabled desktop access requires its controlled ingress template.' >&2; exit 1
+fi
 
 # Read the same non-secret host list as the targeted OIDC seed without sourcing credentials.
 customer_portal_env="${CUSTOMER_PORTAL_ENV_FILE:-$COMPOSE_ENV_RUNTIME_DIR/.env.customer-portal-bff}"
@@ -283,6 +290,10 @@ if [ ! -f "$TAKEOVER_DEFAULTS_FILE" ]; then
   echo "错误：找不到 $TAKEOVER_DEFAULTS_FILE" >&2
   exit 1
 fi
+if [ "$WORKBENCH_DESKTOP_ENABLED" = 1 ]; then
+  cp "$ruyin_template" "$DST/sites-enabled/ruyin-api.conf"
+fi
+
 echo "==> 解析站点接管档位"
 # 第三个参数 `prune`：现场状态里有一个已从登记表退役的域时，丢弃它并提示，而不是报错。
 # 这里报错会让整次 deploy 失败（本脚本 set -e），等于「把一个域从接管登记表里摘掉」这
