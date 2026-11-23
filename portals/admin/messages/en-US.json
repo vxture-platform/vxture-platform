@@ -3817,7 +3817,7 @@
       "billStatus": "Bill status",
       "plan": "Plan",
       "currency": "Currency",
-      "orderAmount": "Order amount",
+      "orderAmount": "Original price",
       "discountAmount": "Discount amount",
       "payableAmount": "Amount due",
       "operator": "Operator",

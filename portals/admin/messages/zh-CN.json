@@ -3817,7 +3817,7 @@
       "billStatus": "账单状态",
       "plan": "套餐",
       "currency": "货币",
-      "orderAmount": "订单金额",
+      "orderAmount": "原价",
       "discountAmount": "优惠金额",
       "payableAmount": "应付金额",
       "operator": "操作人",

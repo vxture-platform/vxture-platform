@@ -47,6 +47,7 @@ function row(over: Record<string, unknown> = {}): Record<string, unknown> {
     refund_in_flight: false,
     refunded_amount: "0",
     paid_at: NOW,
+    fulfilled_at: NOW,
     created_at: NOW,
     start_at: NOW,
     end_at: new Date("2027-09-25T02:00:00.000Z"),
@@ -155,7 +156,40 @@ describe("订单轴：实体状态 → wire 十态", () => {
       orderStatus: "cancelled",
       noncashReversed: true,
       activatedAt: NOW.toISOString(),
+      fulfilledAt: NOW.toISOString(),
     });
+  });
+
+  it("keeps the persisted renewal fulfillment separate from the original subscription start", async () => {
+    const subscriptionStart = new Date("2026-09-01T03:00:00.000Z");
+    const fulfilled = new Date("2026-09-25T02:14:00.000Z");
+    const orders = await routerWith([
+      row({ start_at: subscriptionStart, fulfilled_at: fulfilled }),
+      row({ order_status: "paid", fulfilled_at: null, start_at: null }),
+      row({
+        order_status: "refunded",
+        fulfilled_at: fulfilled,
+        start_at: subscriptionStart,
+      }),
+    ]).getMyOrders(req());
+    expect(orders[0]).toMatchObject({
+      startAt: subscriptionStart.toISOString(),
+      activatedAt: subscriptionStart.toISOString(),
+      fulfilledAt: fulfilled.toISOString(),
+    });
+    expect(orders[1]).toMatchObject({
+      orderStatus: "activating",
+      fulfilledAt: null,
+    });
+    expect(orders[2]).toMatchObject({
+      orderStatus: "refunded",
+      fulfilledAt: fulfilled.toISOString(),
+    });
+    const detail = await detailRouterWith(
+      row({ start_at: subscriptionStart, fulfilled_at: fulfilled }),
+      null,
+    ).getOrderDetail(req(), ORDER_UUID);
+    expect(detail.fulfilledAt).toBe(fulfilled.toISOString());
   });
 
   it.each([

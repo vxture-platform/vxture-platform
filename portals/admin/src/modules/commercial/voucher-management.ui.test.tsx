@@ -1021,7 +1021,7 @@ describe("voucher list pages DOM", () => {
     await act(async () => exportButton!.click());
     const call = vi.mocked(exportRowsToCsv).mock.calls[0]!;
     for (const column of call[1])
-      if (["订单金额", "优惠金额", "应付金额", "货币"].includes(column.label))
+      if (["原价", "优惠金额", "应付金额", "货币"].includes(column.label))
         expect(column.value(record)).toBe("");
   });
 });
@@ -1137,6 +1137,82 @@ describe.each(["zh-CN", "en-US"])(
       ).toBe(english ? "Voucher code" : "优惠码");
     });
 
+    it("shows and exports the gross invoice price without adding voucher tender", async () => {
+      state.locale = locale;
+      const english = locale === "en-US";
+      const amounts = [
+        {
+          discountAmount: 0.2,
+          orderAmount: 0.8,
+          payableAmount: 0.8,
+          original: 1,
+          kind: "discount",
+        },
+        {
+          discountAmount: 0,
+          orderAmount: 0.83,
+          payableAmount: 0.83,
+          original: 0.83,
+          kind: "credit_voucher",
+        },
+        {
+          discountAmount: 0,
+          orderAmount: 0.75,
+          payableAmount: 0.75,
+          original: 0.75,
+          kind: "discount",
+        },
+      ];
+      const records: PromotionRedemptionRecord[] = amounts.map(
+        ({ discountAmount, orderAmount, payableAmount, kind }, index) => ({
+          discountAmount,
+          orderAmount,
+          payableAmount,
+          kind,
+          id: "redemption-" + index,
+          redemptionNo: "VR-AMOUNT-" + index,
+          promotionCode: "V-01",
+          promotionName: "Campaign",
+          benefitLabel: "",
+          walletTransactions: [],
+          subscriptionId: null,
+          tenantId: "tenant",
+          tenantCode: "TEN-01",
+          tenantName: "Tenant",
+          tenantType: "company",
+          orderNo: "ORD-01",
+          billId: "bill-" + index,
+          billNo: "INV-" + index,
+          billStatus: "paid",
+          servicePlanName: null,
+          currency: "CNY",
+          operatorName: "Customer",
+          redeemedAt: "2026-11-20T00:00:00Z",
+          remark: null,
+        }),
+      );
+      vi.mocked(api.fetchPromotionRedemptionRecords).mockResolvedValue(records);
+      await act(async () => root.render(<PromotionRedemptionsPage />));
+      const prefix = english ? "Original" : "原价";
+      for (const [index, record] of records.entries()) {
+        const row = Array.from(host.querySelectorAll('[role="row"]')).find(
+          (candidate) => candidate.textContent?.includes(record.redemptionNo),
+        );
+        expect(row?.textContent).toContain(
+          prefix + " ¥" + amounts[index]!.original.toFixed(2),
+        );
+      }
+      await click(english ? "Export all" : "导出全部");
+      const columns = vi.mocked(exportRowsToCsv).mock.calls[0]![1];
+      const originalColumn = columns.find(
+        (column) => column.label === (english ? "Original price" : "原价"),
+      );
+      expect(originalColumn).toBeDefined();
+      expect(records.map((record) => originalColumn!.value(record))).toEqual([
+        1, 0.83, 0.75,
+      ]);
+    });
+
     it("exports visible subscription codes while hiding UUID and missing identifiers", async () => {
       state.locale = locale;
       const english = locale === "en-US";
@@ -1191,8 +1267,8 @@ describe.each(["zh-CN", "en-US"])(
         ),
       ).not.toContain(uuid);
       const cashLabels = english
-        ? ["Order amount", "Discount amount", "Amount due", "Currency"]
-        : ["订单金额", "优惠金额", "应付金额", "货币"];
+        ? ["Original price", "Discount amount", "Amount due", "Currency"]
+        : ["原价", "优惠金额", "应付金额", "货币"];
       const cashColumns = columns.filter((column) =>
         cashLabels.includes(column.label),
       );

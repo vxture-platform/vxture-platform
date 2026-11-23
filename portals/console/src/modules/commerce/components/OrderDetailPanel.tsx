@@ -39,6 +39,8 @@ interface Step {
   at: string | null;
   /** 当前停留步（着重显示）。 */
   now?: boolean;
+  /** Terminal state can confirm a step even when legacy data has no timestamp. */
+  completed?: boolean;
   /** 附注（如剩余倒计时）。 */
   note?: string;
 }
@@ -72,14 +74,14 @@ function buildSteps(order: MyOrder, countdown: string | null): Step[] {
           ...(countdown ? { note: countdown } : {}),
         },
         { key: zero ? "settleZero" : "confirm", at: null },
-        { key: "provision", at: null },
+        { key: "fulfillment", at: null },
       ];
     case "paid_pending_verify":
       return [
         submitted,
         { key: "declared", at: order.declaredAt },
         { key: "confirm", at: null, now: true },
-        { key: "provision", at: null },
+        { key: "fulfillment", at: null },
       ];
     // 钱只到了一半：申报那一步过了，收款这一步停在「部分到账」——还等客户把剩下的补上。
     case "partially_paid":
@@ -87,14 +89,14 @@ function buildSteps(order: MyOrder, countdown: string | null): Step[] {
         submitted,
         { key: "declared", at: order.declaredAt },
         { key: "partialReceived", at: order.confirmedAt, now: true },
-        { key: "provision", at: null },
+        { key: "fulfillment", at: null },
       ];
     case "activating":
       return [
         submitted,
         { key: "declared", at: order.declaredAt },
         { key: zero ? "settleZero" : "confirm", at: order.confirmedAt },
-        { key: "provision", at: null, now: true },
+        { key: "fulfillment", at: null, now: true },
       ];
     case "completed":
       return settledSteps(order, zero, submitted);
@@ -123,13 +125,13 @@ function settledSteps(order: MyOrder, zero: boolean, submitted: Step): Step[] {
     ? [
         submitted,
         { key: "settleZero", at: order.confirmedAt ?? order.createdAt },
-        { key: "provision", at: order.activatedAt },
+        { key: "fulfillment", at: order.fulfilledAt ?? null, completed: true },
       ]
     : [
         submitted,
         { key: "declared", at: order.declaredAt },
         { key: "confirm", at: order.confirmedAt },
-        { key: "provision", at: order.activatedAt },
+        { key: "fulfillment", at: order.fulfilledAt ?? null, completed: true },
       ];
 }
 
@@ -275,7 +277,7 @@ export function OrderDetailPanel({
       <DetailCard title={t("progress")}>
         <ol className="flex flex-col gap-xs">
           {steps.map((step) => {
-            const done = step.at != null && !step.now;
+            const done = (step.completed || step.at != null) && !step.now;
             return (
               <li
                 key={step.key}

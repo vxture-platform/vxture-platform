@@ -1211,6 +1211,8 @@ export interface MyOrder {
   declaredAt: string | null;
   /** 服务开通时刻（completed 单；订阅周期起算锚点）。 */
   activatedAt: string | null;
+  /** Persisted order fulfillment time; absent on older BFF responses. */
+  fulfilledAt?: string | null;
   /** 履约后挂上的订阅 id；未履约 null。订单菜单「退订」对它落锤。 */
   subscriptionId: string | null;
 }
@@ -1309,6 +1311,7 @@ export interface OrderDetail {
   orderState: OrderState;
   orderType: "subscription";
   createdAt: string;
+  fulfilledAt?: string | null;
   expireAt: string | null;
   listPrice: string;
   paidAmount: string;
