@@ -14,6 +14,19 @@ export {
   readRecommendedAgentCodes,
 } from "./repository/recommended-products.read";
 export type { RecommendedProductRow } from "./repository/recommended-products.read";
+export {
+  pickRepresentative,
+  readLiveEntitlementComponents,
+  readSubscriptionFactCandidates,
+  readWorkspaceEntitlementProductCodes,
+  readWorkspaceEntitlementSummary,
+  resolveEntitlementCoverage,
+} from "./repository/workspace-entitlement.read";
+export type {
+  ComponentRow,
+  SubscriptionFactsRow,
+  WorkspaceEntitlementSummary,
+} from "./repository/workspace-entitlement.read";
 export { SubscriptionRedemption } from "./service/subscription-redemption";
 export type {
   RedemptionPlan,

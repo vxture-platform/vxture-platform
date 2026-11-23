@@ -36,6 +36,7 @@ import { TestRedis } from "./test-redis";
 import { WorkspaceReader, type OrganizationReads } from "./workspace-reader";
 import { ApplicationReader } from "./application-reader";
 import { ResourceReader } from "./resource-reader";
+import { EntitlementReader } from "./entitlement-reader";
 import { failure } from "../errors";
 
 const SUB = "usr_11111111-1111-4111-8111-111111111111";
@@ -581,13 +582,124 @@ describe("minimal desktop backend", () => {
   });
 
   it("keeps missing business and device APIs explicit rather than proxying Console", async () => {
-    for (const path of [
-      "/api/subscription/entitlements",
-      "/api/desktop/devices",
-      "/api/atlas/models",
-    ])
+    for (const path of ["/api/desktop/devices", "/api/atlas/models"])
       expect((await request(path)).status).toBe(404);
     expect(seenRequests).toEqual([]);
+  });
+
+  // ========================================================================
+  // Minimal workspace entitlements
+  // ========================================================================
+
+  const entitlementsPath = "/api/subscription/entitlements";
+
+  it("returns minimal entitlement facts only for the session workspace", async () => {
+    const session = await login();
+    const assertRead = vi.fn().mockResolvedValue(undefined);
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ product_code: "bundled-agent" }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            product_code: "bundled-agent",
+            tier_code: null,
+            component_role: "bundled",
+            quota: { limit: 100 },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    rt.entitlements = new EntitlementReader({ query }, { assertRead });
+
+    const response = await request(
+      `${entitlementsPath}?workspaceId=other&tenantId=other`,
+      {
+        headers: { "x-vxture-session": session.rpsid },
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(await response.json()).toEqual([
+      { productCode: "bundled-agent", tier: null, status: null, bundled: true },
+    ]);
+    expect(query.mock.calls.map((args) => args[1])).toEqual([
+      [WORKSPACE],
+      [WORKSPACE, ["bundled-agent"]],
+      [WORKSPACE, ["bundled-agent"]],
+    ]);
+    expect(assertRead.mock.calls).toEqual(
+      Array.from({ length: 2 }, () => [
+        expect.objectContaining({ activeWorkspace: WORKSPACE, activeOrg: ORG }),
+        "tenant.quota.read",
+      ]),
+    );
+  });
+
+  it("distinguishes missing credentials, permission, empty coverage and source failure", async () => {
+    const session = await login();
+    const headers = { "x-vxture-session": session.rpsid };
+    const assertRead = vi.fn().mockResolvedValue(undefined);
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const missingSource = await request(entitlementsPath, { headers });
+    expect(missingSource.status).toBe(503);
+    rt.entitlements = new EntitlementReader({ query }, { assertRead });
+    expect(
+      (
+        await request(entitlementsPath, {
+          headers: { cookie: "vx_rp_session=browser-only" },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(entitlementsPath, {
+          headers: { "x-vxture-session": "invalid-session" },
+        })
+      ).status,
+    ).toBe(401);
+    expect(assertRead).not.toHaveBeenCalled();
+
+    assertRead.mockRejectedValueOnce(
+      failure(403, "WORKBENCH_READ_FORBIDDEN", "Read forbidden"),
+    );
+    expect((await request(entitlementsPath, { headers })).status).toBe(403);
+    expect(query).not.toHaveBeenCalled();
+
+    const empty = await request(entitlementsPath, { headers });
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual([]);
+
+    query.mockRejectedValueOnce(new Error("private source details"));
+    const unavailable = await request(entitlementsPath, { headers });
+    expect(unavailable.status).toBe(503);
+    expect(await unavailable.json()).toEqual({
+      code: "WORKBENCH_ENTITLEMENTS_UNAVAILABLE",
+      message: "Workspace entitlements are temporarily unavailable",
+      retryable: true,
+    });
+    expect((await request("/api/me", { headers })).status).toBe(200);
+  });
+
+  it("discards entitlement results when the user logs out while reading", async () => {
+    const session = await login();
+    const headers = { "x-vxture-session": session.rpsid };
+    const assertRead = vi.fn().mockResolvedValue(undefined);
+    let finish!: () => void;
+    const pending = new Promise<{ rows: [] }>((resolve) => {
+      finish = () => resolve({ rows: [] });
+    });
+    const query = vi.fn().mockReturnValueOnce(pending);
+    rt.entitlements = new EntitlementReader({ query }, { assertRead });
+
+    const reading = request(entitlementsPath, { headers });
+    try {
+      await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(1));
+      expect((await post("/auth/native/logout", {}, headers)).status).toBe(204);
+    } finally {
+      finish();
+    }
+    expect((await reading).status).toBe(401);
   });
 
   // ========================================================================

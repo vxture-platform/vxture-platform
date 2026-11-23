@@ -37,6 +37,7 @@ import { DesktopEnabledGuard } from "./enabled.guard";
 import { requireWorkspaceReader } from "./workspace-reader";
 import { requireApplicationReader } from "./application-reader";
 import { requireResourceReader } from "./resource-reader";
+import { requireEntitlementReader } from "./entitlement-reader";
 import { failure } from "../errors";
 import { NATIVE_DONE_CSP, NATIVE_DONE_HTML } from "./native-done-page";
 
@@ -246,6 +247,18 @@ export class DesktopRouter {
       this.rt.applications,
     ).recommended(user);
     // Logging out or changing scope while the read is pending invalidates its result.
+    await this.sessions.resolve(rpsid);
+    return rows;
+  }
+
+  @Get("api/subscription/entitlements")
+  @Header("Cache-Control", "private, no-store")
+  async entitlements(@Req() req: Request) {
+    const rpsid = nativeSessionHeader(req);
+    const { user } = await this.sessions.current(rpsid);
+    const rows = await requireEntitlementReader(this.rt.entitlements).read(
+      user,
+    );
     await this.sessions.resolve(rpsid);
     return rows;
   }

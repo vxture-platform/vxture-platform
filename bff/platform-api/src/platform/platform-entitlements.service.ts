@@ -15,18 +15,22 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Pool } from "pg";
 import type { MergeStrategy } from "@vxture-platform/shared";
+// ⚠️ 跨层引用: Consume the domain-owned coverage and representative inputs.
+import {
+  pickRepresentative,
+  readLiveEntitlementComponents,
+  readSubscriptionFactCandidates,
+} from "@vxture/service-subscription";
 import {
   buildQuotaPoolView,
   buildSubscriptionFacts,
   mergeSaleAxes,
-  pickRepresentative,
   strategyKey,
   type ComponentRow,
   type MergeStrategyMap,
   type PoolRow,
   type ProductEntitlementView,
   type QuotaPoolView,
-  type SubscriptionFactsRow,
 } from "./entitlement-view";
 
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -36,14 +40,6 @@ interface PlatformPoolRow extends PoolRow {
   /** NULL = WS-level pool (ws_base / addon_purchase): no contributor, open to all products. */
   contributingProductCode: string | null;
   kind: string; // platform_metrics.kind
-}
-
-interface ComponentSqlRow {
-  product_code: string;
-  tier_code: string | null;
-  component_role: "primary" | "bundled";
-  features: string[] | null;
-  quota: Record<string, unknown> | null;
 }
 
 interface StrategySqlRow {
@@ -95,7 +91,7 @@ export class PlatformEntitlementsService {
       factsRows,
       gaugeUsage,
     ] = await Promise.all([
-      this.queryComponents(workspaceId, productCodes),
+      readLiveEntitlementComponents(this.pool, workspaceId, productCodes),
       this.queryStrategies(productCodes),
       liveSubscriptionIdsP.then((ids) =>
         this.queryPools(workspaceId, productCodes, ids),
@@ -104,7 +100,7 @@ export class PlatformEntitlementsService {
         this.queryPlatformPools(workspaceId, ids),
       ),
       this.querySharingPolicy(workspaceId),
-      this.querySubscriptionFactsRows(workspaceId, productCodes),
+      readSubscriptionFactCandidates(this.pool, workspaceId, productCodes),
       this.queryGaugeUsage(workspaceId),
     ]);
 
@@ -193,92 +189,6 @@ export class PlatformEntitlementsService {
       };
     }
     return result;
-  }
-
-  /** All active/trialing components for the workspace × products (no first-wins). */
-  private async queryComponents(
-    workspaceId: string,
-    productCodes: string[],
-  ): Promise<ComponentRow[]> {
-    const res = await this.pool.query<ComponentSqlRow>(
-      `SELECT prod.product_code,
-              COALESCE(o.override_tier_code, pc.tier) AS tier_code,
-              pc.component_role, pc.features, pc.quota
-       FROM metering.subscriptions ts
-       JOIN product.plan_versions pv ON pv.id = ts.plan_version_id AND pv.is_locked = true
-       JOIN product.plan_components pc ON pc.plan_version_id = pv.id
-       JOIN product.products prod ON prod.id = pc.product_id
-       LEFT JOIN metering.subscription_entitlement_overrides o
-         ON o.subscription_id = ts.id AND o.product_id = prod.id
-        AND (o.expires_at IS NULL OR o.expires_at > NOW())
-       WHERE ts.workspace_id = $1
-         AND prod.product_code = ANY($2::text[])
-         AND ts.status IN ('active', 'trialing')
-         AND ts.deleted_at IS NULL`,
-      [workspaceId, productCodes],
-    );
-    return res.rows.map((r) => ({
-      productCode: r.product_code,
-      tierCode: r.tier_code,
-      role: r.component_role,
-      features: r.features,
-      quota: r.quota,
-    }));
-  }
-
-  /**
-   * Representative-candidate rows per product (product_220 §3): ALL standalone
-   * (primary) subscriptions of any status, with the fields the v2 subscription
-   * facts need (trial/period end, auto-renew). The representative pick
-   * (status precedence, tie → latest period end) is pure logic in
-   * entitlement-view. Products with no rows → the caller resolves the facts
-   * to `status: null` ("never subscribed", not a status value); bundled-only
-   * coverage contributes no primary subscription → also null.
-   */
-  private async querySubscriptionFactsRows(
-    workspaceId: string,
-    productCodes: string[],
-  ): Promise<Map<string, SubscriptionFactsRow[]>> {
-    const res = await this.pool.query<{
-      product_code: string;
-      status: string;
-      trial_end_at: Date | null;
-      end_at: Date | null;
-      auto_renew: boolean;
-    }>(
-      `SELECT DISTINCT ON (ts.id, prod.product_code)
-              prod.product_code, ts.status, ts.trial_end_at, ts.end_at,
-              ts.auto_renew
-       FROM metering.subscriptions ts
-       JOIN product.plan_versions pv ON pv.id = ts.plan_version_id
-       JOIN product.plan_components pc
-         ON pc.plan_version_id = pv.id AND pc.component_role = 'primary'
-       JOIN product.products prod ON prod.id = pc.product_id
-       WHERE ts.workspace_id = $1
-         AND prod.product_code = ANY($2::text[])
-         AND ts.deleted_at IS NULL
-         -- D10 (product_220 §3): a never-paid trial that lapsed or was
-         -- cancelled leaves as null (never-subscribed semantics) — 'expired'
-         -- is reserved for paid lapse. A suspended trial still surfaces
-         -- (freeze is not laundered into null).
-         AND NOT (ts.subscription_kind = 'trial'
-                  AND ts.status IN ('expired', 'cancelled'))`,
-      [workspaceId, productCodes],
-    );
-    const map = new Map<string, SubscriptionFactsRow[]>();
-    for (const r of res.rows) {
-      (
-        map.get(r.product_code) ??
-        map.set(r.product_code, []).get(r.product_code)!
-      ).push({
-        productCode: r.product_code,
-        status: r.status as SubscriptionFactsRow["status"],
-        trialEndAt: r.trial_end_at,
-        endAt: r.end_at,
-        autoRenew: r.auto_renew,
-      });
-    }
-    return map;
   }
 
   /** merge_strategy per (product, metric) — decides which quota keys are capabilities. */
