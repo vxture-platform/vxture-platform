@@ -60,7 +60,7 @@ server {
         limit_req_status 429;
         proxy_pass http://$ruyin_api/desktop$uri$is_args$args;
     }
-    location ~ ^/api/(me(/(workspaces|organization))?|tenant-context|iam/workspaces/mine|subscription/subscribed-products)$ {
+    location ~ ^/api/(me(/(workspaces|organization))?|tenant-context|iam/workspaces/mine|subscription/(subscribed-products|quota-usage))$ {
         if ($request_method != GET) { return 405; }
         proxy_pass http://$ruyin_api/desktop$uri$is_args$args;
     }

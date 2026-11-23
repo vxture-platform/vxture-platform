@@ -14,6 +14,7 @@ import {
   Header,
   Headers,
   HttpCode,
+  HttpException,
   Inject,
   Post,
   Param,
@@ -35,6 +36,8 @@ import { DESKTOP_RUNTIME, type DesktopRuntime } from "./runtime";
 import { DesktopEnabledGuard } from "./enabled.guard";
 import { requireWorkspaceReader } from "./workspace-reader";
 import { requireApplicationReader } from "./application-reader";
+import { requireResourceReader } from "./resource-reader";
+import { failure } from "../errors";
 
 const DONE_HTML =
   '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RUYIN</title><body><main><h1>登录已完成</h1><p>请返回 RUYIN 桌面应用继续。</p></main></body></html>';
@@ -208,6 +211,35 @@ export class DesktopRouter {
     // A local logout or scope change during the read must win over its result.
     await this.sessions.resolve(rpsid);
     return rows;
+  }
+
+  @Get("api/subscription/quota-usage")
+  @Header("Cache-Control", "private, no-store")
+  async quotaUsage(@Req() req: Request) {
+    try {
+      const rpsid = nativeSessionHeader(req);
+      const { user } = await this.sessions.current(rpsid);
+      const usage = await requireResourceReader(this.rt.resources).quotaUsage(
+        user,
+      );
+      await this.sessions.resolve(rpsid);
+      return usage;
+    } catch (error) {
+      // Legacy native auth errors lack retryability; this new read uses the envelope.
+      if (error instanceof HttpException) {
+        const body = error.getResponse();
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "code" in body &&
+          "message" in body &&
+          typeof body.code === "string" &&
+          typeof body.message === "string"
+        )
+          throw failure(error.getStatus(), body.code, body.message);
+      }
+      throw error;
+    }
   }
 
   /** Public branding only; no desktop or browser session is required. */

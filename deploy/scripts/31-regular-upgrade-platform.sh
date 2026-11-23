@@ -11,6 +11,10 @@
 # 约束：常规升级只检查数据库可用性，不执行 migration 或 seed。
 set -euo pipefail
 
+if [ "$#" -gt 0 ] && { [ "$#" -ne 1 ] || [ "$1" != --preview ]; }; then
+  echo 'Usage: 31-regular-upgrade-platform.sh [--preview]' >&2
+  exit 2
+fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # 统一变量入口：compose 里的 ${VX_*} 在调用方进程环境求值，tailnet 地址既不能
@@ -22,12 +26,21 @@ load_compose_env
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 NGINX_COMPOSE_FILE="/srv/vxture/data/nginx/compose.yml"
 
+# Explicit preview must bypass runtime preparation and all deployment steps.
+if [ "${1:-}" = --preview ]; then
+  exec bash "$SCRIPT_DIR/30-deploy-platform-stack.sh" --preview
+fi
+
 run_step() {
   local label="$1"
   shift
   echo ""
   echo "==> $label"
   "$@"
+}
+
+preview_stack_changes() {
+  bash "$SCRIPT_DIR/30-deploy-platform-stack.sh" --preview
 }
 
 check_auth_runtime_contract() {
@@ -94,10 +107,11 @@ check_auth_runtime_contract() {
 
 cd "$COMPOSE_DIR"
 echo "=== Vxture Regular Upgrade Platform ==="
-echo "流程：13 -> 20 -> 21 -> 30 -> 40"
+echo "流程：13 -> preview -> 20 -> 21 -> 30 -> 40"
 
 run_step "13 准备 runtime env" bash "$SCRIPT_DIR/13-prepare-runtime-env.sh"
 run_step "检查 Auth runtime 契约" check_auth_runtime_contract
+run_step "Preview service changes before routing or container changes" preview_stack_changes
 run_step "20 同步 Nginx 配置" bash "$SCRIPT_DIR/20-sync-nginx-config.sh"
 run_step "启动或更新 Nginx" docker compose -f "$NGINX_COMPOSE_FILE" up -d
 run_step "21 检查平台数据库" bash "$SCRIPT_DIR/21-prepare-platform-database.sh"
