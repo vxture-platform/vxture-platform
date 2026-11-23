@@ -310,12 +310,30 @@ describe("minimal desktop backend", () => {
     expect(style).toBeTruthy();
     const digest = createHash("sha256").update(style!).digest("base64");
     expect(response.headers.get("content-security-policy")).toBe(
-      `default-src 'none'; style-src 'sha256-${digest}'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
+      `default-src 'none'; style-src 'sha256-${digest}'; img-src data:; font-src data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
     );
     expect(html).toContain('aria-labelledby="completion-title"');
+    expect(html).toContain("<title>验证完成 · Ruyin Work</title>");
+    expect(html).toContain(">DESKTOP</span>");
     expect(html).toContain("现在可以关闭此页面");
+    expect(
+      [...html.matchAll(/\bsrc="([^"]+)"/g)].map(([, src]) => src),
+    ).toEqual([expect.stringMatching(/^data:image\/png;base64,/)]);
+    expect(
+      [...html.matchAll(/\bhref="([^"]+)"/g)].map(([, href]) => href),
+    ).toEqual([
+      "https://ruyin.work/",
+      "https://vxture.com/zh-CN/legal/terms",
+      "https://vxture.com/zh-CN/legal/privacy",
+      "https://vxture.com/zh-CN/legal/copyright",
+    ]);
+    const urls = [...(style ?? "").matchAll(/url\("([^"]+)"\)/g)].map(
+      ([, url]) => url,
+    );
+    const embeddedFont = expect.stringMatching(/^data:font\/woff2;base64,/);
+    expect(urls).toEqual([embeddedFont, embeddedFont]);
     expect(html).not.toMatch(
-      /<script\b|<link\b|<img\b|<form\b|\bsrc=|\bstyle=|\bon\w+=|synthetic-private-/i,
+      /<script\b|<link\b|<form\b|\bstyle=|\bon\w+=|synthetic-private-/i,
     );
   });
 
