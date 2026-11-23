@@ -90,7 +90,7 @@ it("rejects a broad database role for activity writes", () => {
 describe("optional desktop module", () => {
   const desktop = {
     WORKBENCH_DESKTOP_ENABLED: "1",
-    RUYIN_BFF_BASE: "https://api.ruyin.work",
+    RUYIN_BFF_BASE: "https://app.ruyin.work",
     RUYIN_DESKTOP_OIDC_CLIENT_SECRET: "desktop-synthetic-secret",
   };
   it("preserves the browser-only configuration and ignores inactive desktop settings", () => {
@@ -107,8 +107,18 @@ describe("optional desktop module", () => {
     expect(config.desktop?.oidc).toMatchObject({
       clientId: "ruyin-desktop",
       clientSecret: desktop.RUYIN_DESKTOP_OIDC_CLIENT_SECRET,
-      redirectUri: "https://api.ruyin.work/auth/callback",
+      redirectUri: "https://app.ruyin.work/auth/callback",
     });
+  });
+  it("uses the app callback without renaming the desktop identity or session namespace", () => {
+    const config = loadConfig({ ...env, ...desktop });
+    expect(config.desktop?.base).toBe("https://app.ruyin.work");
+    expect(config.desktop?.oidc.clientId).toBe("ruyin-desktop");
+    expect(config.desktop?.oidc.redirectUri).toBe(
+      "https://app.ruyin.work/auth/callback",
+    );
+    expect(config.oidc.redirectUri).toBe("https://ruyin.work/auth/callback");
+    expect(config.desktop?.keyPrefix).toBe("vx:");
   });
   it.each([
     { WORKBENCH_DESKTOP_ENABLED: "true" },
