@@ -1,4 +1,4 @@
-# Controlled desktop API ingress; only the current adapter endpoints are public.
+# Controlled client ingress; only the current desktop adapter endpoints are public.
 # @package @vxture/repo
 # @layer Infrastructure
 # @category deployment
@@ -9,15 +9,17 @@ limit_req_zone $binary_remote_addr zone=ruyin_auth:1m rate=5r/s;
 server {
     listen 80;
     listen [::]:80;
-    server_name api.ruyin.work;
-    return 308 https://api.ruyin.work$request_uri;
+    server_name app.ruyin.work;
+    return 308 https://app.ruyin.work$request_uri;
 }
 
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
-    server_name api.ruyin.work;
+    server_name app.ruyin.work;
+    # Reject a mismatched HTTP Host even if TLS SNI selected this server.
+    if ($host != app.ruyin.work) { return 404; }
     ssl_certificate     /etc/nginx/ssl/live/vxture.com/fullchain.pem;
     ssl_certificate_key /etc/nginx/ssl/live/vxture.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;

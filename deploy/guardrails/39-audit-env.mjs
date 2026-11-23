@@ -1513,7 +1513,7 @@ function auditWorkbenchDesktop() {
   if (flag !== "1") return [];
   const issues = [];
   if (
-    value("RUYIN_BFF_BASE") !== "https://api.ruyin.work" ||
+    value("RUYIN_BFF_BASE") !== "https://app.ruyin.work" ||
     value("WORKBENCH_BFF_PORT") !== "3061" ||
     value("OIDC_CLIENT_ID") !== "workbench" ||
     value("OIDC_ISSUER") !== "https://accounts.vxture.com"

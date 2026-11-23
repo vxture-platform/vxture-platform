@@ -26,7 +26,7 @@ WORKBENCH_BASE_URL=https://ruyin.work
 OIDC_CLIENT_ID=workbench
 OIDC_ISSUER=https://accounts.vxture.com
 OIDC_CLIENT_SECRET=fixture-browser-secret
-RUYIN_BFF_BASE=https://api.ruyin.work
+RUYIN_BFF_BASE=https://app.ruyin.work
 RUYIN_DESKTOP_OIDC_CLIENT_SECRET=fixture-native-secret
 EOF
 printf 'OIDC_CLIENT_SECRET_HASH_RUYIN_DESKTOP=\x27$2b$12$%053d\x27\n' 1 > "$fixture/runtime/.env.auth-bff"
@@ -40,6 +40,10 @@ check() {
   else test "$status" != 0; [[ "$output" != *PREFLIGHT_ACCEPTED* && "$output" != *MUTATION_REACHED* ]]; fi
   [[ "$output" != *fixture-native-secret* && "$output" != *fixture-browser-secret* ]]
 }
+check accept
+sed -i 's#^RUYIN_BFF_BASE=.*#RUYIN_BFF_BASE=https://api.ruyin.work#' "$fixture/runtime/.env.workbench-bff"
+check reject
+sed -i 's#^RUYIN_BFF_BASE=.*#RUYIN_BFF_BASE=https://app.ruyin.work#' "$fixture/runtime/.env.workbench-bff"
 check accept
 sed -i 's/^RUYIN_DESKTOP_OIDC_CLIENT_SECRET=.*/RUYIN_DESKTOP_OIDC_CLIENT_SECRET=/' "$fixture/runtime/.env.workbench-bff"
 check reject
