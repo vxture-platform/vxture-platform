@@ -9,6 +9,11 @@ export type {
   SubscribedProductRow,
   ProductIconRow,
 } from "./repository/subscribed-products.read";
+export {
+  readRecommendedProducts,
+  readRecommendedAgentCodes,
+} from "./repository/recommended-products.read";
+export type { RecommendedProductRow } from "./repository/recommended-products.read";
 export { SubscriptionRedemption } from "./service/subscription-redemption";
 export type {
   RedemptionPlan,

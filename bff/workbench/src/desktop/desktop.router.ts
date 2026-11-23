@@ -237,6 +237,19 @@ export class DesktopRouter {
     }
   }
 
+  @Get("api/subscription/recommended-products")
+  @Header("Cache-Control", "private, no-store")
+  async recommendedProducts(@Req() req: Request) {
+    const rpsid = nativeSessionHeader(req);
+    const { user } = await this.sessions.current(rpsid);
+    const rows = await requireApplicationReader(
+      this.rt.applications,
+    ).recommended(user);
+    // Logging out or changing scope while the read is pending invalidates its result.
+    await this.sessions.resolve(rpsid);
+    return rows;
+  }
+
   /** Public branding only; no desktop or browser session is required. */
   @Get("api/applications/:appCode/icon")
   async productIcon(
