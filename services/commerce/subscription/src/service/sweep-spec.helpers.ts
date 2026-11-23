@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import type { PoolClient } from "pg";
 import { SubscriptionService } from "./subscription.service";
 import type { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import type { ProvisioningService } from "@vxture/service-provisioning";
@@ -35,6 +36,7 @@ export const subscriptionFixture = (
 
 export interface SweepMocks {
   repo: {
+    withLockedSubscription: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     getById: ReturnType<typeof vi.fn>;
     findLapsedTrialIds: ReturnType<typeof vi.fn>;
@@ -46,6 +48,7 @@ export interface SweepMocks {
     findExpiringSoon: ReturnType<typeof vi.fn>;
     getNotifyDisplay: ReturnType<typeof vi.fn>;
     /* 2026-09-25 步骤三：暂停顺延（结算 + 到点处置）。 */
+    findUnsettledSuspensions: ReturnType<typeof vi.fn>;
     settleResumedSuspensions: ReturnType<typeof vi.fn>;
     findOverdueSuspensions: ReturnType<typeof vi.fn>;
     closeSuspension: ReturnType<typeof vi.fn>;
@@ -64,6 +67,8 @@ export interface SweepMocks {
     enqueueEvent: ReturnType<typeof vi.fn>;
   };
   service: SubscriptionService;
+  transaction: PoolClient;
+  transactionEvents: string[];
 }
 
 export const buildSweepMocks = (product: {
@@ -71,7 +76,13 @@ export const buildSweepMocks = (product: {
   productCode: string;
   planCode: string;
 }): SweepMocks => {
+  const transaction = {
+    query: vi.fn(),
+    release: vi.fn(),
+  } as unknown as PoolClient;
+  const transactionEvents: string[] = [];
   const repo = {
+    withLockedSubscription: vi.fn(),
     update: vi.fn(),
     getById: vi.fn(),
     findLapsedTrialIds: vi.fn().mockResolvedValue([]),
@@ -81,6 +92,7 @@ export const buildSweepMocks = (product: {
     findOverdueCandidates: vi.fn().mockResolvedValue([]),
     findExpiringSoon: vi.fn().mockResolvedValue([]),
     getNotifyDisplay: vi.fn().mockResolvedValue(null),
+    findUnsettledSuspensions: vi.fn().mockResolvedValue([]),
     settleResumedSuspensions: vi.fn().mockResolvedValue([]),
     findOverdueSuspensions: vi.fn().mockResolvedValue([]),
     closeSuspension: vi.fn().mockResolvedValue(undefined),
@@ -92,6 +104,28 @@ export const buildSweepMocks = (product: {
        默认空数组 = 没有窗口被延长，既有 spec 的行为不变。 */
     syncMaintenanceExpectedResume: vi.fn().mockResolvedValue([]),
   };
+  repo.withLockedSubscription.mockImplementation(
+    async (
+      id: string,
+      operation: (
+        before: SubscriptionRecord | null,
+        client: PoolClient,
+      ) => Promise<unknown>,
+    ) => {
+      transactionEvents.push("begin");
+      try {
+        const result = await operation(
+          await repo.getById(id, transaction),
+          transaction,
+        );
+        transactionEvents.push("commit");
+        return result;
+      } catch (error) {
+        transactionEvents.push("rollback");
+        throw error;
+      }
+    },
+  );
   const provisioning = {
     onSubscriptionActivated: vi
       .fn()
@@ -110,5 +144,12 @@ export const buildSweepMocks = (product: {
      那些 spec 行为不变（emit 拿不到 input，照样不发）。 */
   const notifier = { notify: vi.fn(async () => undefined) };
   service.setCustomerNotifier(notifier);
-  return { repo, provisioning, service, notifier };
+  return {
+    repo,
+    provisioning,
+    service,
+    notifier,
+    transaction,
+    transactionEvents,
+  };
 };

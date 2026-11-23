@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { PoolClient } from "pg";
 import { SubscriptionService } from "./subscription.service";
 import type { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import type { ProvisioningService } from "@vxture/service-provisioning";
@@ -43,6 +44,8 @@ const RUNOS = {
 
 interface Mocks {
   repo: {
+    withTransaction: ReturnType<typeof vi.fn>;
+    withLockedSubscription: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     getById: ReturnType<typeof vi.fn>;
@@ -56,10 +59,17 @@ interface Mocks {
     enqueueEvent: ReturnType<typeof vi.fn>;
   };
   service: SubscriptionService;
+  transaction: PoolClient;
 }
 
 const build = (): Mocks => {
+  const transaction = {
+    query: vi.fn(),
+    release: vi.fn(),
+  } as unknown as PoolClient;
   const repo = {
+    withTransaction: vi.fn(),
+    withLockedSubscription: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     getById: vi.fn(),
@@ -67,6 +77,19 @@ const build = (): Mocks => {
     hasOtherActiveCoverage: vi.fn().mockResolvedValue(false),
     findTierConflicts: vi.fn().mockResolvedValue([]),
   };
+  repo.withTransaction.mockImplementation(
+    async (operation: (client: PoolClient) => Promise<SubscriptionRecord>) =>
+      operation(transaction),
+  );
+  repo.withLockedSubscription.mockImplementation(
+    async (
+      id: string,
+      operation: (
+        before: SubscriptionRecord | null,
+        client: PoolClient,
+      ) => Promise<SubscriptionRecord>,
+    ) => operation(await repo.getById(id, transaction), transaction),
+  );
   const provisioning = {
     onSubscriptionActivated: vi
       .fn()
@@ -80,7 +103,7 @@ const build = (): Mocks => {
     repo as unknown as PgSubscriptionRepository,
     provisioning as unknown as ProvisioningService,
   );
-  return { repo, provisioning, service };
+  return { repo, provisioning, service, transaction };
 };
 
 describe("createSubscription → tenant.provisioned per component", () => {
@@ -92,13 +115,16 @@ describe("createSubscription → tenant.provisioned per component", () => {
     m.repo.listVersionProducts.mockResolvedValue([ARDA, RUNOS]);
     await m.service.createSubscription({} as never);
     expect(m.provisioning.onSubscriptionActivated).toHaveBeenCalledTimes(2);
-    expect(m.provisioning.onSubscriptionActivated).toHaveBeenCalledWith({
-      workspaceId: "ws-1",
-      tenantId: "org-1",
-      applicationId: "prod-arda",
-      appCode: "arda",
-      plan: "arda-free",
-    });
+    expect(m.provisioning.onSubscriptionActivated).toHaveBeenCalledWith(
+      {
+        workspaceId: "ws-1",
+        tenantId: "org-1",
+        applicationId: "prod-arda",
+        appCode: "arda",
+        plan: "arda-free",
+      },
+      m.transaction,
+    );
   });
 
   it("does not fire when the created record is not activated", async () => {
@@ -107,11 +133,11 @@ describe("createSubscription → tenant.provisioned per component", () => {
     expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
   });
 
-  it("an enqueue failure never fails the committed create", async () => {
+  it("a lifecycle enqueue failure rejects the transactional create", async () => {
     m.repo.create.mockResolvedValue(SUB);
     m.provisioning.onSubscriptionActivated.mockRejectedValue(new Error("db"));
-    await expect(m.service.createSubscription({} as never)).resolves.toEqual(
-      SUB,
+    await expect(m.service.createSubscription({} as never)).rejects.toThrow(
+      "db",
     );
   });
 });
@@ -126,13 +152,70 @@ describe("cancelSubscription → per-component deprovision fallout (§11.4)", ()
 
   it("deprovisions a product with no surviving coverage", async () => {
     await m.service.cancelSubscription("sub-1");
-    expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledWith({
-      workspaceId: "ws-1",
-      tenantId: "org-1",
-      applicationId: "prod-arda",
-      appCode: "arda",
-    });
+    expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledWith(
+      {
+        workspaceId: "ws-1",
+        tenantId: "org-1",
+        applicationId: "prod-arda",
+        appCode: "arda",
+      },
+      m.transaction,
+    );
   });
+
+  it.each(["month", "perpetual"] as const)(
+    "preserves the %s term rule and original order guard during cancellation",
+    async (cycleType) => {
+      const before = {
+        ...SUB,
+        cycleType,
+        endAt: cycleType === "perpetual" ? null : SUB.endAt,
+      };
+      m.repo.getById.mockResolvedValue(before);
+      m.repo.update.mockImplementation(async (_id, _before, input) => ({
+        ...before,
+        ...input,
+      }));
+
+      const result = await m.service.cancelSubscription(
+        "sub-1",
+        "actor",
+        "refund reversal",
+        "system",
+        "order-original",
+      );
+      expect(m.repo.update).toHaveBeenCalledWith(
+        "sub-1",
+        before,
+        expect.objectContaining({
+          status: "cancelled",
+          autoRenew: false,
+          expectedCurrentOrderId: "order-original",
+          expectedStatus: before.status,
+          operatorType: "system",
+        }),
+        m.transaction,
+      );
+      if (cycleType === "perpetual") {
+        expect(m.repo.update.mock.calls[0]?.[2]).not.toHaveProperty("endAt");
+        expect(result.endAt).toBeNull();
+      } else {
+        expect(result.endAt).toBeInstanceOf(Date);
+        expect(m.repo.update.mock.calls[0]?.[2]).toHaveProperty(
+          "endAt",
+          result.endAt,
+        );
+      }
+      expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledWith(
+        expect.objectContaining({ applicationId: "prod-arda" }),
+        m.transaction,
+      );
+      expect(m.provisioning.enqueueEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ event: "subscription_changed" }),
+        m.transaction,
+      );
+    },
+  );
 
   it("keeps a product still covered by another active subscription", async () => {
     m.repo.hasOtherActiveCoverage.mockResolvedValue(true);
@@ -146,6 +229,7 @@ describe("cancelSubscription → per-component deprovision fallout (§11.4)", ()
       "ws-1",
       "prod-arda",
       "sub-1",
+      m.transaction,
     );
   });
 });
@@ -171,6 +255,7 @@ describe("upgradeSubscription → provision new set, deprovision dropped set", (
           expectedStatus: status,
           toPlanVersionId: "pv-2",
         }),
+        m.transaction,
       );
     },
   );
@@ -290,12 +375,15 @@ describe("中间态 → 终态必须发 deprovisioned（expiring/overdue/suspend
         expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledTimes(
           1,
         );
-        expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledWith({
-          workspaceId: "ws-1",
-          tenantId: "org-1",
-          applicationId: "prod-arda",
-          appCode: "arda",
-        });
+        expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledWith(
+          {
+            workspaceId: "ws-1",
+            tenantId: "org-1",
+            applicationId: "prod-arda",
+            appCode: "arda",
+          },
+          m.transaction,
+        );
       });
     }
   }
@@ -333,12 +421,15 @@ describe("中间态 → 终态必须发 deprovisioned（expiring/overdue/suspend
       pv === "pv-2" ? [ARDA] : [ARDA, RUNOS],
     );
     await m.service.updateSubscription("sub-1", { toPlanVersionId: "pv-2" });
-    expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledWith({
-      workspaceId: "ws-1",
-      tenantId: "org-1",
-      applicationId: "prod-runos",
-      appCode: "runos",
-    });
+    expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledWith(
+      {
+        workspaceId: "ws-1",
+        tenantId: "org-1",
+        applicationId: "prod-runos",
+        appCode: "runos",
+      },
+      m.transaction,
+    );
   });
 });
 
@@ -421,23 +512,31 @@ describe("subscription_changed → C2 entitlement invalidate (P2.4 debt)", () =>
 
     expect(m.provisioning.enqueueEvent).toHaveBeenCalledTimes(2);
     for (const product of [ARDA, RUNOS]) {
-      expect(m.provisioning.enqueueEvent).toHaveBeenCalledWith({
-        workspaceId: before.workspaceId,
-        tenantId: before.tenantId,
-        applicationId: product.productId,
-        appCode: product.productCode,
-        event: "subscription_changed",
-        idempotencyKey: expect.stringContaining(
-          `subchg:${before.id}:${product.productId}:`,
-        ),
-        data: { products: [product.productCode], subscription_id: before.id },
-      });
+      expect(m.provisioning.enqueueEvent).toHaveBeenCalledWith(
+        {
+          workspaceId: before.workspaceId,
+          tenantId: before.tenantId,
+          applicationId: product.productId,
+          appCode: product.productCode,
+          event: "subscription_changed",
+          idempotencyKey: expect.stringContaining(
+            `subchg:${before.id}:${product.productId}:`,
+          ),
+          data: { products: [product.productCode], subscription_id: before.id },
+        },
+        m.transaction,
+      );
     }
     expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
     expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
-    expect(m.repo.update).toHaveBeenCalledExactlyOnceWith("sub-1", before, {
-      endAt: after.endAt,
-    });
+    expect(m.repo.update).toHaveBeenCalledExactlyOnceWith(
+      "sub-1",
+      before,
+      {
+        endAt: after.endAt,
+      },
+      m.transaction,
+    );
   });
 
   it.each([
@@ -509,7 +608,7 @@ describe("subscription_changed → C2 entitlement invalidate (P2.4 debt)", () =>
     expect(m.provisioning.onSubscriptionActivated).toHaveBeenCalledOnce();
   });
 
-  it("keeps a committed renewal successful when invalidation enqueue fails", async () => {
+  it("rejects a renewal when transactional invalidation enqueue fails", async () => {
     m.repo.getById.mockResolvedValue(SUB);
     const after = { ...SUB, endAt: new Date("2028-11-11T16:49:05.065Z") };
     m.repo.update.mockResolvedValue(after);
@@ -518,7 +617,7 @@ describe("subscription_changed → C2 entitlement invalidate (P2.4 debt)", () =>
     );
     await expect(
       m.service.updateSubscription("sub-1", { endAt: after.endAt }),
-    ).resolves.toEqual(after);
+    ).rejects.toThrow("queue unavailable");
     expect(m.provisioning.enqueueEvent).toHaveBeenCalledOnce();
   });
 
@@ -552,11 +651,11 @@ describe("subscription_changed → C2 entitlement invalidate (P2.4 debt)", () =>
     expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
   });
 
-  it("an enqueue failure never fails the committed write", async () => {
+  it("an invalidation enqueue failure rejects the transactional create", async () => {
     m.repo.create.mockResolvedValue(SUB);
     m.provisioning.enqueueEvent.mockRejectedValue(new Error("db"));
-    await expect(m.service.createSubscription({} as never)).resolves.toEqual(
-      SUB,
+    await expect(m.service.createSubscription({} as never)).rejects.toThrow(
+      "db",
     );
   });
 });
@@ -597,6 +696,7 @@ describe("tier-stacking guardrail (D12 invariant, arda reply-07 §3)", () => {
       "ws-1",
       "pv-2",
       "sub-1",
+      m.transaction,
     );
     m.repo.findTierConflicts.mockResolvedValue(CONFLICT);
     await expect(
@@ -612,6 +712,7 @@ describe("tier-stacking guardrail (D12 invariant, arda reply-07 §3)", () => {
       "ws-1",
       "pv-2",
       "sub-1",
+      m.transaction,
     );
 
     // revival: suspended → active re-enters live coverage on the CURRENT version
@@ -622,6 +723,7 @@ describe("tier-stacking guardrail (D12 invariant, arda reply-07 §3)", () => {
       "ws-1",
       "pv-1",
       "sub-1",
+      m.transaction,
     );
 
     // plain field update creates no coverage — no probe

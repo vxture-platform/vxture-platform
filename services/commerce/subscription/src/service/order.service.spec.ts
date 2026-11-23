@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { PoolClient } from "pg";
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { OrderService, composeAutoRenewNotice } from "./order.service";
 import type { OrderRecord, RefundRecordView } from "../types/order.types";
@@ -125,7 +126,37 @@ function transferringView(over: Partial<RefundRecordView> = {}) {
 }
 
 function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
+  const transaction = {
+    query: vi.fn(),
+    release: vi.fn(),
+  } as unknown as PoolClient;
+  const boundaries: string[] = [];
   const orders = {
+    withOrderTx: vi.fn(
+      async <T>(
+        _id: string,
+        fn: (ctx: {
+          client: PoolClient;
+          order: OrderRecord;
+          invoice: null;
+        }) => Promise<T>,
+      ): Promise<T> => {
+        boundaries.push("begin");
+        try {
+          const value = await fn({
+            client: transaction,
+            order: orderRow,
+            invoice: null,
+          });
+          boundaries.push("commit");
+          return value;
+        } catch (error) {
+          boundaries.push("rollback");
+          throw error;
+        }
+      },
+    ),
+    lockFulfillmentWorkspace: vi.fn(async () => undefined),
     getById: vi.fn(async () => orderRow),
     getSettledPaymentAmount: vi.fn(
       async (_orderId: string) => orderRow.payableAmount,
@@ -216,6 +247,7 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
   const subscriptions = {
     getSubscription: vi.fn(async (id: string) => {
       if (fromSub && id === fromSub.id) return fromSub;
+      if (id === "sub-orphan") return sub({ id, planVersionId: PV_PRO });
       if (id === "sub-new")
         return sub({ id: "sub-new", planVersionId: PV_PRO });
       throw new NotFoundException(`订阅 ${id} 不存在`);
@@ -245,6 +277,7 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
       async (_id: string, enabled: boolean, _p: Record<string, unknown>) =>
         sub({ autoRenew: enabled }),
     ),
+    notifyOrderTermsChanged: vi.fn(async () => undefined),
   };
   const service = new OrderService(
     orders as never,
@@ -252,7 +285,7 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
     subscriptions as never,
     {} as never,
   );
-  return { service, orders, subscriptions };
+  return { service, orders, subscriptions, transaction, boundaries };
 }
 
 describe("OrderService.createOrder guards", () => {
@@ -789,6 +822,7 @@ describe("OrderService upgrade proration (P2-a)", () => {
     expect(orders.grantLeftoverToPrepaid).toHaveBeenCalledWith(
       expect.objectContaining({ id: "ord-1" }),
       expect.objectContaining({ actorType: "operator" }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -812,6 +846,7 @@ describe("OrderService upgrade proration (P2-a)", () => {
     expect(subscriptions.updateSubscription).toHaveBeenCalledWith(
       "sub-1",
       expect.objectContaining({ toPlanVersionId: PV_PRO_V2 }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -858,11 +893,13 @@ describe("OrderService upgrade proration (P2-a)", () => {
     expect(orders.applySubscriptionTerms).toHaveBeenCalledWith(
       "sub-orphan",
       expect.objectContaining({ mode: "new", orderId: "ord-1" }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
     expect(orders.markFulfilled).toHaveBeenCalledWith(
       "ord-1",
       "sub-orphan",
       expect.anything(),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -1599,6 +1636,7 @@ describe("OrderService.fulfill", () => {
           expect(orders.applySubscriptionTerms).toHaveBeenCalledWith(
             expect.any(String),
             expect.objectContaining({ payAmount: payable }),
+            expect.objectContaining({ query: expect.any(Function) }),
           );
         },
       );
@@ -1713,6 +1751,7 @@ describe("OrderService.fulfill", () => {
         activationMethod: "offline_purchase",
         payAmount: 100,
       }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
     const input = subscriptions.createSubscription.mock
       .calls[0]![0] as unknown as {
@@ -1723,11 +1762,13 @@ describe("OrderService.fulfill", () => {
     expect(orders.applySubscriptionTerms).toHaveBeenCalledWith(
       "sub-new",
       expect.objectContaining({ mode: "new", orderId: "ord-1" }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
     expect(orders.markFulfilled).toHaveBeenCalledWith(
       "ord-1",
       "sub-new",
       expect.objectContaining({ actorType: "operator" }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -1739,6 +1780,7 @@ describe("OrderService.fulfill", () => {
     await service.fulfill("ord-1", { actorType: "customer", actorId: "u-1" });
     expect(subscriptions.createSubscription).toHaveBeenCalledWith(
       expect.objectContaining({ subscriptionKind: "free", payAmount: 0 }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -1750,6 +1792,7 @@ describe("OrderService.fulfill", () => {
     });
     expect(off.subscriptions.createSubscription).toHaveBeenCalledWith(
       expect.objectContaining({ autoRenew: false }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
     const on = build(order({ autoRenew: true }), null);
     await on.service.fulfill("ord-1", {
@@ -1758,6 +1801,7 @@ describe("OrderService.fulfill", () => {
     });
     expect(on.subscriptions.createSubscription).toHaveBeenCalledWith(
       expect.objectContaining({ autoRenew: true }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -1774,6 +1818,7 @@ describe("OrderService.fulfill", () => {
       "sub-1",
       true,
       expect.objectContaining({ actorType: "customer", actorId: "u-1" }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
     const same = build(
       order({ intent: "renew", fromSubscriptionId: "sub-1", autoRenew: false }),
@@ -1797,16 +1842,19 @@ describe("OrderService.fulfill", () => {
       PV_PRO,
       "op",
       expect.any(String),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
     expect(subscriptions.createSubscription).not.toHaveBeenCalled();
     expect(orders.applySubscriptionTerms).toHaveBeenCalledWith(
       "sub-1",
       expect.objectContaining({ mode: "upgrade", payAmount: "100.00" }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
     expect(orders.markFulfilled).toHaveBeenCalledWith(
       "ord-1",
       "sub-1",
       expect.anything(),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -1835,6 +1883,7 @@ describe("OrderService.fulfill", () => {
     expect(orders.applySubscriptionTerms).toHaveBeenCalledWith(
       "sub-1",
       expect.objectContaining({ mode: "renew" }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -1885,13 +1934,12 @@ describe("OrderService.runAutoRenewalPass (P2-c)", () => {
       settleZeroOrderTx: ReturnType<typeof vi.fn>;
     };
     orders.findAutoRenewCandidates = vi.fn(async () => cands);
-    orders.withOrderTx = vi.fn(
-      async (_id: string, fn: (ctx: unknown) => Promise<unknown>) =>
-        fn({
-          client: {},
-          order: order({ status: "pending_payment" }),
-          invoice: null,
-        }),
+    orders.withOrderTx.mockImplementationOnce(async (_id: string, fn) =>
+      fn({
+        client: base.transaction,
+        order: order({ status: "pending_payment" }),
+        invoice: null,
+      }),
     );
     orders.settleZeroOrderTx = vi.fn(async () => undefined);
     orders.getById.mockImplementation(async () =>
@@ -1932,10 +1980,12 @@ describe("OrderService.runAutoRenewalPass (P2-c)", () => {
     expect(subscriptions.updateSubscription).toHaveBeenCalledWith(
       "sub-1",
       expect.objectContaining({ endAt: expect.any(Date) }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
     expect(orders.applySubscriptionTerms).toHaveBeenCalledWith(
       "sub-1",
       expect.objectContaining({ mode: "renew" }),
+      expect.objectContaining({ query: expect.any(Function) }),
     );
   });
 
@@ -2491,5 +2541,87 @@ describe("wallet settlement wiring", () => {
     service.setWalletSettlement(null);
     for (const repo of [orders, subscriptions])
       expect(repo.setWalletSettlement.mock.calls).toEqual([[port], [null]]);
+  });
+});
+
+describe("OrderService fulfillment transaction boundaries", () => {
+  it("passes the same client to every fulfillment primitive before customer messaging", async () => {
+    const h = build(
+      order({
+        intent: "upgrade",
+        fromSubscriptionId: "sub-1",
+        autoRenew: true,
+        leftoverAmount: "0.25",
+      }),
+      sub({ planVersionId: PV_FREE }),
+    );
+    const notify = vi.fn(async () => {
+      expect(h.boundaries.at(-1)).toBe("commit");
+    });
+    h.service.setCustomerNotifier({ notify });
+    await h.service.fulfill("ord-1", { actorType: "customer", actorId: "u-1" });
+    expect(h.orders.lockFulfillmentWorkspace).toHaveBeenCalledExactlyOnceWith(
+      WS,
+      h.transaction,
+    );
+    expect(h.subscriptions.getSubscription).toHaveBeenCalledWith(
+      "sub-1",
+      h.transaction,
+      true,
+    );
+    expect(h.subscriptions.upgradeSubscription).toHaveBeenCalledWith(
+      "sub-1",
+      PV_PRO,
+      "u-1",
+      expect.any(String),
+      h.transaction,
+    );
+    expect(h.orders.applySubscriptionTerms).toHaveBeenCalledWith(
+      "sub-1",
+      expect.objectContaining({ mode: "upgrade" }),
+      h.transaction,
+    );
+    expect(h.subscriptions.setAutoRenew).toHaveBeenCalledWith(
+      "sub-1",
+      true,
+      expect.anything(),
+      h.transaction,
+    );
+    expect(h.orders.grantLeftoverToPrepaid).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      h.transaction,
+    );
+    expect(h.orders.markFulfilled).toHaveBeenCalledWith(
+      "ord-1",
+      "sub-1",
+      expect.anything(),
+      h.transaction,
+    );
+    expect(notify).toHaveBeenCalledOnce();
+  });
+  it("does not issue a customer message when a later order write aborts", async () => {
+    const h = build(order(), null);
+    h.orders.markFulfilled.mockRejectedValueOnce(
+      new Error("event unavailable"),
+    );
+    const notify = vi.fn();
+    h.service.setCustomerNotifier({ notify });
+    await expect(
+      h.service.fulfill("ord-1", { actorType: "system", actorId: null }),
+    ).rejects.toThrow("event unavailable");
+    expect(h.boundaries).toEqual(["begin", "rollback"]);
+    expect(notify).not.toHaveBeenCalled();
+  });
+  it("does not accept a lost CAS merely because a reread claims another fulfillment", async () => {
+    const h = build(order(), null);
+    h.orders.markFulfilled.mockResolvedValueOnce(false);
+    h.orders.getById.mockResolvedValueOnce(
+      order({ status: "fulfilled", subscriptionId: "other-sub" }),
+    );
+    await expect(
+      h.service.fulfill("ord-1", { actorType: "system", actorId: null }),
+    ).rejects.toThrow(/履约未落地/);
+    expect(h.boundaries).toEqual(["begin", "rollback"]);
   });
 });

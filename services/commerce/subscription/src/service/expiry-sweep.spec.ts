@@ -56,11 +56,13 @@ describe("sweepExpiredSubscriptions", () => {
         operatorType: "system",
         expectedStatus: "overdue",
       }),
+      m.transaction,
     );
     // active → expired with no other coverage: deprovision + invalidate fire
     expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalled();
     expect(m.provisioning.enqueueEvent).toHaveBeenCalledWith(
       expect.objectContaining({ event: "subscription_changed" }),
+      m.transaction,
     );
   });
 
@@ -101,6 +103,7 @@ describe("sweepExpiredSubscriptions", () => {
       "s-1",
       expect.anything(),
       expect.objectContaining({ expectedEndAt: endAt }),
+      m.transaction,
     );
     expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
   });
@@ -115,5 +118,39 @@ describe("sweepExpiredSubscriptions", () => {
       .mockResolvedValueOnce(paidSub("good"));
     m.repo.update.mockResolvedValueOnce(paidSub("good", "expired"));
     await expect(m.service.sweepExpiredSubscriptions()).resolves.toBe(1);
+  });
+
+  it("does not count or notify an outbox failure and continues with the next row", async () => {
+    m.repo.findExpiredSubscriptionIds.mockResolvedValue([
+      { id: "bad", status: "active" },
+      { id: "good", status: "active" },
+    ]);
+    m.repo.getById.mockImplementation(async (id: string) => paidSub(id));
+    m.repo.update.mockImplementation(async (id: string) =>
+      paidSub(id, "expired"),
+    );
+    m.provisioning.enqueueEvent.mockRejectedValueOnce(
+      new Error("outbox unavailable"),
+    );
+    expect(await m.service.sweepExpiredSubscriptions()).toBe(1);
+    expect(m.transactionEvents).toEqual([
+      "begin",
+      "rollback",
+      "begin",
+      "commit",
+    ]);
+    expect(m.repo.getNotifyDisplay).toHaveBeenCalledExactlyOnceWith("good");
+  });
+
+  it("skips a paid candidate that became a trial before locking", async () => {
+    m.repo.findExpiredSubscriptionIds.mockResolvedValue([
+      { id: "s-1", status: "active" },
+    ]);
+    m.repo.getById.mockResolvedValue(
+      subscriptionFixture({ subscriptionKind: "trial" }),
+    );
+    expect(await m.service.sweepExpiredSubscriptions()).toBe(0);
+    expect(m.repo.update).not.toHaveBeenCalled();
+    expect(m.notifier.notify).not.toHaveBeenCalled();
   });
 });

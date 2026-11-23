@@ -183,13 +183,69 @@ export class PgSubscriptionRepository {
   async getById(
     id: string,
     client?: PoolClient,
+    lock = false,
   ): Promise<SubscriptionRecord | null> {
+    if (lock && !client)
+      throw new Error("A subscription lock requires a transaction");
     const result = await (client ?? this.pool).query<SubscriptionRow>(
-      `select * from metering.subscriptions where id = $1 and deleted_at is null limit 1`,
+      `select * from metering.subscriptions where id = $1 and deleted_at is null limit 1${lock ? " for update" : ""}`,
       [id],
     );
     const row = result.rows[0];
     return row ? this.mapSubscription(row) : null;
+  }
+
+  /**
+   * Commit subscription and outbox work through one repository-owned connection.
+   * @param operation - Work sharing this transaction, without completing it.
+   * @returns The operation result after a successful commit.
+   * @throws {Error} When starting, executing or committing the transaction fails.
+   */
+  async withTransaction<T>(
+    operation: (transaction: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const value = await operation(client);
+      await client.query("commit");
+      return value;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Lock the real prior state until the update and its outbox writes commit.
+   * @param id - Subscription to lock.
+   * @param operation - Work sharing the locked subscription connection.
+   * @param transaction - Optional caller-owned transaction, never completed here.
+   * @returns The operation result after a successful commit.
+   * @throws {Error} When locking, the operation or commit fails.
+   */
+  async withLockedSubscription<T>(
+    id: string,
+    operation: (
+      subscription: SubscriptionRecord | null,
+      transaction: PoolClient,
+    ) => Promise<T>,
+    transaction?: PoolClient,
+  ): Promise<T> {
+    const operationWithLock = async (client: PoolClient) => {
+      const result = await client.query<SubscriptionRow>(
+        `select * from metering.subscriptions
+         where id = $1 and deleted_at is null for update`,
+        [id],
+      );
+      const row = result.rows[0];
+      return operation(row ? this.mapSubscription(row) : null, client);
+    };
+    return transaction
+      ? operationWithLock(transaction)
+      : this.withTransaction(operationWithLock);
   }
 
   /** Latest active subscription for a workspace (the cost center that holds subscriptions). */
@@ -287,10 +343,11 @@ export class PgSubscriptionRepository {
     id: string,
     subscription: SubscriptionRecord,
     input: UpdateSubscriptionInput,
+    transaction?: PoolClient,
   ): Promise<SubscriptionRecord | null> {
-    const client = await this.pool.connect();
+    const client = transaction ?? (await this.pool.connect());
     try {
-      await client.query("begin");
+      if (!transaction) await client.query("begin");
 
       const result = await client.query<SubscriptionRow>(
         // new DDL drops updated_by (change trail lives in subscription_histories);
@@ -326,7 +383,7 @@ export class PgSubscriptionRepository {
 
       const updated = result.rows[0];
       if (!updated) {
-        await client.query("rollback");
+        if (!transaction) await client.query("rollback");
         return null;
       }
 
@@ -386,13 +443,13 @@ export class PgSubscriptionRepository {
         ],
       );
 
-      await client.query("commit");
+      if (!transaction) await client.query("commit");
       return this.mapSubscription(updated);
     } catch (err) {
-      await client.query("rollback");
+      if (!transaction) await client.query("rollback");
       throw err;
     } finally {
-      client.release();
+      if (!transaction) client.release();
     }
   }
 
@@ -412,14 +469,17 @@ export class PgSubscriptionRepository {
    * Products bundled by a plan_version (one row per plan_component), with the
    * owning plan_code — the provisioning wire fans events out per product.
    */
-  async listVersionProducts(planVersionId: string): Promise<
+  async listVersionProducts(
+    planVersionId: string,
+    transaction?: PoolClient,
+  ): Promise<
     {
       productId: string;
       productCode: string;
       planCode: string;
     }[]
   > {
-    const result = await this.pool.query<{
+    const result = await (transaction ?? this.pool).query<{
       product_id: string;
       product_code: string;
       plan_code: string;
@@ -448,8 +508,9 @@ export class PgSubscriptionRepository {
     workspaceId: string,
     productId: string,
     excludeSubscriptionId: string,
+    transaction?: PoolClient,
   ): Promise<boolean> {
-    const result = await this.pool.query<{ exists: boolean }>(
+    const result = await (transaction ?? this.pool).query<{ exists: boolean }>(
       `select exists (
          select 1 from metering.subscriptions ts
          join product.plan_components pc on pc.plan_version_id = ts.plan_version_id
@@ -479,8 +540,9 @@ export class PgSubscriptionRepository {
   async findUnclaimedLiveForProduct(
     workspaceId: string,
     planVersionId: string,
+    transaction?: PoolClient,
   ): Promise<SubscriptionRecord | null> {
-    const result = await this.pool.query<SubscriptionRow>(
+    const result = await (transaction ?? this.pool).query<SubscriptionRow>(
       `select s.*
          from metering.subscriptions s
         where s.workspace_id = $1
@@ -494,7 +556,7 @@ export class PgSubscriptionRepository {
              limit 1
           )
         order by s.created_at desc
-        limit 1`,
+        limit 1${transaction ? " for update of s" : ""}`,
       [workspaceId, planVersionId],
     );
     const row = result.rows[0];
@@ -1180,30 +1242,52 @@ export class PgSubscriptionRepository {
   }
 
   /**
-   * 顺延结算（2026-09-25 步骤三）：把**已闭合但还没结算**的暂停 episode 结成天数，加到
-   * 订阅的 `end_at` 上。
-   *
-   * 为什么是「事后扫」而不是在恢复那一笔事务里算完：离开 `suspended` 的路有三条（运营
-   * 恢复 / 续期 / 退订），加上到点强制恢复那一条就是四个写入方。把这段数学放进每一个
-   * 写入方，等于四份同样的算式各自漂移；放在这里，**谁闭合 episode 都由同一段结算**。
-   * 幂等判据是 `granted_seconds is null`：结算失败下一趟自愈，不会静默吞掉客户的天数
-   * （那正是「不能为暂停期间的代价让客户承担」最容易破在的地方）。
-   *
-   * 取整**向上取天**：停了 3 小时也还一整天。差额由平台吃，因为这段时间的不可用是平台
-   * 造成的——向下取整会让所有不足一天的暂停归零。
-   *
-   * `extends_term = false`（客户违规）也要结算，结成 0：否则那条 episode 永远「未结算」，
-   * 每一趟都被捞起来重算一遍。
-   *
-   * `end_at IS NULL`（永久订阅）不加：它没有到期日可顺延。仍写 `granted_seconds`，
-   * 记下那一次本该给多少——将来若改成别的补偿方式，账在那里。
-   *
-   * `for update skip locked`：多实例同时扫不会互相等，也不会把同一条结算两次。
+   * Select one bounded batch without changing compensation or taking episode locks.
+   * @param input - Optional subscription filter and the original episode limit.
+   * @returns Closed, unsettled identities for per-subscription transactions.
    */
-  async settleResumedSuspensions(input: {
+  async findUnsettledSuspensions(input: {
     subscriptionId?: string;
     limit?: number;
-  }): Promise<
+  }): Promise<{ id: string; subscriptionId: string }[]> {
+    const { rows } = await this.pool.query<{
+      id: string;
+      subscription_id: string;
+    }>(
+      `select sus.id, sus.subscription_id
+         from metering.subscription_suspensions sus
+         join metering.subscriptions s on s.id = sus.subscription_id
+        where sus.resumed_at is not null and sus.granted_seconds is null
+          and ($1::uuid is null or sus.subscription_id = $1)
+        order by sus.resumed_at asc, sus.id asc
+        limit $2`,
+      [input.subscriptionId ?? null, input.limit ?? 100],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      subscriptionId: row.subscription_id,
+    }));
+  }
+
+  /**
+   * Settle closed episodes using the existing ceil-to-day compensation rule.
+   * Violations record zero; perpetual subscriptions record the grant without an end date.
+   * The subscription owner holds its row lock before calling; episode locks retain
+   * SKIP LOCKED and the granted_seconds NULL guard. Legacy callers still own one
+   * repository transaction when no connection is supplied.
+   * @param input - Subscription, episode limit and optional selected episode identities.
+   * @param transaction - Caller-owned connection for business state and outbox work.
+   * @returns Settled episode records, pending the caller's commit when supplied.
+   * @throws {Error} When selecting or persisting compensation fails.
+   */
+  async settleResumedSuspensions(
+    input: {
+      subscriptionId?: string;
+      limit?: number;
+      episodeIds?: string[];
+    },
+    transaction?: PoolClient,
+  ): Promise<
     {
       id: string;
       subscriptionId: string;
@@ -1211,16 +1295,18 @@ export class PgSubscriptionRepository {
       extended: boolean;
     }[]
   > {
-    const client = await this.pool.connect();
-    try {
-      await client.query("begin");
-      const { rows } = await client.query<{
-        id: string;
-        subscription_id: string;
-        granted_seconds: string;
-        has_end_at: boolean;
-      }>(
-        `select sus.id,
+    if (!transaction)
+      return this.withTransaction((client) =>
+        this.settleResumedSuspensions(input, client),
+      );
+    const client = transaction;
+    const { rows } = await client.query<{
+      id: string;
+      subscription_id: string;
+      granted_seconds: string;
+      has_end_at: boolean;
+    }>(
+      `select sus.id,
                 sus.subscription_id,
                 case when sus.extends_term
                      then (ceil(extract(epoch from (sus.resumed_at - sus.paused_at)) / 86400)
@@ -1233,51 +1319,49 @@ export class PgSubscriptionRepository {
           where sus.resumed_at is not null
             and sus.granted_seconds is null
             and ($1::uuid is null or sus.subscription_id = $1)
+            and ($3::uuid[] is null or sus.id = any($3))
           order by sus.resumed_at asc
           limit $2
             for update of sus skip locked`,
-        [input.subscriptionId ?? null, input.limit ?? 100],
-      );
+      [
+        input.subscriptionId ?? null,
+        input.limit ?? 100,
+        input.episodeIds ?? null,
+      ],
+    );
 
-      const settled: {
-        id: string;
-        subscriptionId: string;
-        grantedSeconds: number;
-        extended: boolean;
-      }[] = [];
-      for (const row of rows) {
-        const granted = Number(row.granted_seconds);
-        await client.query(
-          `update metering.subscription_suspensions
+    const settled: {
+      id: string;
+      subscriptionId: string;
+      grantedSeconds: number;
+      extended: boolean;
+    }[] = [];
+    for (const row of rows) {
+      const granted = Number(row.granted_seconds);
+      await client.query(
+        `update metering.subscription_suspensions
               set granted_seconds = $2, updated_at = now()
             where id = $1 and granted_seconds is null`,
-          [row.id, granted],
-        );
-        const extend = granted > 0 && row.has_end_at;
-        if (extend) {
-          await client.query(
-            `update metering.subscriptions
+        [row.id, granted],
+      );
+      const extend = granted > 0 && row.has_end_at;
+      if (extend) {
+        await client.query(
+          `update metering.subscriptions
                 set end_at = end_at + make_interval(secs => $2), updated_at = now()
               where id = $1 and end_at is not null`,
-            [row.subscription_id, granted],
-          );
-        }
-        settled.push({
-          id: row.id,
-          subscriptionId: row.subscription_id,
-          grantedSeconds: granted,
-          extended: extend,
-        });
+          [row.subscription_id, granted],
+        );
       }
-
-      await client.query("commit");
-      return settled;
-    } catch (e) {
-      await client.query("rollback");
-      throw e;
-    } finally {
-      client.release();
+      settled.push({
+        id: row.id,
+        subscriptionId: row.subscription_id,
+        grantedSeconds: granted,
+        extended: extend,
+      });
     }
+
+    return settled;
   }
 
   /**
@@ -1293,6 +1377,8 @@ export class PgSubscriptionRepository {
   async findOverdueSuspensions(
     maxDays: number,
     limit = 50,
+    transaction?: PoolClient,
+    episodeId?: string,
   ): Promise<
     {
       id: string;
@@ -1303,7 +1389,7 @@ export class PgSubscriptionRepository {
       autoRenewBefore: boolean | null;
     }[]
   > {
-    const { rows } = await this.pool.query<{
+    const { rows } = await (transaction ?? this.pool).query<{
       id: string;
       subscription_id: string;
       status: string;
@@ -1321,9 +1407,10 @@ export class PgSubscriptionRepository {
           -- 订阅已经不在冻结态了（别的路径改过状态而 episode 没闭合）→ 交给闭合那一段
           -- 处理，不在这里当「超期暂停」处置。
           and s.status = 'suspended'
+          and ($3::uuid is null or sus.id = $3)
         order by sus.paused_at asc
-        limit $2`,
-      [maxDays, limit],
+        limit $2 ${transaction ? "for update of sus" : ""}`,
+      [maxDays, limit, episodeId ?? null],
     );
     return rows.map((r) => ({
       id: r.id,
@@ -1357,8 +1444,11 @@ export class PgSubscriptionRepository {
    * 供 admin「续期确认」那条**裸 SQL** 路径用——客户自助续订走订单履约，那一侧在
    * `applySubscriptionTerms` 里做同一件事。两条路径、一条判据（`renewalRestartsPeriod`）。
    */
-  async reanchorPeriodicPools(subscriptionId: string): Promise<number> {
-    const res = await this.pool.query(
+  async reanchorPeriodicPools(
+    subscriptionId: string,
+    transaction?: PoolClient,
+  ): Promise<number> {
+    const res = await (transaction ?? this.pool).query(
       `update metering.quota_pools
           set period_anchor = now(), current_period_start = now(), updated_at = now()
         where subscription_id = $1 and status = 'active' and reset_period <> 'none'`,
@@ -1367,12 +1457,35 @@ export class PgSubscriptionRepository {
     return res.rowCount ?? 0;
   }
 
-  /** 闭合一条 episode（到点处置用；运营路径在 admin-bff 的同一事务里闭合）。 */
-  async closeSuspension(subscriptionId: string): Promise<void> {
-    await this.pool.query(
+  /** Close only the locked episode; a lost identity aborts the caller transaction.
+   * @throws {ConflictException} When the expected open episode no longer exists.
+   */
+  async closeSuspension(
+    subscriptionId: string,
+    transaction?: PoolClient,
+    episodeId?: string,
+  ): Promise<void> {
+    const result = await (transaction ?? this.pool).query<{ id: string }>(
       `update metering.subscription_suspensions
           set resumed_at = now(), updated_at = now()
-        where subscription_id = $1 and resumed_at is null`,
+        where subscription_id = $1 and resumed_at is null
+          and ($2::uuid is null or id = $2)
+        returning id`,
+      [subscriptionId, episodeId ?? null],
+    );
+    if (transaction && episodeId && result.rows.length !== 1)
+      throw new ConflictException("暂停记录已变化，请重新核对");
+  }
+
+  /** Hold a product's window stable while a locked subscription enters or leaves it. */
+  private async lockMaintenanceProduct(
+    subscriptionId: string,
+    transaction: PoolClient,
+  ): Promise<void> {
+    await transaction.query(
+      `select p.id from product.products p
+         join metering.subscriptions s on s.product_id = p.id
+        where s.id = $1 for share of p`,
       [subscriptionId],
     );
   }
@@ -1390,8 +1503,11 @@ export class PgSubscriptionRepository {
    * 不写 on conflict：uidx_subscription_suspensions_open 保证一条订阅同时只有一次进行中的
    * 暂停，撞上 23505 说明别的写入方抢先开了一条——那是该抛给调用方记日志的事，不该静默。
    */
-  async openSuspension(input: OpenSuspensionInput): Promise<string> {
-    const res = await this.pool.query<{ id: string }>(
+  async openSuspension(
+    input: OpenSuspensionInput,
+    transaction?: PoolClient,
+  ): Promise<string> {
+    const res = await (transaction ?? this.pool).query<{ id: string }>(
       `insert into metering.subscription_suspensions (
          subscription_id, tenant_id, reason, reason_note, extends_term, auto_renew_before,
          expected_resume_at, actor_type, actor_id, client_ip, maintenance_window_id
@@ -1424,8 +1540,12 @@ export class PgSubscriptionRepository {
    */
   async findMaintenanceCandidates(
     limit = 100,
+    transaction?: PoolClient,
+    subscriptionId?: string,
   ): Promise<MaintenanceCandidate[]> {
-    const { rows } = await this.pool.query<{
+    if (transaction && subscriptionId)
+      await this.lockMaintenanceProduct(subscriptionId, transaction);
+    const { rows } = await (transaction ?? this.pool).query<{
       subscription_id: string;
       tenant_id: string;
       status: string;
@@ -1442,13 +1562,14 @@ export class PgSubscriptionRepository {
           and p.maintenance_until is not null
           and s.deleted_at is null
           and s.status = any($1::text[])
+          and ($3::uuid is null or s.id = $3)
           and not exists (
             select 1 from metering.subscription_suspensions sus
              where sus.subscription_id = s.id and sus.resumed_at is null
           )
         order by s.created_at asc
         limit $2`,
-      [IN_SERVICE_STATUSES, limit],
+      [IN_SERVICE_STATUSES, limit, subscriptionId ?? null],
     );
     return rows.map((r) => ({
       subscriptionId: r.subscription_id,
@@ -1468,8 +1589,14 @@ export class PgSubscriptionRepository {
    * 只认还停着的（status = suspended）：别的路径已经把状态改走而 episode 没闭合的，同
    * findOverdueSuspensions 的处理，不在这里当作维护恢复。
    */
-  async findMaintenanceReleases(limit = 100): Promise<MaintenanceRelease[]> {
-    const { rows } = await this.pool.query<{
+  async findMaintenanceReleases(
+    limit = 100,
+    transaction?: PoolClient,
+    target?: { subscriptionId: string; episodeId: string },
+  ): Promise<MaintenanceRelease[]> {
+    if (transaction && target)
+      await this.lockMaintenanceProduct(target.subscriptionId, transaction);
+    const { rows } = await (transaction ?? this.pool).query<{
       id: string;
       subscription_id: string;
       status: string;
@@ -1486,9 +1613,11 @@ export class PgSubscriptionRepository {
           and p.maintenance_window_id is distinct from sus.maintenance_window_id
           and s.deleted_at is null
           and s.status = 'suspended'
+          and ($2::uuid is null or sus.subscription_id = $2)
+          and ($3::uuid is null or sus.id = $3)
         order by sus.paused_at asc
-        limit $1`,
-      [limit],
+        limit $1 ${transaction ? "for update of sus" : ""}`,
+      [limit, target?.subscriptionId ?? null, target?.episodeId ?? null],
     );
     return rows.map((r) => ({
       id: r.id,

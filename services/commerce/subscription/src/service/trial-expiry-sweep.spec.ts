@@ -7,7 +7,7 @@ import {
 
 // Trial-expiry sweep unit tests (product_310 D10): repo + provisioning are
 // mocked; the subject is the sweep loop — each lapsed trial goes through
-// updateSubscription (so the status-transition wiring fires) and a per-row
+// the locked expiry transaction (including product notifications) and a per-row
 // failure never aborts the pass.
 
 const trialSub = (id: string, status = "trialing") =>
@@ -47,6 +47,7 @@ describe("sweepLapsedTrials", () => {
       "t-1",
       expect.objectContaining({ status: "trialing" }),
       expect.objectContaining({ status: "expired", operatorType: "system" }),
+      m.transaction,
     );
   });
 
@@ -60,6 +61,7 @@ describe("sweepLapsedTrials", () => {
     // and the subscription_changed C2 invalidate fan-out fires
     expect(m.provisioning.enqueueEvent).toHaveBeenCalledWith(
       expect.objectContaining({ event: "subscription_changed" }),
+      m.transaction,
     );
   });
 
@@ -74,6 +76,7 @@ describe("sweepLapsedTrials", () => {
       "t-1",
       expect.anything(),
       expect.objectContaining({ expectedStatus: "trialing" }),
+      m.transaction,
     );
     expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
     expect(m.provisioning.enqueueEvent).not.toHaveBeenCalled();
@@ -92,6 +95,44 @@ describe("sweepLapsedTrials", () => {
   it("passes the batch limit through to the repository", async () => {
     await m.service.sweepLapsedTrials(25);
     expect(m.repo.findLapsedTrialIds).toHaveBeenCalledWith(25);
+  });
+
+  it.each(["extended", "converted", "missing-cutoff"])(
+    "rechecks a %s trial under the lock before expiring it",
+    async (change) => {
+      m.repo.findLapsedTrialIds.mockResolvedValue(["t-1"]);
+      m.repo.getById.mockResolvedValue({
+        ...trialSub("t-1"),
+        ...(change === "extended"
+          ? { trialEndAt: new Date(Date.now() + 86_400_000) }
+          : {}),
+        ...(change === "converted" ? { subscriptionKind: "paid" } : {}),
+        ...(change === "missing-cutoff" ? { trialEndAt: null } : {}),
+      });
+      expect(await m.service.sweepLapsedTrials()).toBe(0);
+      expect(m.repo.update).not.toHaveBeenCalled();
+      expect(m.provisioning.enqueueEvent).not.toHaveBeenCalled();
+      expect(m.notifier.notify).not.toHaveBeenCalled();
+    },
+  );
+
+  it("skips a failed outbox row, rolls back its transaction and continues", async () => {
+    m.repo.findLapsedTrialIds.mockResolvedValue(["bad", "good"]);
+    m.repo.getById.mockImplementation(async (id: string) => trialSub(id));
+    m.repo.update.mockImplementation(async (id: string) =>
+      trialSub(id, "expired"),
+    );
+    m.provisioning.enqueueEvent.mockRejectedValueOnce(
+      new Error("outbox unavailable"),
+    );
+    expect(await m.service.sweepLapsedTrials()).toBe(1);
+    expect(m.transactionEvents).toEqual([
+      "begin",
+      "rollback",
+      "begin",
+      "commit",
+    ]);
+    expect(m.repo.getNotifyDisplay).toHaveBeenCalledExactlyOnceWith("good");
   });
 });
 

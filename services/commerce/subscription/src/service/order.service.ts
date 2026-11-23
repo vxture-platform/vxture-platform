@@ -920,177 +920,238 @@ export class OrderService {
    *  renew   → 原订阅 end = max(end, now) + 周期（到期族复活为 active）；已取消 → 退化为 new
    */
   async fulfill(orderId: string, actor: OrderActor): Promise<FulfillResult> {
-    const order = await this.getOrder(orderId);
-    if (order.status === "fulfilled" && order.subscriptionId) {
-      const subscription = await this.subscriptions.getSubscription(
-        order.subscriptionId,
-      );
-      return { order, subscription };
-    }
-    if (order.status !== "paid") {
-      throw new ConflictException("订单未收款，不能履约");
-    }
-
-    let subscription: SubscriptionRecord;
-    let mode = order.intent;
-    const from = order.fromSubscriptionId
-      ? await this.subscriptions.getSubscription(order.fromSubscriptionId)
-      : null;
-
-    // Payment and fulfillment may be separated by operator review or retries.
-    // Recheck direction without invalidating an already-applied version switch.
-    if (from) {
-      if (
-        from.tenantId !== order.tenantId ||
-        from.workspaceId !== order.workspaceId ||
-        from.status === "suspended"
-      ) {
-        throw new ConflictException(
-          "原订阅归属或状态已变化，不能继续开通此订单",
-        );
-      }
-      if (
-        from.planVersionId !== order.planVersionId &&
-        (mode === "renew" || mode === "upgrade")
-      ) {
-        const target = await this.orders.resolveRenewTarget(
-          from.planVersionId,
-          order.planVersionId,
-        );
-        if (
-          !target?.sameProduct ||
-          (mode === "renew" && !target.samePlan) ||
-          (mode === "upgrade" &&
-            LIVE.has(from.status) &&
-            !isTierUpgrade(target.fromTier, target.toTier))
-        ) {
-          throw new ConflictException(
-            "原订阅套餐已变化，请核对订单后处理，不能重复开通或降档",
+    const outcome = await this.orders.withOrderTx(
+      orderId,
+      async ({ client, order }) => {
+        if (order.status === "fulfilled" && order.subscriptionId) {
+          const subscription = await this.subscriptions.getSubscription(
+            order.subscriptionId,
+            client,
           );
+          return { order, subscription, mode: null };
         }
-      }
-    }
+        if (order.status !== "paid") {
+          throw new ConflictException("订单未收款，不能履约");
+        }
 
-    if (mode === "upgrade" && from && LIVE.has(from.status)) {
-      if (from.planVersionId !== order.planVersionId) {
-        await this.subscriptions.upgradeSubscription(
-          from.id,
-          order.planVersionId,
-          actor.actorId ?? undefined,
-          actor.remark ?? `order ${order.orderNo}`,
-        );
-      }
-      await this.orders.applySubscriptionTerms(from.id, {
-        mode: "upgrade",
-        cycleUnit: order.cycleUnit,
-        cycleCount: order.cycleCount,
-        payAmount: order.payableAmount,
-        orderId: order.id,
-      });
-      await this.applyOrderAutoRenew(from, order, actor);
-      // 折抵溢出进预付款（幂等，按 order_no 去重）——放在订阅改完之后，钱的动作最后做。
-      if (Number(order.leftoverAmount) > 0) {
-        await this.orders.grantLeftoverToPrepaid(order, actor);
-      }
-      subscription = await this.subscriptions.getSubscription(from.id);
-    } else if (mode === "renew" && from && RENEWABLE.has(from.status)) {
-      const now = new Date();
-      const base = from.endAt && from.endAt > now ? from.endAt : now;
-      const endAt = addCycle(base, order.cycleUnit, order.cycleCount);
-      await this.subscriptions.updateSubscription(from.id, {
-        ...(from.status === "active" ? {} : { status: "active" }),
-        expectedStatus: from.status,
-        endAt,
-        /* 续订 = 重新签一次，签的是现在在售的那一版（owner 2026-09-22）。不重钉的话
+        await this.orders.lockFulfillmentWorkspace(order.workspaceId, client);
+        let subscription: SubscriptionRecord;
+        let mode = order.intent;
+        const from = order.fromSubscriptionId
+          ? await this.subscriptions.getSubscription(
+              order.fromSubscriptionId,
+              client,
+              true,
+            )
+          : null;
+
+        // Payment and fulfillment may be separated by operator review or retries.
+        // Recheck direction without invalidating an already-applied version switch.
+        if (from) {
+          if (
+            from.tenantId !== order.tenantId ||
+            from.workspaceId !== order.workspaceId ||
+            from.status === "suspended"
+          ) {
+            throw new ConflictException(
+              "原订阅归属或状态已变化，不能继续开通此订单",
+            );
+          }
+          if (
+            from.planVersionId !== order.planVersionId &&
+            (mode === "renew" || mode === "upgrade")
+          ) {
+            const target = await this.orders.resolveRenewTarget(
+              from.planVersionId,
+              order.planVersionId,
+              client,
+            );
+            if (
+              !target?.sameProduct ||
+              (mode === "renew" && !target.samePlan) ||
+              (mode === "upgrade" &&
+                LIVE.has(from.status) &&
+                !isTierUpgrade(target.fromTier, target.toTier))
+            ) {
+              throw new ConflictException(
+                "原订阅套餐已变化，请核对订单后处理，不能重复开通或降档",
+              );
+            }
+          }
+        }
+
+        if (mode === "upgrade" && from && LIVE.has(from.status)) {
+          if (from.planVersionId !== order.planVersionId) {
+            await this.subscriptions.upgradeSubscription(
+              from.id,
+              order.planVersionId,
+              actor.actorId ?? undefined,
+              actor.remark ?? `order ${order.orderNo}`,
+              client,
+            );
+          }
+          await this.orders.applySubscriptionTerms(
+            from.id,
+            {
+              mode: "upgrade",
+              cycleUnit: order.cycleUnit,
+              cycleCount: order.cycleCount,
+              payAmount: order.payableAmount,
+              orderId: order.id,
+            },
+            client,
+          );
+          await this.applyOrderAutoRenew(from, order, actor, client);
+          // 折抵溢出进预付款（幂等，按 order_no 去重）——放在订阅改完之后，钱的动作最后做。
+          if (Number(order.leftoverAmount) > 0) {
+            await this.orders.grantLeftoverToPrepaid(order, actor, client);
+          }
+          subscription = await this.subscriptions.getSubscription(
+            from.id,
+            client,
+          );
+          if (from.planVersionId === order.planVersionId) {
+            await this.subscriptions.notifyOrderTermsChanged(
+              subscription,
+              client,
+            );
+          }
+        } else if (mode === "renew" && from && RENEWABLE.has(from.status)) {
+          const now = new Date();
+          const base = from.endAt && from.endAt > now ? from.endAt : now;
+          const endAt = addCycle(base, order.cycleUnit, order.cycleCount);
+          await this.subscriptions.updateSubscription(
+            from.id,
+            {
+              ...(from.status === "active" ? {} : { status: "active" }),
+              expectedStatus: from.status,
+              endAt,
+              /* 续订 = 重新签一次，签的是现在在售的那一版（owner 2026-09-22）。不重钉的话
            「小改开新版本」永远触达不到存量客户——那正是 owner 最初想改已发布套餐的
            原因。跨版本那一步已在下单时要过客户确认。 */
-        ...(order.planVersionId !== from.planVersionId
-          ? { toPlanVersionId: order.planVersionId }
-          : {}),
-        operatorType: actor.actorType,
-        ...(actor.actorId ? { operatorId: actor.actorId } : {}),
-        operatorRemark: actor.remark ?? `renew order ${order.orderNo}`,
-      });
-      await this.orders.applySubscriptionTerms(from.id, {
-        mode: "renew",
-        cycleUnit: order.cycleUnit,
-        cycleCount: order.cycleCount,
-        payAmount: order.payableAmount,
-        orderId: order.id,
-        /* 服务期重起才重锚配额周期。与上面算 `base` 是同一条判据，走 @shared 那一份，
+              ...(order.planVersionId !== from.planVersionId
+                ? { toPlanVersionId: order.planVersionId }
+                : {}),
+              operatorType: actor.actorType,
+              ...(actor.actorId ? { operatorId: actor.actorId } : {}),
+              operatorRemark: actor.remark ?? `renew order ${order.orderNo}`,
+            },
+            client,
+          );
+          await this.orders.applySubscriptionTerms(
+            from.id,
+            {
+              mode: "renew",
+              cycleUnit: order.cycleUnit,
+              cycleCount: order.cycleCount,
+              payAmount: order.payableAmount,
+              orderId: order.id,
+              /* 服务期重起才重锚配额周期。与上面算 `base` 是同一条判据，走 @shared 那一份，
            因为 admin 的「续期确认」也要问同一个问题（owner 2026-09-26 决策）。 */
-        restartsPeriod: renewalRestartsPeriod(from.endAt ?? null, now),
-      });
-      await this.applyOrderAutoRenew(from, order, actor);
-      subscription = await this.subscriptions.getSubscription(from.id);
-    } else {
-      mode = "new";
-      const now = new Date();
-      const endAt = addCycle(now, order.cycleUnit, order.cycleCount);
-      const price = Number(order.payableAmount);
-      // 幂等（2026-09-07 事故）：建订阅、回写条款、翻订单是三个独立事务，中间断掉
-      // 就会留下一条已生效、但没有订单认领的订阅。此时**必须认领它**而不是再建一条：
-      // 再建一定撞 uidx_subscriptions_live_per_product（一个 workspace × product 至多
-      // 一条在用订阅），于是第一次尝试的副作用把后续所有重试——包括 reconcile 兜底和
-      // 运营台「重试开通」——永久挡死。判据只认「没有订单认领」的行，不碰客户已有的
-      // 正常订阅：那属于「买了已经拥有的产品」，是另一回事，下面单独报错。
-      const orphan = await this.subscriptions.findUnclaimedLiveForProduct(
-        order.workspaceId,
-        order.planVersionId,
-      );
-      if (orphan) {
-        this.logger.warn(
-          `fulfill ${order.orderNo}: adopting subscription ${orphan.id} left behind by an interrupted attempt`,
-        );
-        subscription = orphan;
-      } else {
-        await this.orders.assertNoOtherSubscription(
-          order.workspaceId,
-          order.planVersionId,
-        );
-        // 订阅↔订单的关联是 current_order_id（下面 applySubscriptionTerms 落）；
-        // subscriptions.order_no 已停写（product_330 P2）。
-        subscription = await this.subscriptions.createSubscription({
-          tenantId: order.tenantId,
-          workspaceId: order.workspaceId,
-          planVersionId: order.planVersionId,
-          cycleType: order.cycleUnit,
-          cycleCount: order.cycleCount,
-          startAt: now,
-          endAt,
-          // owner 2026-09-03：自动续费默认关，客户在订单确认页显式开启——按订单值写。
-          autoRenew: order.autoRenew,
-          payAmount: price,
-          currency: order.currency,
-          createdBy: order.createdById ?? actor.actorId ?? order.tenantId,
-          status: "active",
-          subscriptionKind: price > 0 ? "paid" : "free",
-          activationMethod: "offline_purchase",
-          createdByType: order.createdByType,
-        });
-      }
-      await this.orders.applySubscriptionTerms(subscription.id, {
-        mode: "new",
-        cycleUnit: order.cycleUnit,
-        cycleCount: order.cycleCount,
-        payAmount: order.payableAmount,
-        orderId: order.id,
-      });
-    }
+              restartsPeriod: renewalRestartsPeriod(from.endAt ?? null, now),
+            },
+            client,
+          );
+          await this.applyOrderAutoRenew(from, order, actor, client);
+          subscription = await this.subscriptions.getSubscription(
+            from.id,
+            client,
+          );
+        } else {
+          mode = "new";
+          const now = new Date();
+          const endAt = addCycle(now, order.cycleUnit, order.cycleCount);
+          const price = Number(order.payableAmount);
+          // Adopt only the historical unclaimed live row, locked under the workspace
+          // acquisition lock. Newly interrupted attempts now roll back as one unit.
+          const orphan = await this.subscriptions.findUnclaimedLiveForProduct(
+            order.workspaceId,
+            order.planVersionId,
+            client,
+          );
+          if (orphan) {
+            if (
+              orphan.tenantId !== order.tenantId ||
+              orphan.workspaceId !== order.workspaceId
+            ) {
+              throw new ConflictException("待认领订阅归属不匹配");
+            }
+            this.logger.warn(
+              `fulfill ${order.orderNo}: adopting subscription ${orphan.id} left behind by an interrupted attempt`,
+            );
+            subscription = orphan;
+          } else {
+            await this.orders.assertNoOtherSubscription(
+              order.workspaceId,
+              order.planVersionId,
+              undefined,
+              client,
+            );
+            // 订阅↔订单的关联是 current_order_id（下面 applySubscriptionTerms 落）；
+            // subscriptions.order_no 已停写（product_330 P2）。
+            subscription = await this.subscriptions.createSubscription(
+              {
+                tenantId: order.tenantId,
+                workspaceId: order.workspaceId,
+                planVersionId: order.planVersionId,
+                cycleType: order.cycleUnit,
+                cycleCount: order.cycleCount,
+                startAt: now,
+                endAt,
+                // owner 2026-09-03：自动续费默认关，客户在订单确认页显式开启——按订单值写。
+                autoRenew: order.autoRenew,
+                payAmount: price,
+                currency: order.currency,
+                createdBy: order.createdById ?? actor.actorId ?? order.tenantId,
+                status: "active",
+                subscriptionKind: price > 0 ? "paid" : "free",
+                activationMethod: "offline_purchase",
+                createdByType: order.createdByType,
+              },
+              client,
+            );
+          }
+          await this.orders.applySubscriptionTerms(
+            subscription.id,
+            {
+              mode: "new",
+              cycleUnit: order.cycleUnit,
+              cycleCount: order.cycleCount,
+              payAmount: order.payableAmount,
+              orderId: order.id,
+            },
+            client,
+          );
+          subscription = await this.subscriptions.getSubscription(
+            subscription.id,
+            client,
+          );
+        }
 
-    // 翻订单是 CAS（where status = 'paid'）：0 行不是异常，但**也不是成功**。此前返回值
-    // 被丢掉，订单没翻也照走通知、照返回「已履约」——调用方拿不到任何信号（2026-09-07
-    // 事故的放大器之一）。并发履约先翻了是良性的，所以复读一次再判，只对真没翻的报错。
-    const flipped = await this.orders.markFulfilled(order.id, subscription.id, {
-      ...actor,
-      remark: actor.remark ?? `${mode} → subscription ${subscription.id}`,
-    });
-    const fresh = await this.getOrder(order.id);
-    if (!flipped && fresh.status !== "fulfilled") {
-      throw new ConflictException(
-        `订单 ${order.orderNo} 履约未落地：订阅 ${subscription.id} 已生效，但订单仍停在 ${fresh.status}`,
-      );
-    }
+        // A failed CAS must abort every effect of this fulfillment attempt.
+        const flipped = await this.orders.markFulfilled(
+          order.id,
+          subscription.id,
+          {
+            ...actor,
+            remark: actor.remark ?? `${mode} → subscription ${subscription.id}`,
+          },
+          client,
+        );
+        const fresh = await this.orders.getById(order.id, client);
+        if (!fresh) throw new ConflictException("履约订单不存在");
+        if (!flipped) {
+          throw new ConflictException(
+            `订单 ${order.orderNo} 履约未落地：订单仍停在 ${fresh.status}，本次订阅变更将回滚`,
+          );
+        }
+        return { order: fresh, subscription, mode };
+      },
+    );
+    if (outcome.mode === null)
+      return { order: outcome.order, subscription: outcome.subscription };
+    // Customer messaging is best-effort and may only observe committed fulfillment.
+    const { order, subscription, mode } = outcome;
     const fulfilledSub = subscription;
     await this.emit(`fulfill ${order.orderNo}`, async () => {
       const display = await this.orders.getPlanDisplay(order.planVersionId);
@@ -1111,7 +1172,7 @@ export class OrderService {
         link: `/subscribe/pay/${order.id}`,
       };
     });
-    return { order: fresh, subscription };
+    return { order, subscription };
   }
 
   /**
@@ -1122,13 +1183,19 @@ export class OrderService {
     from: SubscriptionRecord,
     order: OrderRecord,
     actor: OrderActor,
+    transaction: PoolClient,
   ): Promise<void> {
     if (from.autoRenew === order.autoRenew) return;
-    await this.subscriptions.setAutoRenew(from.id, order.autoRenew, {
-      actorId: actor.actorId,
-      actorType: actor.actorType,
-      remark: `order ${order.orderNo}`,
-    });
+    await this.subscriptions.setAutoRenew(
+      from.id,
+      order.autoRenew,
+      {
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        remark: `order ${order.orderNo}`,
+      },
+      transaction,
+    );
   }
 
   /**

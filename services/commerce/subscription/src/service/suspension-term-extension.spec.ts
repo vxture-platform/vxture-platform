@@ -200,7 +200,13 @@ describe("到点处置：动作按暂停原因分岔", () => {
 
 describe("顺延结算：欠客户的账不能静默丢", () => {
   let m: SweepMocks;
-  beforeEach(() => (m = buildSweepMocks(VXTPL)));
+  beforeEach(() => {
+    m = buildSweepMocks(VXTPL);
+    m.repo.getById.mockResolvedValue(subscriptionFixture());
+    m.repo.findUnsettledSuspensions.mockResolvedValue([
+      { id: "sus-1", subscriptionId: "s-1" },
+    ]);
+  });
 
   it("带 subscriptionId 时只结那一条（运营恢复后的即时结算）", async () => {
     m.repo.settleResumedSuspensions.mockResolvedValue([
@@ -212,15 +218,19 @@ describe("顺延结算：欠客户的账不能静默丢", () => {
       },
     ]);
     await expect(m.service.settleSuspensionExtension("s-1")).resolves.toBe(1);
-    expect(m.repo.settleResumedSuspensions).toHaveBeenCalledWith({
-      subscriptionId: "s-1",
-      limit: 100,
-    });
+    expect(m.repo.settleResumedSuspensions).toHaveBeenCalledWith(
+      {
+        subscriptionId: "s-1",
+        limit: 100,
+        episodeIds: ["sus-1"],
+      },
+      m.transaction,
+    );
   });
 
   it("不带 subscriptionId 时**整个键不出现**（作业兜底扫全量）", async () => {
     await m.service.settleSuspensionExtension();
-    const arg = m.repo.settleResumedSuspensions.mock.calls[0]?.[0] as Record<
+    const arg = m.repo.findUnsettledSuspensions.mock.calls[0]?.[0] as Record<
       string,
       unknown
     >;
@@ -251,5 +261,107 @@ describe("顺延结算：欠客户的账不能静默丢", () => {
     ]);
     await expect(m.service.settleSuspensionExtension("s-1")).resolves.toBe(1);
     expect(logged.join("\n")).toContain("no end_at");
+  });
+});
+
+// ============================================================================
+// Transaction outcomes are counted before post-commit customer notices.
+// ============================================================================
+describe("suspension and settlement row isolation", () => {
+  it("rolls back a failed required event and continues the next deadline row", async () => {
+    const m = buildSweepMocks(VXTPL);
+    m.repo.findOverdueSuspensions.mockResolvedValue([
+      episode({ id: "bad-episode", subscriptionId: "bad" }),
+      episode({ id: "good-episode", subscriptionId: "good" }),
+    ]);
+    m.repo.getById.mockImplementation(async (id: string) =>
+      subscriptionFixture({ id, status: "suspended" }),
+    );
+    m.repo.update.mockImplementation(async (id: string) =>
+      subscriptionFixture({ id, status: "active" }),
+    );
+    m.provisioning.enqueueEvent.mockRejectedValueOnce(
+      new Error("outbox unavailable"),
+    );
+    m.repo.getNotifyDisplay.mockImplementation(async (id: string) => ({
+      ...display("active"),
+      id,
+    }));
+    m.notifier.notify.mockImplementation(async () => {
+      expect(m.transactionEvents.at(-1)).toBe("commit");
+    });
+    expect(await m.service.sweepOverdueSuspensions()).toEqual({
+      resumed: 1,
+      terminated: 0,
+    });
+    expect(m.transactionEvents).toEqual([
+      "begin",
+      "rollback",
+      "begin",
+      "commit",
+    ]);
+    expect(m.notifier.notify).toHaveBeenCalledOnce();
+    expect(m.notifier.notify.mock.calls[0]![0].reference.id).toContain("good:");
+    expect(m.repo.closeSuspension).toHaveBeenCalledWith(
+      "good",
+      m.transaction,
+      "good-episode",
+    );
+  });
+
+  it("does not act on a deadline episode that no longer qualifies under its lock", async () => {
+    const m = buildSweepMocks(VXTPL);
+    m.repo.findOverdueSuspensions
+      .mockResolvedValueOnce([episode()])
+      .mockResolvedValueOnce([]);
+    m.repo.getById.mockResolvedValue(
+      subscriptionFixture({ status: "suspended" }),
+    );
+    expect(await m.service.sweepOverdueSuspensions()).toEqual({
+      resumed: 0,
+      terminated: 0,
+    });
+    expect(m.repo.update).not.toHaveBeenCalled();
+    expect(m.repo.closeSuspension).not.toHaveBeenCalled();
+    expect(m.notifier.notify).not.toHaveBeenCalled();
+    expect(m.repo.findOverdueSuspensions).toHaveBeenLastCalledWith(
+      60,
+      1,
+      m.transaction,
+      "sus-1",
+    );
+  });
+
+  it("continues after one settlement group fails and counts only a later commit", async () => {
+    const m = buildSweepMocks(VXTPL);
+    m.repo.findUnsettledSuspensions.mockResolvedValue([
+      { id: "episode-bad", subscriptionId: "bad" },
+      { id: "episode-good", subscriptionId: "good" },
+    ]);
+    m.repo.getById.mockImplementation(async (id: string) =>
+      subscriptionFixture({ id }),
+    );
+    m.repo.settleResumedSuspensions
+      .mockRejectedValueOnce(new Error("settlement failed"))
+      .mockResolvedValueOnce([
+        {
+          id: "episode-good",
+          subscriptionId: "good",
+          grantedSeconds: 86400,
+          extended: false,
+        },
+      ]);
+    expect(await m.service.settleSuspensionExtension()).toBe(1);
+    expect(m.transactionEvents).toEqual([
+      "begin",
+      "rollback",
+      "begin",
+      "commit",
+    ]);
+    expect(m.repo.settleResumedSuspensions).toHaveBeenLastCalledWith(
+      { subscriptionId: "good", limit: 100, episodeIds: ["episode-good"] },
+      m.transaction,
+    );
+    expect(m.notifier.notify).not.toHaveBeenCalled();
   });
 });

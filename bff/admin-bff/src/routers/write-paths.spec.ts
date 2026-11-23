@@ -291,7 +291,7 @@ describe("subscriptions runSubscriptionAction", () => {
     ["resume", "suspended"],
     ["cancel", "active"],
     ["renew", "expired"],
-  ])("%s（原态 %s）提交后补跑写完成尾", async (action, status) => {
+  ])("%s（原态 %s）提交前完成必要产品入队", async (action, status) => {
     const tx = makeTxClient((s) =>
       s.includes("for update")
         ? [
@@ -324,11 +324,60 @@ describe("subscriptions runSubscriptionAction", () => {
       suspendReason: "platform_ops",
     });
     // before 必须是锁行时读到的状态与版本——hooks 全靠它判「从哪到哪」。
-    expect(subs.applyExternalStatusChange).toHaveBeenCalledWith(UUID_A, {
-      status,
-      planVersionId: "pv-1",
-    });
+    expect(subs.applyExternalStatusChange).toHaveBeenCalledWith(
+      UUID_A,
+      { status, planVersionId: "pv-1", endAt: null },
+      tx.client,
+      { reanchorPools: action === "renew" },
+    );
+    expect(
+      subs.applyExternalStatusChange.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      subs.notifyOperatorStatusChange.mock.invocationCallOrder[0] ?? Infinity,
+    );
   });
+
+  it.each(["renew", "suspend", "resume", "cancel"])(
+    "%s rolls back and sends no customer message or refund when required enqueue fails",
+    async (action) => {
+      const tx = makeTxClient((sql) =>
+        sql.includes("for update")
+          ? [
+              {
+                status: action === "resume" ? "suspended" : "active",
+                tenant_id: UUID_A,
+                plan_version_id: "pv-1",
+                end_at: null,
+              },
+            ]
+          : undefined,
+      );
+      const subs = stubSubscriptions();
+      const orders = stubOrders();
+      subs.applyExternalStatusChange.mockRejectedValue(
+        new Error("required enqueue failed"),
+      );
+      const router = new SubscriptionsRouter(
+        dummyRoPool(),
+        tx.pool,
+        subs,
+        orders,
+      );
+      await expect(
+        router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
+          action,
+          suspendReason: "platform_ops",
+        }),
+      ).rejects.toThrow("required enqueue failed");
+      expect(tx.outcome()).toEqual({
+        committed: false,
+        rolledBack: true,
+        released: true,
+      });
+      expect(subs.notifyOperatorStatusChange).not.toHaveBeenCalled();
+      expect(orders.settleAfterCancel).not.toHaveBeenCalled();
+    },
+  );
 
   it("前置校验就 409 时不补跑写完成尾（什么都没改，别打扰产品侧）", async () => {
     const tx = makeTxClient((s) =>

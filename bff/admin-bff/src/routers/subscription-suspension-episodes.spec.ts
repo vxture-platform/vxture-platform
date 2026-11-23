@@ -73,7 +73,7 @@ function makeRwPool(
     // 闭合 episode 会 returning 一行：续费意愿还原与「要不要结算」都看它。
     if (/update metering\.subscription_suspensions/i.test(text)) {
       return {
-        rows: [{ extends_term: true, auto_renew_before: autoRenewBefore }],
+        rows: [{ id: "episode-1", auto_renew_before: autoRenewBefore }],
       };
     }
     return { rows: [] };
@@ -85,7 +85,7 @@ function makeRwPool(
   } as unknown as Pool;
   const find = (needle: RegExp) =>
     calls.find((c) => needle.test(c.sql.toLowerCase()));
-  return { pool, calls, find };
+  return { pool, client, calls, find };
 }
 
 /** 只读池：详情读回。`limit 1` 的那条暂停查询回空即可（本线不验渲染）。 */
@@ -99,12 +99,14 @@ function makeRouter(
   opts: { autoRenew?: boolean; autoRenewBefore?: boolean | null } = {},
 ) {
   const rw = makeRwPool(status, opts);
-  const settle = vi.fn(async () => 0);
+  const complete = vi.fn(async () => {
+    expect(rw.calls.some((c) => c.sql.trim().toLowerCase() === "commit")).toBe(
+      false,
+    );
+  });
   const subscriptions = {
-    applyExternalStatusChange: vi.fn(async () => undefined),
+    applyExternalStatusChange: complete,
     notifyOperatorStatusChange: vi.fn(async () => undefined),
-    /* 步骤三：顺延结算。提交后调，客户马上能看到新的到期日。 */
-    settleSuspensionExtension: settle,
   } as unknown as SubscriptionService;
   const orders = {
     settleAfterCancel: vi.fn(async () => undefined),
@@ -115,7 +117,7 @@ function makeRouter(
     subscriptions,
     orders,
   );
-  return { router, rw, settle };
+  return { router, rw, complete };
 }
 
 /** 详情读回会 404（只读池回空行）——本线只看事务里写了什么，到这一步已经写完了。 */
@@ -279,20 +281,30 @@ describe("顺延的两个半边：记下续费意愿、恢复时还原（步骤�
     expect(rw.calls.some((c) => /auto_renew = \$2/.test(c.sql))).toBe(false);
   });
 
-  it("闭合了 episode 就在提交后结算顺延（只结这一条）", async () => {
-    const { router, settle } = makeRouter("suspended");
+  it("闭合了 episode 就在提交前结算顺延（同一事务）", async () => {
+    const { router, rw, complete } = makeRouter("suspended");
     await run(router, { action: "resume", reason: "复核完成" });
-    expect(settle).toHaveBeenCalledWith(SUB_ID);
+    expect(complete).toHaveBeenCalledWith(
+      SUB_ID,
+      expect.objectContaining({ status: "suspended", endAt: expect.any(Date) }),
+      rw.client,
+      { settleSuspensionId: "episode-1", reanchorPools: false },
+    );
   });
 
   it("没闭合任何 episode 的动作不触发结算", async () => {
-    const { router, settle } = makeRouter("active");
+    const { router, complete } = makeRouter("active");
     await run(router, {
       action: "suspend",
       reason: "平台迁移",
       suspendReason: "platform_ops",
     });
-    expect(settle).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledWith(
+      SUB_ID,
+      expect.anything(),
+      expect.anything(),
+      { reanchorPools: false },
+    );
   });
 });
 
@@ -305,15 +317,14 @@ describe("顺延的两个半边：记下续费意愿、恢复时还原（步骤�
  */
 describe("续期确认：只有过期后续期才重锚", () => {
   it("到期日还在未来（在用续期）→ 不重锚，刷新日守住", async () => {
-    const { router, rw } = makeRouter("active");
-    const reanchor = vi.fn(async () => 0);
-    (
-      router as unknown as {
-        subscriptions: { reanchorAfterPeriodRestart: unknown };
-      }
-    ).subscriptions.reanchorAfterPeriodRestart = reanchor;
+    const { router, rw, complete } = makeRouter("active");
     await run(router, { action: "renew", reason: "合同已续签" });
-    expect(reanchor).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledWith(
+      SUB_ID,
+      expect.anything(),
+      rw.client,
+      { reanchorPools: false },
+    );
     // 锁行 mock 的 end_at 是 now + 30 天，确实在未来。
     expect(rw.find(/for update of s/)).toBeDefined();
   });
