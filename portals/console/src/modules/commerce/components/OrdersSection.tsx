@@ -199,7 +199,8 @@ export function OrdersSection() {
   const sortAccessors = useMemo(
     () => ({
       order: (o: MyOrder) => o.tenantName ?? "",
-      amount: (o: MyOrder) => Number.parseFloat(o.amount || "0"),
+      amount: (o: MyOrder) =>
+        Number.parseFloat(o.settlementAmount ?? o.amount ?? "0"),
       placed: (o: MyOrder) => new Date(o.createdAt).getTime(),
     }),
     [],
@@ -317,7 +318,7 @@ export function OrdersSection() {
       cell: (o) => (
         <span className="flex flex-col items-end tabular-nums">
           <span className="font-semibold text-foreground">
-            {money(o.amount, o.currency)}
+            {money(o.settlementAmount ?? o.amount, o.currency)}
           </span>
           {Number.parseFloat(o.voucherOff) > 0 ? (
             <span className="text-body-small text-muted-foreground">
@@ -336,7 +337,7 @@ export function OrdersSection() {
       cell: (o) => {
         const zeroSettled =
           (o.orderStatus === "completed" || o.noncashReversed) &&
-          Number.parseFloat(o.amount) === 0;
+          Number.parseFloat(o.settlementAmount ?? o.amount) === 0;
         const axis = PAY_AXIS[o.noncashReversed ? "completed" : o.orderStatus];
         return (
           <StatusBadge tone={axis.tone}>

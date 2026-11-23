@@ -1094,6 +1094,7 @@ export class OrderService {
     const fulfilledSub = subscription;
     await this.emit(`fulfill ${order.orderNo}`, async () => {
       const display = await this.orders.getPlanDisplay(order.planVersionId);
+      const settledAmount = await this.orders.getSettledPaymentAmount(order.id);
       return {
         tenantId: order.tenantId,
         templateCode:
@@ -1104,7 +1105,7 @@ export class OrderService {
           planName: display.planName,
           orderNo: order.orderNo,
           endAt: formatNotifyDate(fulfilledSub.endAt),
-          amount: formatNotifyMoney(order.payableAmount, order.currency),
+          amount: formatNotifyMoney(settledAmount, order.currency),
         },
         recipients: customerRecipients(order.createdByType, order.createdById),
         link: `/subscribe/pay/${order.id}`,
