@@ -58,7 +58,7 @@ jobs:
           key: ${{ secrets.DEPLOY_HOST_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE }}
           fingerprint: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          source: deploy/nginx/sites-enabled/registered-ruyin-products.conf
+          source: deploy/nginx/sites-enabled/registered-ruyin-products.conf,deploy/nginx/sites-enabled/arda.vxture.com.conf
           target: /tmp/vxture-edge-${{ github.run_id }}
       - name: Install with syntax validation and rollback
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
@@ -76,30 +76,44 @@ jobs:
             set -eu
             test "$(hostname -s)" = vx-worker-01
             stage="/tmp/vxture-edge-$EDGE_RUN_ID"
-            name=registered-ruyin-products.conf
-            src="/srv/vxture/deploy/nginx/sites-enabled/$name"
-            live="/srv/vxture/data/nginx/conf/sites-enabled/$name"
+            names='registered-ruyin-products.conf arda.vxture.com.conf'
+            # Read the existing non-secret host setting; do not mutate platform env.
+            worker02="$(sudo bash -c '. /srv/vxture/deploy/scripts/lib/compose-env.sh; read_compose_env VX_WORKER02_TAILNET_IP')"
+            test -n "$worker02"
             sudo cp -a /srv/vxture/data/nginx/conf/conf.d/agents-upstream.map "$stage/previous.map"
-            for file in "$src" "$live"; do
-              if sudo test -f "$file"; then sudo cp -a "$file" "$stage/$(echo "$file" | tr / _).bak"; fi
+            for name in $names; do
+              for file in "/srv/vxture/deploy/nginx/sites-enabled/$name" "/srv/vxture/data/nginx/conf/sites-enabled/$name"; do
+                if sudo test -f "$file"; then sudo cp -a "$file" "$stage/$(echo "$file" | tr / _).bak"; fi
+              done
             done
             rollback() {
-              for file in "$src" "$live"; do
-                backup="$stage/$(echo "$file" | tr / _).bak"
-                if sudo test -f "$backup"; then sudo cp -a "$backup" "$file"; else sudo rm -f -- "$file"; fi
+              for name in $names; do
+                for file in "/srv/vxture/deploy/nginx/sites-enabled/$name" "/srv/vxture/data/nginx/conf/sites-enabled/$name"; do
+                  backup="$stage/$(echo "$file" | tr / _).bak"
+                  if sudo test -f "$backup"; then sudo cp -a "$backup" "$file"; else sudo rm -f -- "$file"; fi
+                done
               done
               sudo cp -a "$stage/previous.map" /srv/vxture/data/nginx/conf/conf.d/agents-upstream.map
             }
-            sudo install -m 0644 "$stage/deploy/nginx/sites-enabled/$name" "$src"
-            sudo install -m 0644 "$src" "$live"
+            trap rollback EXIT
+            for name in $names; do
+              src="/srv/vxture/deploy/nginx/sites-enabled/$name"
+              live="/srv/vxture/data/nginx/conf/sites-enabled/$name"
+              # Substitute only the host placeholder, preserving nginx variables.
+              VX_WORKER02_TAILNET_IP="$worker02" envsubst '${VX_WORKER02_TAILNET_IP}' \
+                < "$stage/deploy/nginx/sites-enabled/$name" > "$stage/$name.rendered"
+              sudo install -m 0644 "$stage/deploy/nginx/sites-enabled/$name" "$src"
+              sudo install -m 0644 "$stage/$name.rendered" "$live"
+            done
             sudo docker run --rm --network vxture-prod \
               --env-file /srv/vxture/runtime/secrets/platform.env \
               -v /srv/vxture/deploy/nginx:/edge:ro \
               -v /srv/vxture/data/nginx/conf/conf.d:/out \
               -v /srv/vxture/data/db-tool-cache:/tmp/vxture-db \
               node:24-alpine sh -ec 'export NODE_PATH=/tmp/vxture-db/node_modules; node /edge/render-agent-map.mjs /out/agents-upstream.map'
-            if ! sudo docker exec vxture-nginx nginx -t; then rollback; exit 1; fi
-            if ! sudo docker exec vxture-nginx nginx -s reload; then rollback; exit 1; fi
+            sudo docker exec vxture-nginx nginx -t
+            sudo docker exec vxture-nginx nginx -s reload
+            trap - EXIT
             printf '%s\n' "$EDGE_SHA" | sudo tee /srv/vxture/runtime/product-edge-revision >/dev/null
             test "$(realpath "$stage")" = "/tmp/vxture-edge-$EDGE_RUN_ID"
             sudo rm -rf -- "$stage"
