@@ -295,6 +295,30 @@ describe("minimal desktop backend", () => {
   // Authentication, identity projection and exact boundaries
   // ========================================================================
 
+  it("serves the self-contained completion page with only its exact stylesheet allowed", async () => {
+    const response = await request(
+      "/auth/native/done?code=synthetic-private-code&handle=synthetic-private-handle",
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("set-cookie")).toBeNull();
+    const html = await response.text();
+    const style = html.match(/<style>([\s\S]*?)<\/style>/)?.[1];
+    expect(style).toBeTruthy();
+    const digest = createHash("sha256").update(style!).digest("base64");
+    expect(response.headers.get("content-security-policy")).toBe(
+      `default-src 'none'; style-src 'sha256-${digest}'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
+    );
+    expect(html).toContain('aria-labelledby="completion-title"');
+    expect(html).toContain("现在可以关闭此页面");
+    expect(html).not.toMatch(
+      /<script\b|<link\b|<img\b|<form\b|\bsrc=|\bstyle=|\bon\w+=|synthetic-private-/i,
+    );
+  });
+
   it("uses native approval without browser credentials and returns only an opaque session", async () => {
     const pending = await approval();
     expect(pending.authorize.searchParams.has("prompt")).toBe(false);
