@@ -79,6 +79,8 @@ function build(realm: Realm, grant: Grant) {
   const durableSession = {
     get: vi.fn(async (): Promise<SessionRecord | null> => durable),
     isRevoked: vi.fn(async () => false),
+    bindClient: vi.fn(async () => {}),
+    getContext: vi.fn(async () => null),
   };
   const account = {
     getUserById: vi.fn(

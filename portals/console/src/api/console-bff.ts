@@ -144,10 +144,13 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
  * sessions", the reassuring answer, and the wrong one). Pages that must tell
  * the two apart use this and render their own error state.
  */
-async function readJsonStrict<T>(path: string): Promise<T> {
+async function readJsonStrict<T>(
+  path: string,
+  signal?: AbortSignal,
+): Promise<T> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${path}`,
-    { credentials: "include", cache: "no-store" },
+    { credentials: "include", cache: "no-store", signal: signal ?? null },
   );
   if (!response.ok) {
     throw new ConsoleBffError(
@@ -1935,7 +1938,9 @@ export function orgLogoUrl(logoHash: string): string {
 }
 
 /** Check central validity without loading user, tenant, or permission projections. */
-export async function hasActiveSession(): Promise<boolean | null> {
+export async function hasActiveSession(
+  signal: AbortSignal = AbortSignal.timeout(15_000),
+): Promise<boolean | null> {
   try {
     // RP session probe: /auth/session lives at the BFF root (outside /api/*),
     // returns 200 with verified claims when the OIDC-RP session is active, 401
@@ -1945,7 +1950,7 @@ export async function hasActiveSession(): Promise<boolean | null> {
       {
         credentials: "include",
         cache: "no-store",
-        signal: AbortSignal.timeout(5000),
+        signal,
       },
     );
 
@@ -1958,7 +1963,9 @@ export async function hasActiveSession(): Promise<boolean | null> {
 }
 
 export async function restoreSession(): Promise<SessionSnapshot> {
-  const active = await hasActiveSession();
+  // Bound the whole reconciliation, including a proxy that stalls after headers.
+  const signal = AbortSignal.timeout(15_000);
+  const active = await hasActiveSession(signal);
   if (active === null) {
     throw new ConsoleBffError("Console BFF is unavailable.", 503);
   }
@@ -1968,10 +1975,10 @@ export async function restoreSession(): Promise<SessionSnapshot> {
   }
 
   const [user, tenant, tenantOptions, capabilities] = await Promise.all([
-    fetchCurrentUser(),
-    fetchTenantContext(),
-    fetchTenantOptions(),
-    fetchCapabilities(),
+    readJsonStrict<ConsoleUser | null>("/api/me", signal),
+    readJsonStrict<TenantContext | null>("/api/tenant-context", signal),
+    readJsonStrict<TenantContext[]>("/api/tenant-context/options", signal),
+    readJsonStrict<Capability[]>("/api/capabilities", signal),
   ]);
 
   const snapshot = {

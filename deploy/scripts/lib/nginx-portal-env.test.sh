@@ -24,7 +24,7 @@ SH
 mkdir() { :; }
 export -f mkdir
 export RUNTIME_DIR="$fixture/runtime"
-export CUSTOMER_PORTAL_ENV_FILE="$fixture/runtime/.env.customer-portal-bff"
+export CUSTOMER_PORTAL_ENV_FILE="$fixture/runtime/.env.tenant-bff"
 export VX_WORKER01_TAILNET_IP=127.0.0.1 VX_WORKER02_TAILNET_IP=127.0.0.2
 
 check() {

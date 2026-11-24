@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import cookieParser from "cookie-parser";
+import { text } from "express";
 import express from "express";
 import { AppModule } from "./app.module";
 import { setupOpenApi } from "@vxture/core-config/openapi";
@@ -22,6 +23,10 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
+  app.use(
+    "/auth/identity-events",
+    text({ type: "application/jwt", limit: "64kb" }),
+  );
   // Portal assets are authenticated and validated by their domain service.
   app.use(
     "/api/tenants/:tenantId/customer-portal/assets",

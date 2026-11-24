@@ -1,0 +1,314 @@
+# Local Prometheus rule behavior; no alerts are sent.
+# @package @vxture/repo
+# @layer Infrastructure
+# @category test
+# @author AI-Generated
+# @date 2026-11-25
+rule_files:
+  - alerts.example.yml
+evaluation_interval: 1m
+tests:
+  - name: No configured collector
+    interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: IdentityCollectorMissing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: Identity collector has no configured scope series
+      - eval_time: 5m
+        alertname: IdentityCollectionFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityInspectionStale
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityBindingOrSchemaNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityPendingTooOld
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeliveryQuarantined
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeadlineSweepDelayed
+        exp_alerts: []
+  - name: Healthy workforce receiver
+    interval: 1m
+    input_series:
+      - &a1
+        series: vxture_identity_scope_expected{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 1+0x6
+      - &a2
+        series: vxture_identity_collection_success{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 1+0x6
+      - &a4
+        series: vxture_identity_inspection_timestamp_seconds{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 0+60x6
+      - &a3
+        series: vxture_identity_database_ready{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 1+0x6
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: IdentityCollectorMissing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityCollectionFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityInspectionStale
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityBindingOrSchemaNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityPendingTooOld
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeliveryQuarantined
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeadlineSweepDelayed
+        exp_alerts: []
+  - name: Stale complete snapshot
+    interval: 1m
+    input_series:
+      - *a1
+      - *a2
+      - series: vxture_identity_inspection_timestamp_seconds{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 0+0x6
+      - *a3
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: IdentityCollectorMissing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityCollectionFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityInspectionStale
+        exp_alerts:
+          - exp_labels:
+              client_id: admin
+              environment: prod
+              realm: workforce
+              release_channel: stable
+              severity: critical
+            exp_annotations:
+              summary: Identity inspection is missing or stale
+      - eval_time: 5m
+        alertname: IdentityBindingOrSchemaNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityPendingTooOld
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeliveryQuarantined
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeadlineSweepDelayed
+        exp_alerts: []
+  - name: Unavailable database does not become zero work
+    interval: 1m
+    input_series:
+      - series: vxture_identity_scope_expected{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 1+0x6
+      - series: vxture_identity_collection_success{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 0+0x6
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: IdentityCollectorMissing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityCollectionFailed
+        exp_alerts:
+          - exp_labels:
+              client_id: admin
+              environment: prod
+              realm: workforce
+              release_channel: stable
+              severity: critical
+            exp_annotations:
+              summary: Identity scope could not be inspected
+      - eval_time: 5m
+        alertname: IdentityInspectionStale
+        exp_alerts:
+          - exp_labels:
+              client_id: admin
+              environment: prod
+              realm: workforce
+              release_channel: stable
+              severity: critical
+            exp_annotations:
+              summary: Identity inspection is missing or stale
+      - eval_time: 5m
+        alertname: IdentityBindingOrSchemaNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityPendingTooOld
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeliveryQuarantined
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeadlineSweepDelayed
+        exp_alerts: []
+  - name: Wrong registration or missing schema
+    interval: 1m
+    input_series:
+      - *a1
+      - *a2
+      - *a4
+      - series: vxture_identity_database_ready{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 0+0x6
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: IdentityCollectorMissing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityCollectionFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityInspectionStale
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityBindingOrSchemaNotReady
+        exp_alerts:
+          - exp_labels:
+              client_id: admin
+              environment: prod
+              realm: workforce
+              release_channel: stable
+              severity: critical
+            exp_annotations:
+              summary: Identity registration, schema or queued work needs attention
+      - eval_time: 5m
+        alertname: IdentityPendingTooOld
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeliveryQuarantined
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeadlineSweepDelayed
+        exp_alerts: []
+  - name: Delivery backlog
+    interval: 1m
+    input_series:
+      - *a1
+      - *a2
+      - *a4
+      - *a3
+      - series: vxture_identity_changes_oldest_pending_seconds{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 61+0x6
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: IdentityCollectorMissing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityCollectionFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityInspectionStale
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityBindingOrSchemaNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityPendingTooOld
+        exp_alerts:
+          - exp_labels:
+              client_id: admin
+              environment: prod
+              realm: workforce
+              release_channel: stable
+              severity: warning
+            exp_annotations:
+              summary: Identity delivery is delayed
+      - eval_time: 5m
+        alertname: IdentityDeliveryQuarantined
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeadlineSweepDelayed
+        exp_alerts: []
+  - name: Quarantine or exhausted retries
+    interval: 1m
+    input_series:
+      - *a1
+      - *a2
+      - *a4
+      - *a3
+      - series: vxture_identity_logout_exhausted{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 1+0x6
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: IdentityCollectorMissing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityCollectionFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityInspectionStale
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityBindingOrSchemaNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityPendingTooOld
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeliveryQuarantined
+        exp_alerts:
+          - exp_labels:
+              client_id: admin
+              environment: prod
+              realm: workforce
+              release_channel: stable
+              severity: critical
+            exp_annotations:
+              summary: Identity delivery requires explicit recovery
+      - eval_time: 5m
+        alertname: IdentityDeadlineSweepDelayed
+        exp_alerts: []
+  - name: Delayed durable time boundary
+    interval: 1m
+    input_series:
+      - *a1
+      - *a2
+      - *a4
+      - *a3
+      - series: vxture_identity_global_oldest_due_seconds{client_id="admin",environment="prod",realm="workforce",release_channel="stable"}
+        values: 91+0x6
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: IdentityCollectorMissing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityCollectionFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityInspectionStale
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityBindingOrSchemaNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityPendingTooOld
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeliveryQuarantined
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IdentityDeadlineSweepDelayed
+        exp_alerts:
+          - exp_labels:
+              client_id: admin
+              environment: prod
+              realm: workforce
+              release_channel: stable
+              severity: warning
+            exp_annotations:
+              summary: A durable identity time boundary is overdue

@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:vxture:identity-event:1:candidate",
+  "$comment": "@package @vxture/repo; @layer Application; @category api-schema; @author AI-Generated; @date 2026-11-24. Candidate only; not a deployed API.",
+  "title": "Identity invalidation event v1 (candidate)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "type",
+    "occurred_at",
+    "issuer",
+    "realm",
+    "environment",
+    "audience",
+    "cursor",
+    "subject",
+    "version"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "enum": [
+        "session.revoked",
+        "session.context_changed",
+        "identity.access_changed"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "issuer": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2048
+    },
+    "realm": {
+      "enum": ["customer", "workforce"]
+    },
+    "environment": {
+      "enum": ["prod", "beta", "dev"]
+    },
+    "audience": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "cursor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,19}$"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sub"],
+      "properties": {
+        "sub": {
+          "$ref": "#/$defs/id"
+        },
+        "sid": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["org_id", "workspace_id", "product_id"],
+      "properties": {
+        "org_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "workspace_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "product_id": {
+          "$ref": "#/$defs/nullableId"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "identity.access_changed"
+          }
+        }
+      },
+      "then": {
+        "required": ["scope"],
+        "properties": {
+          "scope": true,
+          "subject": {
+            "type": "object",
+            "properties": {
+              "sid": false
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "scope": false,
+          "subject": {
+            "type": "object",
+            "required": ["sid"],
+            "properties": {
+              "sid": {
+                "$ref": "#/$defs/id"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "nullableId": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/id"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

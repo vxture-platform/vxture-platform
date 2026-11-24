@@ -9,11 +9,15 @@ export const RP_REDIS = Symbol("RP_REDIS");
 export const RP_OIDC_CLIENT = Symbol("RP_OIDC_CLIENT");
 export const RP_SESSION_STORE = Symbol("RP_SESSION_STORE");
 export const RP_AUTH_SERVICE = Symbol("RP_AUTH_SERVICE");
+export const RP_SESSION_EVENTS = Symbol("RP_SESSION_EVENTS");
+export const RP_RECOVERY = Symbol("RP_RECOVERY");
+export const RP_CHANGES = Symbol("RP_CHANGES");
+export const RP_EVENT_VERIFIER = Symbol("RP_EVENT_VERIFIER");
 
-/** Runtime knobs derived from config/env for the RP routes + middleware. */
+/** Runtime knobs derived from config/env for the RP routes + (future) middleware. */
 export interface RpRuntime {
   config: OidcRpConfig;
-  /** RP is always on (the OIDC_RP_ENABLED gray-rollout gate was retired, D-BD) */
+  /** gray-rollout flag; gates the dual-read in AuthMiddleware (follow-up slice) */
   enabled: boolean;
   /** allowlist of origins accepted as post-login returnTo */
   allowedReturnOrigins: string[];
@@ -24,4 +28,6 @@ export interface RpRuntime {
   cookieSecure: boolean;
   /** Redis key prefix (matches the session store) */
   keyPrefix: string;
+  /** Explicit rollout approval after complete fact/delivery/proxy acceptance. */
+  sessionPollingRetirement?: boolean;
 }

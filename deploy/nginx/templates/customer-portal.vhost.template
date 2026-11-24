@@ -32,15 +32,33 @@ server {
     client_max_body_size 16k;
     resolver 127.0.0.11 valid=10s ipv6=off;
     set $customer_portal_frontend vx-customer-portal-frontend:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Connection '';
+
+    # Preserve the Next.js host-bound proxy and allow the 25-second heartbeat.
+    location = /auth/events {
+        proxy_pass http://$customer_portal_frontend;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 75s;
+        proxy_send_timeout 75s;
+    }
+
+    location = /auth/identity-events {
+        client_max_body_size 64k;
+        proxy_pass http://$customer_portal_frontend;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 20s;
+    }
 
     location / {
         proxy_pass http://$customer_portal_frontend;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header Connection '';
         proxy_connect_timeout 3s;
         proxy_read_timeout 20s;
     }

@@ -7,6 +7,7 @@
  * @date 2026-10-19
  */
 import "reflect-metadata";
+import { sessionTestEval } from "./rp-session-test-eval";
 import { Module, type INestApplication } from "@nestjs/common";
 import { APP_GUARD, NestFactory } from "@nestjs/core";
 import { VxConfigService } from "@vxture/core-config";
@@ -17,7 +18,6 @@ import {
   rpSessionCookieName,
   type OidcRpClient,
   type RpRedis,
-  type RpSession,
 } from "@vxture/core-oidc-rp";
 import cookieParser from "cookie-parser";
 import { createServer, type Server } from "node:http";
@@ -52,27 +52,7 @@ const WORKSPACE = "22222222-2222-4222-8222-222222222222";
 const OTHER = "33333333-3333-4333-8333-333333333333";
 const values = new Map<string, string>();
 const redis = {
-  async eval(_script: string, _count: number, ...args: (string | number)[]) {
-    if (_script.includes("destroy-unchanged-session")) {
-      const [key, , raw] = args.map(String);
-      if (values.get(key!) !== raw) return 0;
-      values.delete(key!);
-      return 1;
-    }
-    const [key, , raw, , , expected] = args.map(String);
-    const existing = values.get(key!);
-    if (!existing) return 0;
-    const current = JSON.parse(existing) as RpSession;
-    const next = JSON.parse(raw!) as RpSession;
-    if (
-      current.sid !== next.sid ||
-      current.sub !== next.sub ||
-      (expected && current.refreshToken !== expected)
-    )
-      return 0;
-    values.set(key!, raw!);
-    return 1;
-  },
+  eval: sessionTestEval(values),
   get: async (key: string) => values.get(key) ?? null,
   setex: async (key: string, _ttl: number, value: string) => {
     values.set(key, value);
@@ -276,10 +256,14 @@ describe("Runos session catalog HTTP", () => {
     expect(response.status).toBe(200);
     expect(exchange.getToken).toHaveBeenCalledWith(OTHER, "runos", TENANT);
   });
-  it.each(["none", "expired"])(
-    "rejects %s session before contacting Runos",
-    async (id) => {
-      expect((await read("", { "X-Vxture-Session": id })).status).toBe(401);
+  it.each([
+    ["none", 401],
+    ["expired", 503],
+  ] as const)(
+    "rejects %s session before contacting Runos with status %s",
+    async (id, status) => {
+      expect((await read("", { "X-Vxture-Session": id })).status).toBe(status);
+      if (id === "expired") expect(await store.get(id)).not.toBeNull();
       expect(received).toEqual([]);
     },
   );

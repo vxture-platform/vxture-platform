@@ -33,13 +33,16 @@ export class OperatorUnauthenticatedError extends AccountSessionError {
 }
 
 /** Read the authenticated operator's own account. 401 → OperatorUnauthenticatedError. */
-export async function fetchOperatorSelf(): Promise<OperatorSelf> {
+export async function fetchOperatorSelf(
+  signal?: AbortSignal,
+): Promise<OperatorSelf> {
   let res: Response;
   try {
     res = await accountsFetch(`${OIDC_API_BASE}/oidc/operator/self`, {
       method: "GET",
       credentials: "include",
       cache: "no-store",
+      ...(signal ? { signal } : {}),
     });
   } catch {
     throw new Error(apiMessage("error_36"));

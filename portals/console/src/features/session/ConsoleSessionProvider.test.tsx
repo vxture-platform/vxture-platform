@@ -1,6 +1,6 @@
 /**
  * @vitest-environment jsdom
- * Keep passive Console checks separate from aggregated session projections.
+ * Keep compatibility reads bounded and preserve event-driven logout fencing.
  * @package @vxture/console
  * @layer Presentation
  * @category test
@@ -10,15 +10,15 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ probe: vi.fn(), restore: vi.fn() }));
+const mocks = vi.hoisted(() => ({ restore: vi.fn(), events: vi.fn() }));
 vi.mock("@/api/console-bff", () => ({
-  hasActiveSession: mocks.probe,
   restoreSession: mocks.restore,
   buildRpLoginUrl: () => "/login",
   buildLogoutUrl: () => "/logout",
   buildTenantSwitchUrl: () => "/tenant",
   buildWorkspaceSwitchUrl: () => "/workspace",
 }));
+vi.mock("./session-events", () => ({ startSessionEvents: mocks.events }));
 vi.mock("@vxture/core-identity-sdk", () => ({
   IDLE_MS: { customer: 1000000 },
   startIdleWatcher: () => () => {},
@@ -35,6 +35,16 @@ const ready = {
   tenantOptions: [],
   capabilities: [],
 } as unknown as SessionSnapshot;
+const anonymous: SessionSnapshot = {
+  isAuthenticated: false,
+  user: null,
+  tenant: null,
+  tenantOptions: [],
+  capabilities: [],
+};
+// ============================================================================
+// Real React lifecycle with controllable event transport and snapshot requests.
+// ============================================================================
 let root: Root;
 let host: HTMLDivElement;
 function Consumer() {
@@ -48,7 +58,7 @@ function Consumer() {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  mocks.probe.mockReset().mockResolvedValue(true);
+  mocks.events.mockReset().mockReturnValue(() => {});
   mocks.restore.mockReset().mockResolvedValue(ready);
   Object.defineProperty(document, "visibilityState", {
     configurable: true,
@@ -72,64 +82,66 @@ async function mount() {
     ),
   );
   mocks.restore.mockClear();
-  mocks.probe.mockClear();
 }
-it("uses one passive check without four projection reads every 15 seconds", async () => {
+it("uses bounded compatibility reads only while events are unavailable", async () => {
   await mount();
   await act(async () => vi.advanceTimersByTimeAsync(15000));
-  expect(mocks.probe).toHaveBeenCalledTimes(1);
+  expect(mocks.restore).not.toHaveBeenCalled();
+  await act(async () => vi.advanceTimersByTimeAsync(285000));
+  expect(mocks.restore).toHaveBeenCalledTimes(1);
+  const mode = mocks.events.mock.calls[0]![1] as (active: boolean) => void;
+  await act(async () => mode(true));
+  mocks.restore.mockClear();
+  await act(async () => vi.advanceTimersByTimeAsync(600000));
+  await act(async () => window.dispatchEvent(new Event("focus")));
   expect(mocks.restore).not.toHaveBeenCalled();
 });
-it("pauses both full and passive checks in hidden tabs", async () => {
+it("pauses compatibility reads in hidden tabs", async () => {
   await mount();
   Object.defineProperty(document, "visibilityState", {
     configurable: true,
     value: "hidden",
   });
   await act(async () => vi.advanceTimersByTimeAsync(300000));
-  expect(mocks.probe).not.toHaveBeenCalled();
   expect(mocks.restore).not.toHaveBeenCalled();
 });
 it("removes the authenticated shell on confirmed denial and stops anonymous polling", async () => {
   await mount();
-  mocks.probe.mockResolvedValue(false);
-  await act(async () => vi.advanceTimersByTimeAsync(45000));
+  mocks.restore.mockResolvedValue(anonymous);
+  await act(async () => vi.advanceTimersByTimeAsync(300000));
   expect(host.textContent).toBe("Anonymous");
-  expect(mocks.probe).toHaveBeenCalledTimes(1);
+  await act(async () => vi.advanceTimersByTimeAsync(600000));
+  expect(mocks.restore).toHaveBeenCalledTimes(1);
 });
-it("does not log out during an outage or overlap passive checks", async () => {
+it("does not log out during an outage or overlap compatibility reads", async () => {
   await mount();
-  let finish!: (value: null) => void;
-  mocks.probe.mockImplementationOnce(
+  let fail!: (error: Error) => void;
+  mocks.restore.mockImplementationOnce(
     () =>
-      new Promise<null>((resolve) => {
-        finish = resolve;
+      new Promise<SessionSnapshot>((_resolve, reject) => {
+        fail = reject;
       }),
   );
-  await act(async () => vi.advanceTimersByTimeAsync(45000));
-  expect(mocks.probe).toHaveBeenCalledTimes(1);
-  await act(async () => finish(null));
+  await act(async () => vi.advanceTimersByTimeAsync(900000));
+  expect(mocks.restore).toHaveBeenCalledTimes(1);
+  await act(async () => fail(new Error("unavailable")));
   expect(host.textContent).toBe("Authenticated");
 });
 it("fences an older projection response after confirmed logout", async () => {
   await mount();
-  let deny!: (value: boolean) => void;
   let finish!: (value: SessionSnapshot) => void;
-  mocks.probe.mockImplementationOnce(
-    () =>
-      new Promise<boolean>((resolve) => {
-        deny = resolve;
-      }),
-  );
-  await act(async () => vi.advanceTimersByTimeAsync(15000));
   mocks.restore.mockImplementationOnce(
     () =>
       new Promise<SessionSnapshot>((resolve) => {
         finish = resolve;
       }),
   );
-  await act(async () => window.dispatchEvent(new Event("focus")));
-  await act(async () => deny(false));
+  await act(async () => vi.advanceTimersByTimeAsync(300000));
+  mocks.restore.mockResolvedValueOnce(anonymous);
+  const reconcile = mocks.events.mock.calls[0]![0] as () => Promise<string>;
+  await act(async () => {
+    await reconcile();
+  });
   await act(async () => finish(ready));
   expect(host.textContent).toBe("Anonymous");
 });

@@ -6,6 +6,7 @@
 # @author AI-Generated
 # @date 2026-11-20
 # Preview: bash scripts/28d-apply-migrations.sh --plan
+# Optional inclusive bounds: MIGRATE_FROM and MIGRATE_UNTIL (unique prefixes).
 # Apply requires CONFIRM_MIGRATE=yes, MIGRATE_PLAN_SHA256 and the evidence
 # validated by lib/migration-plan.sh. No service stop, restore or restamp occurs.
 set -euo pipefail

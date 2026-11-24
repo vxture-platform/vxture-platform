@@ -613,10 +613,54 @@ export class OidcService {
      * 自称 website 也只能回 website 登记过的地址。
      */
     initiatingClientId?: string,
+    resolvedRealm?: IdentityRealm,
   ): Promise<string | null> {
     let clientIds: string[] = initiatingClientId ? [initiatingClientId] : [];
     for (const sid of sids) {
       if (!sid) continue;
+      const customer =
+        resolvedRealm === "workforce"
+          ? null
+          : await this.durableSession.customerOwner(sid);
+      if (customer) {
+        const durableClients = await this.durableSession.getClients(sid);
+        await this.durableSession.revoke(sid);
+        clientIds = [...new Set([...clientIds, ...durableClients])];
+        // Revocation and its delivery tasks have committed; Redis is now a cache.
+        await this.token
+          .revokeSession(sid)
+          .catch(() => this.logger.error("Customer refresh cleanup pending"));
+        await this.redis
+          .deleteOidcSession(sid)
+          .catch(() => this.logger.error("Customer cache cleanup pending"));
+        continue;
+      }
+      if (
+        process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true" &&
+        resolvedRealm !== "customer"
+      ) {
+        const owner = await this.durableSession.workforceOwner(sid);
+        if (owner) {
+          const recipients = await this.durableSession.getClients(
+            sid,
+            "workforce",
+          );
+          await this.durableSession.revoke(sid, "workforce");
+          clientIds = [...new Set([...clientIds, ...recipients])];
+          await this.token
+            .revokeSession(sid)
+            .catch(() =>
+              this.logger.error("Workforce refresh cleanup pending"),
+            );
+          await this.redis
+            .deleteOidcSession(sid)
+            .catch(() => this.logger.error("Workforce cache cleanup pending"));
+          continue;
+        }
+      }
+      const legacy = await this.redis.getOidcSession(sid);
+      if (resolvedRealm && legacy && legacy.realm !== resolvedRealm) continue;
+      if (resolvedRealm === "workforce" && !legacy) continue;
       const work = await this.redis.beginOidcLogout(sid);
       /* 回跳白名单要对着**所有**被结束会话的 client 校验：从 opera 登出时，
          允许回跳的是 opera 登记的地址，而它可能只挂在其中一个会话上。 */
@@ -781,13 +825,18 @@ export class OidcService {
     userId: string,
     sid: string,
   ): Promise<string[]> {
+    const owner = await this.durableSession.customerOwner(sid);
+    if (owner && owner !== userId)
+      throw new BadRequestException("customer_session_owner_mismatch");
     const cached = await this.redis.getOidcSession(sid);
     if (
       cached &&
       (cached.realm !== "customer" || cached.sub !== `usr_${userId}`)
     )
       throw new BadRequestException("customer_session_owner_mismatch");
-    return this.redis.getOidcSessionClients(sid);
+    const durable = await this.durableSession.getClients(sid);
+    const cachedClients = await this.redis.getOidcSessionClients(sid);
+    return [...new Set([...durable, ...cachedClients])];
   }
 
   /** Retry an exact customer logout target; persisted recipients survive cache loss. */
@@ -856,13 +905,27 @@ export class OidcService {
    */
   async endOperatorSessions(operatorId: string): Promise<number> {
     const sub = `opr_${operatorId}`;
+    // Commit authority and durable recipients before touching fallible caches.
+    const durable =
+      process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true"
+        ? await this.durableSession.revokeOperatorSessions(operatorId)
+        : [];
     const sessions = (await this.redis.listOperatorSessions()).filter(
       (session) => session.sub === sub,
     );
-    for (const session of sessions) {
-      await this.endSession([session.sid]);
+    const sids = [
+      ...new Set([...durable, ...sessions.map((session) => session.sid)]),
+    ];
+    for (const sid of sids) {
+      await this.endSession(
+        [sid],
+        undefined,
+        undefined,
+        undefined,
+        "workforce",
+      );
     }
-    return sessions.length;
+    return sids.length;
   }
 
   private async sendBackChannelLogouts(
@@ -969,7 +1032,7 @@ export class OidcService {
     }
     if (
       session?.realm === "workforce" &&
-      !(await this.workforceSessionCurrent(session))
+      !(await this.workforceSessionCurrent(session, sid))
     )
       session = null;
     /*
@@ -1077,7 +1140,10 @@ export class OidcService {
     workspaceHint?: string,
   ): Promise<void> {
     if (realm !== "customer" || !activeOrg) return;
-    const stored = await this.redis.getOidcActiveWorkspace(sid, clientId);
+    const durableContext = await this.durableSession.getContext(sid);
+    const stored = durableContext
+      ? durableContext.workspaceId
+      : await this.redis.getOidcActiveWorkspace(sid, clientId);
     const hint = workspaceHint ?? stored ?? undefined;
     const ctx = await this.activeContext.resolveActiveContext(
       userId,
@@ -1089,10 +1155,9 @@ export class OidcService {
       await this.redis.setOidcActiveWorkspace(sid, clientId, chosen);
     }
     if (ctx?.activeOrg) {
-      await this.redis.setOidcActiveContext(sid, {
-        orgId: ctx.activeOrg,
-        workspaceId: chosen,
-      });
+      const context = { orgId: ctx.activeOrg, workspaceId: chosen };
+      await this.durableSession.setContext(sid, context);
+      await this.redis.setOidcActiveContext(sid, context);
     }
   }
 
@@ -1109,7 +1174,10 @@ export class OidcService {
   ): Promise<string | null> {
     if (realm !== "customer") return null;
     const userId = stripSubPrefix(sub);
-    const stored = await this.redis.getOidcActiveOrg(sid, clientId);
+    const durableContext = await this.durableSession.getContext(sid);
+    const stored =
+      durableContext?.orgId ??
+      (await this.redis.getOidcActiveOrg(sid, clientId));
     const hint = orgHint ?? stored ?? undefined;
     const ctx = await this.activeContext.resolveActiveContext(userId, hint);
     const chosen = ctx?.activeOrg ?? null;
@@ -1137,6 +1205,18 @@ export class OidcService {
       !realmSubjectMatches(input.realm, input.sub)
     ) {
       throw new BadRequestException("invalid_grant");
+    }
+    if (
+      input.realm === "customer" ||
+      (process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true" &&
+        input.realm === "workforce")
+    ) {
+      await this.durableSession.bindClient(
+        input.sid,
+        stripSubPrefix(input.sub),
+        input.client.clientId,
+        input.realm as "customer" | "workforce",
+      );
     }
     const code = randomUUID();
     await this.redis.storeOidcAuthCode(
@@ -1534,7 +1614,7 @@ export class OidcService {
 
     if (
       session.realm === "workforce" &&
-      !(await this.workforceSessionCurrent(session))
+      !(await this.workforceSessionCurrent(session, sid))
     )
       return null;
     const client = await this.loginClient(peeked.clientId);
@@ -1691,111 +1771,121 @@ export class OidcService {
     // IdP 侧只剩总时效一个钟；在场判断在门户（见 identity-sdk/idle.ts）。
     const absTtl = this.config.auth.OIDC_SESSION_ABS_TTL;
     const sid = randomUUID();
-    await this.redis.createOidcSession(
+    // Durable authority must commit before any cookie or code can escape.
+    await this.durableSession.create({
       sid,
-      {
-        sub: `usr_${userId}`,
-        realm: "customer",
-        authMethod,
-        amr: authMethodToAmr(authMethod),
-        createdAt: now,
-        lastActiveAt: now,
-        absExpiresAt: now + absTtl,
-      },
-      absTtl,
-    );
-    if (activeOrg) {
-      await this.redis.setOidcActiveOrg(sid, client.clientId, activeOrg);
-      /* 交互式登录也走同一条:提示是跨过登录页从挑战里带过来的
-         (例如「切工作空间」时会话过期,登录完要回到那个工作空间,而不是默认)。 */
-      await this.rememberActiveWorkspace(
-        sid,
-        client.clientId,
-        userId,
-        client.realm,
-        activeOrg,
-        challenge.workspaceHint,
-      );
-    }
-    // 持久镜像(session.auth_sessions,同 sid):console「活跃会话」按它列设备、
-    // 「下线」翻它的 status,刷新 / 静默 SSO 再回查。镜像失败不挡登录——Redis 才是主。
+      userId,
+      realm: "customer",
+      authMethod,
+      ip: meta?.ipAddress ?? null,
+      userAgent: meta?.userAgent ?? null,
+      absTtlSeconds: absTtl,
+      expiresAt: new Date((now + absTtl) * 1000),
+    });
     try {
-      await this.durableSession.create({
+      await this.redis.createOidcSession(
         sid,
-        userId,
-        realm: "customer",
-        authMethod,
-        ip: meta?.ipAddress ?? null,
-        userAgent: meta?.userAgent ?? null,
-        absTtlSeconds: absTtl,
-      });
-    } catch (err) {
-      this.logger.warn(
-        `durable session mirror failed for ${sid}: ${String(err)}`,
+        {
+          sub: `usr_${userId}`,
+          realm: "customer",
+          authMethod,
+          amr: authMethodToAmr(authMethod),
+          createdAt: now,
+          lastActiveAt: now,
+          absExpiresAt: now + absTtl,
+        },
+        absTtl,
       );
-    }
+      if (activeOrg) {
+        await this.redis.setOidcActiveOrg(sid, client.clientId, activeOrg);
+        /* 交互式登录也走同一条:提示是跨过登录页从挑战里带过来的
+         (例如「切工作空间」时会话过期,登录完要回到那个工作空间,而不是默认)。 */
+        await this.rememberActiveWorkspace(
+          sid,
+          client.clientId,
+          userId,
+          client.realm,
+          activeOrg,
+          challenge.workspaceHint,
+        );
+      }
 
-    /*
-     * 注册补齐未完成：会话照建（补齐页要靠它认身份），但**码留到补齐完成再发**。
-     * 授权码 TTL 只有 300 秒，人填三项资料很容易填过头，先发码等于让他填完却登不进去。
-     *
-     * 判断放在这条**共用尾巴**里，而不是放在各个调用方：建号的入口不止手机验证码
-     * 一处（社交登录的 social-auth.service 也会 createUser，走的是
-     * completeLoginWithUser 这条），把判断留给调用方 = 每加一个登录入口就要有人
-     * 记得补一次，漏了不会报错、只会又出现一个"注册完就回应用"的洞。
-     *
-     * 对存量账号无影响：迁移已把 profile_completed_at 回填成 created_at。
-     * 顺带覆盖"补齐填到一半退出、下次换个入口再登录"——判据是库里的事实，
-     * 不是本次是不是新建的。
-     */
-    if (!(await this.account.isProfileCompleted(userId))) {
-      await this.redis.storePendingProfileCompletion(sid, {
-        clientId: client.clientId,
+      /*
+       * 注册补齐未完成：会话照建（补齐页要靠它认身份），但**码留到补齐完成再发**。
+       * 授权码 TTL 只有 300 秒，人填三项资料很容易填过头，先发码等于让他填完却登不进去。
+       *
+       * 判断放在这条**共用尾巴**里，而不是放在各个调用方：建号的入口不止手机验证码
+       * 一处（社交登录的 social-auth.service 也会 createUser，走的是
+       * completeLoginWithUser 这条），把判断留给调用方 = 每加一个登录入口就要有人
+       * 记得补一次，漏了不会报错、只会又出现一个"注册完就回应用"的洞。
+       *
+       * 对存量账号无影响：迁移已把 profile_completed_at 回填成 created_at。
+       * 顺带覆盖"补齐填到一半退出、下次换个入口再登录"——判据是库里的事实，
+       * 不是本次是不是新建的。
+       */
+      if (!(await this.account.isProfileCompleted(userId))) {
+        await this.redis.storePendingProfileCompletion(sid, {
+          clientId: client.clientId,
+          redirectUri: challenge.redirectUri,
+          scope: challenge.scope,
+          state: challenge.state,
+          codeChallenge: challenge.codeChallenge,
+          nonce: challenge.nonce,
+          sub: `usr_${userId}`,
+          activeOrg,
+        });
+        return {
+          sid,
+          realm: "customer",
+          sessionMaxAge: absTtl,
+          redirectTo: this.onboardingUrl(),
+        };
+      }
+
+      if (client.clientId === "accounts-self:customer")
+        return {
+          sid,
+          realm: "customer",
+          sessionMaxAge: absTtl,
+          redirectTo: "/account",
+        };
+
+      const code = await this.issueAuthCode({
+        client,
+        sub: `usr_${userId}`,
+        sid,
+        realm: "customer",
         redirectUri: challenge.redirectUri,
         scope: challenge.scope,
-        state: challenge.state,
         codeChallenge: challenge.codeChallenge,
         nonce: challenge.nonce,
-        sub: `usr_${userId}`,
         activeOrg,
       });
+
       return {
         sid,
         realm: "customer",
         sessionMaxAge: absTtl,
-        redirectTo: this.onboardingUrl(),
+        redirectTo: this.appendParams(challenge.redirectUri, {
+          code,
+          ...(challenge.state ? { state: challenge.state } : {}),
+        }),
       };
+    } catch (error) {
+      // Fail closed even if cache setup, onboarding or code persistence failed.
+      // A failed compensation never turns an unsuccessful login into success.
+      await this.durableSession
+        .revoke(sid)
+        .catch(() =>
+          this.logger.error("Customer login rollback needs recovery"),
+        );
+      await this.redis
+        .deleteOidcSession(sid)
+        .catch(() =>
+          this.logger.error("Customer login cache cleanup needs recovery"),
+        );
+      throw error;
     }
-
-    if (client.clientId === "accounts-self:customer")
-      return {
-        sid,
-        realm: "customer",
-        sessionMaxAge: absTtl,
-        redirectTo: "/account",
-      };
-
-    const code = await this.issueAuthCode({
-      client,
-      sub: `usr_${userId}`,
-      sid,
-      realm: "customer",
-      redirectUri: challenge.redirectUri,
-      scope: challenge.scope,
-      codeChallenge: challenge.codeChallenge,
-      nonce: challenge.nonce,
-      activeOrg,
-    });
-
-    return {
-      sid,
-      realm: "customer",
-      sessionMaxAge: absTtl,
-      redirectTo: this.appendParams(challenge.redirectUri, {
-        code,
-        ...(challenge.state ? { state: challenge.state } : {}),
-      }),
-    };
   }
 
   /**
@@ -2613,51 +2703,78 @@ export class OidcService {
     const sid = randomUUID();
     const sub = `opr_${operator.id}`;
     const amr = authMethodToAmr(authMethod);
-    await this.redis.createOidcSession(
-      sid,
-      {
-        sub,
-        realm: "workforce",
-        authenticationVersion: fresh.authenticationVersion,
-        authMethod,
-        amr,
-        createdAt: now,
-        lastActiveAt: now,
-        absExpiresAt: now + absTtl,
-      },
-      absTtl,
-    );
+    try {
+      if (process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true") {
+        await this.durableSession.create({
+          sid,
+          userId: operator.id,
+          realm: "workforce",
+          authMethod,
+          expiresAt: new Date((now + absTtl) * 1000),
+          absTtlSeconds: absTtl,
+        });
+        const committed = await this.operators.findById(operator.id);
+        if (committed?.authenticationVersion !== fresh.authenticationVersion) {
+          await this.durableSession.revoke(sid, "workforce");
+          throw new BadRequestException("mfa_session_expired");
+        }
+      }
+      await this.redis.createOidcSession(
+        sid,
+        {
+          sub,
+          realm: "workforce",
+          authenticationVersion: fresh.authenticationVersion,
+          authMethod,
+          amr,
+          createdAt: now,
+          lastActiveAt: now,
+          absExpiresAt: now + absTtl,
+        },
+        absTtl,
+      );
 
-    if (client.clientId === "accounts-self:workforce")
+      if (client.clientId === "accounts-self:workforce")
+        return {
+          sid,
+          realm: "workforce",
+          sessionMaxAge: absTtl,
+          redirectTo: "/workforce/account",
+        };
+
+      const code = await this.issueAuthCode({
+        client,
+        sub,
+        sid,
+        realm: "workforce",
+        redirectUri: snap.redirectUri,
+        scope: snap.scope,
+        codeChallenge: snap.codeChallenge,
+        nonce: snap.nonce,
+        activeOrg: null,
+        amr,
+      });
+
       return {
         sid,
         realm: "workforce",
         sessionMaxAge: absTtl,
-        redirectTo: "/workforce/account",
+        redirectTo: this.appendParams(snap.redirectUri, {
+          code,
+          ...(snap.state ? { state: snap.state } : {}),
+        }),
       };
-
-    const code = await this.issueAuthCode({
-      client,
-      sub,
-      sid,
-      realm: "workforce",
-      redirectUri: snap.redirectUri,
-      scope: snap.scope,
-      codeChallenge: snap.codeChallenge,
-      nonce: snap.nonce,
-      activeOrg: null,
-      amr,
-    });
-
-    return {
-      sid,
-      realm: "workforce",
-      sessionMaxAge: absTtl,
-      redirectTo: this.appendParams(snap.redirectUri, {
-        code,
-        ...(snap.state ? { state: snap.state } : {}),
-      }),
-    };
+    } catch (error) {
+      if (process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true") {
+        await this.durableSession
+          .revoke(sid, "workforce")
+          .catch(() => this.logger.error("Workforce session cleanup pending"));
+        await this.redis
+          .deleteOidcSession(sid)
+          .catch(() => this.logger.error("Workforce cache cleanup pending"));
+      }
+      throw error;
+    }
   }
 
   /**
@@ -3063,9 +3180,29 @@ export class OidcService {
       throw sessionStatusUnavailable();
     }
     try {
+      if (client.realm === "customer") {
+        const durable = await this.durableSession.get(request.sid);
+        const cached = await this.redis.getOidcSession(request.sid);
+        if (
+          !durable ||
+          durable.realm !== "customer" ||
+          !cached ||
+          cached.realm !== "customer" ||
+          cached.sub !== `usr_${durable.userId}`
+        )
+          return { valid: false };
+      }
       if (client.realm === "workforce") {
+        if (process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true") {
+          const durable = await this.durableSession.get(request.sid);
+          if (!durable || durable.realm !== "workforce")
+            return { valid: false };
+        }
         const session = await this.redis.getOidcSession(request.sid);
-        if (!session || !(await this.workforceSessionCurrent(session)))
+        if (
+          !session ||
+          !(await this.workforceSessionCurrent(session, request.sid))
+        )
           return { valid: false };
       }
       return await this.redis.checkOidcSessionStatus(
@@ -3113,7 +3250,17 @@ export class OidcService {
 
   private async workforceSessionCurrent(
     session: OidcCentralSession,
+    sid?: string,
   ): Promise<boolean> {
+    if (process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true") {
+      const durable = sid ? await this.durableSession.get(sid) : null;
+      if (
+        !durable ||
+        durable.realm !== "workforce" ||
+        session.sub !== `opr_${durable.userId}`
+      )
+        return false;
+    }
     if (
       session.realm !== "workforce" ||
       !realmSubjectMatches("workforce", session.sub)
@@ -3179,7 +3326,16 @@ export class OidcService {
     }
     const userId = stripSubPrefix(binding.sub);
     if (binding.realm === "workforce") {
-      if (!(await this.workforceSessionCurrent(session))) {
+      if (process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true") {
+        const durable = await this.durableSession.get(binding.sid);
+        if (
+          !durable ||
+          durable.realm !== "workforce" ||
+          durable.userId !== userId
+        )
+          throw new BadRequestException("invalid_grant");
+      }
+      if (!(await this.workforceSessionCurrent(session, binding.sid))) {
         throw new BadRequestException("invalid_grant");
       }
     } else {
@@ -3231,6 +3387,16 @@ export class OidcService {
     }
 
     await this.requireTokenSession(client, payload);
+    if (
+      payload.realm === "customer" ||
+      process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true"
+    )
+      await this.durableSession.bindClient(
+        payload.sid,
+        stripSubPrefix(payload.sub),
+        client.clientId,
+        payload.realm === "workforce" ? "workforce" : "customer",
+      );
 
     const { accessToken, idToken } = await this.issueAccessAndId({
       client,
@@ -3297,6 +3463,16 @@ export class OidcService {
       sub: `${client.realm === "workforce" ? "opr_" : "usr_"}${presented.userId}`,
       realm: client.realm,
     });
+    if (
+      client.realm === "customer" ||
+      process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true"
+    )
+      await this.durableSession.bindClient(
+        presented.sessionId,
+        presented.userId,
+        client.clientId,
+        client.realm === "workforce" ? "workforce" : "customer",
+      );
 
     // Invalid authority must not consume a refresh token or issue a successor.
     let rotated;
@@ -3412,7 +3588,9 @@ export class OidcService {
     } else {
       // An authorization code may predate a context switch in another tab. Read
       // the current tenant as well as workspace when minting either grant type.
-      const current = await this.redis.getOidcActiveContext(sid);
+      const current =
+        (await this.durableSession.getContext(sid)) ??
+        (await this.redis.getOidcActiveContext(sid));
       const currentOrg = current?.orgId ?? input.activeOrg;
       const workspaceHint = current
         ? current.workspaceId

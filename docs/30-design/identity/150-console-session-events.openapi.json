@@ -1,0 +1,354 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Platform RP and Accounts identity session events",
+    "version": "0.7.0-local",
+    "description": "Local opt-in logout and changes-v1 invalidation stream. All events trigger a current-Cookie view read. No page replay cursor. Explicit events-v1 negotiation plus successful reconciliation suspends legacy polling only while the stream is healthy."
+  },
+  "x-source": {
+    "package": "@vxture/bff-console",
+    "layer": "Application",
+    "category": "api-contract",
+    "author": "AI-Generated",
+    "date": "2026-11-24"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "The configured same-origin platform surface"
+    }
+  ],
+  "paths": {
+    "/auth/events": {
+      "get": {
+        "operationId": "platformSessionEvents",
+        "summary": "Subscribe to current-session logout, context and authorization invalidation",
+        "description": "Requires RP_SESSION_EVENTS_ENABLED and durable logout recovery. No query parameters are accepted. Origin, if provided, must match the configured RP origin. Sec-Fetch-Site, if provided, must be same-origin or none. Each connection authenticates again and subscribes before its final session reads. NOTIFY only triggers a durable state recheck; it is never a logout fact. The stream closes on transport loss, slow-reader backpressure or the earlier of the existing Redis expiry and recovered central absolute expiry. No stream operation extends the session lifetime. Missing Origin/Fetch Metadata is permitted for non-browser clients but never replaces Cookie authentication. Error response bodies are not a stable event contract; branch on the HTTP status. With RP_IDENTITY_CHANGES_ENABLED, context-changed and access-changed are emitted only after reading a changed durable version; changes for other subjects are excluded. Notifications never supply permissions or replacement contexts. Console, Website, Admin, Opera, Arche and Workbench use their configured RP cookie. Customer Portal uses __Host-vx_customer_portal_session and retains the exact published hostname and tenant/workspace binding. Workforce emits access changes and logout only. Notifications never replace a pinned portal context.",
+        "security": [
+          {
+            "consoleSessionCookie": []
+          },
+          {
+            "customerPortalCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "description": "Accepted only up to 512 characters and ignored by logout-v1. No event id is emitted. Reconnects always authenticate and reread state; there is no page event replay.",
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated SSE stream. connected is sent first; revoked or expired is followed by close. Every recognized event triggers a current-Cookie session read, never a direct identity mutation.",
+            "headers": {
+              "X-Vxture-Session-Sync": {
+                "description": "Optional. Present only with explicit RP_SESSION_POLLING_RETIREMENT_ENABLED and complete changes/recovery/SSE wiring. Client must also successfully reconcile the connected event before suppressing periodic/focus/visibility reads. Disconnect, invalid frames, missing heartbeats or unavailable view restore legacy fallback. Absence never authorizes polling retirement.",
+                "schema": {
+                  "type": "string",
+                  "const": "events-v1"
+                }
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "X-Accel-Buffering": {
+                "schema": {
+                  "type": "string",
+                  "const": "no"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "examples": {
+                  "connected": {
+                    "value": "event: resync-required\ndata: {\"reason\":\"connected\"}\n\n"
+                  },
+                  "revoked": {
+                    "value": "event: session-ended\ndata: {\"reason\":\"revoked\"}\n\n"
+                  },
+                  "expired": {
+                    "value": "event: resync-required\ndata: {\"reason\":\"expired\"}\n\n"
+                  },
+                  "heartbeat": {
+                    "value": ": keepalive\n\n"
+                  },
+                  "context": {
+                    "value": "event: context-changed\ndata: {\"reason\":\"context-changed\"}\n\n"
+                  },
+                  "access": {
+                    "value": "event: access-changed\ndata: {\"reason\":\"access-changed\"}\n\n"
+                  }
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "Optional stream disabled. No Cookie authentication is performed after the origin/parameter checks. Stop the optional stream without clearing identity.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            }
+          },
+          "400": {
+            "description": "Query parameters or an oversized Last-Event-ID. Stop the optional stream without clearing identity.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session for this connection. Recheck /auth/session with the current Cookie; clear identity only after a confirmed anonymous result.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            }
+          },
+          "403": {
+            "description": "Origin or Sec-Fetch-Site rejected. Stop the optional stream without clearing identity.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            }
+          },
+          "429": {
+            "description": "Connection budget exceeded (5000 per process or 32 per sid). Retry with bounded backoff.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Retry-After": {
+                "schema": {
+                  "type": "string",
+                  "const": "5"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Listener, Redis, durable state or authentication recovery unavailable. Preserve identity display and reconnect with backoff. Protected requests remain independently authenticated.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            }
+          }
+        },
+        "x-sse-events": {
+          "resync-required": {
+            "dataSchema": {
+              "$ref": "#/components/schemas/ResyncData"
+            }
+          },
+          "session-ended": {
+            "dataSchema": {
+              "$ref": "#/components/schemas/EndedData"
+            }
+          },
+          "context-changed": {
+            "dataSchema": {
+              "$ref": "#/components/schemas/ContextData"
+            },
+            "description": "Durable version changed; reread the current Cookie session."
+          },
+          "access-changed": {
+            "dataSchema": {
+              "$ref": "#/components/schemas/AccessData"
+            },
+            "description": "Durable version changed; reread the current Cookie session."
+          }
+        },
+        "x-transport": {
+          "heartbeatSeconds": 25,
+          "clientIdleTimeoutSeconds": 75,
+          "maxReconnectBackoffSeconds": 30,
+          "clientPartialBufferMaxCharacters": 65536,
+          "pageReplay": false,
+          "renewsSession": false
+        }
+      }
+    },
+    "/oidc/session-events": {
+      "get": {
+        "operationId": "accountsSessionEvents",
+        "summary": "Read central Accounts invalidation hints for the current realm cookie",
+        "description": "Requires ACCOUNTS_SESSION_EVENTS_ENABLED; workforce additionally requires WORKFORCE_IDENTITY_SYNC_ENABLED. The required realm selector chooses vx_sid (customer) or vx_sid_op (workforce); the other cookie never substitutes. Rejects all other query fields. Sec-Fetch-Site must be same-origin. Origin, if present, must equal the configured issuer or login UI origin. Resolve the realm authority before and after subscribing, then check durable owner and expiry. Only resync-required hints are sent, without identity, permissions or tokens. Heartbeats every 25 seconds perform no authority reads. Disconnect, expiry or backpressure closes the stream. Every reconnect and notification triggers a complete current-cookie view read. No replay cursor and no extension of session lifetime.",
+        "parameters": [
+          {
+            "name": "realm",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": ["customer", "workforce"]
+            }
+          }
+        ],
+        "security": [
+          {
+            "accountsCustomerCookie": []
+          },
+          {
+            "accountsWorkforceCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated stream of resync-required events, whose JSON data matches AccountsResyncData",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "private, no-store"
+                }
+              },
+              "X-Accel-Buffering": {
+                "schema": {
+                  "const": "no"
+                }
+              },
+              "X-Vxture-Session-Sync": {
+                "schema": {
+                  "const": "events-v1"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: resync-required\ndata: {\"reason\":\"connected\"}\n\n"
+              }
+            }
+          },
+          "204": {
+            "description": "Feature disabled; retain compatibility reads"
+          },
+          "400": {
+            "description": "Invalid realm/query"
+          },
+          "401": {
+            "description": "Missing/ended current-realm session"
+          },
+          "403": {
+            "description": "Origin or fetch metadata rejected"
+          },
+          "429": {
+            "description": "Connection limit"
+          },
+          "503": {
+            "description": "Authority or notification channel unavailable; retain identity and retry"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "consoleSessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-vx_rp_session_console",
+        "description": "Existing HttpOnly RP Cookie. This name is for HTTPS client_id=console; configured client_id replaces the suffix. Local insecure HTTP uses vx_rp_session_<client_id>. The endpoint does not set a Cookie or accept a URL token."
+      },
+      "customerPortalCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-vx_customer_portal_session",
+        "description": "Existing host-only customer portal session cookie; accepted only by that host adapter."
+      },
+      "accountsCustomerCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "vx_sid"
+      },
+      "accountsWorkforceCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "vx_sid_op"
+      }
+    },
+    "headers": {
+      "NoStore": {
+        "schema": {
+          "type": "string",
+          "const": "no-store, no-transform"
+        }
+      }
+    },
+    "schemas": {
+      "ResyncData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": ["connected", "expired"]
+          }
+        }
+      },
+      "EndedData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "const": "revoked"
+          }
+        }
+      },
+      "ContextData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "const": "context-changed"
+          }
+        }
+      },
+      "AccessData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "const": "access-changed"
+          }
+        }
+      },
+      "AccountsResyncData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "enum": ["connected", "access-changed", "expired"]
+          }
+        }
+      }
+    }
+  },
+  "x-source-metadata": {
+    "author": "AI-Generated",
+    "date": "2026-11-24",
+    "layer": "Application",
+    "category": "api-contract",
+    "package": "@vxture/repo"
+  }
+}

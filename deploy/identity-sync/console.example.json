@@ -1,0 +1,9 @@
+{
+  "clientId": "console",
+  "issuer": "https://accounts.vxture.com",
+  "realm": "customer",
+  "environment": "prod",
+  "releaseChannel": "stable",
+  "logoutUri": "https://console.vxture.com/auth/backchannel-logout",
+  "receiverUri": "https://console.vxture.com/auth/identity-events"
+}

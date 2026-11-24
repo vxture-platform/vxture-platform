@@ -151,13 +151,17 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
-async function readJsonStrict<T>(path: string): Promise<T> {
+async function readJsonStrict<T>(
+  path: string,
+  signal?: AbortSignal,
+): Promise<T> {
   let response: Response;
 
   try {
     response = await fetch(`${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}${path}`, {
       credentials: "include",
       cache: "no-store",
+      ...(signal ? { signal } : {}),
     });
   } catch {
     throw new AdminBffError("Admin BFF is unavailable.", 503);
@@ -280,12 +284,16 @@ async function mutateJson<T>(
   return (await response.json()) as T;
 }
 
-export async function fetchCurrentUser(): Promise<ConsoleUser | null> {
-  return readJsonStrict<ConsoleUser | null>("/api/me");
+export async function fetchCurrentUser(
+  signal?: AbortSignal,
+): Promise<ConsoleUser | null> {
+  return readJsonStrict<ConsoleUser | null>("/api/me", signal);
 }
 
-export async function fetchCapabilities(): Promise<Capability[]> {
-  return readJsonStrict<Capability[]>("/api/capabilities");
+export async function fetchCapabilities(
+  signal?: AbortSignal,
+): Promise<Capability[]> {
+  return readJsonStrict<Capability[]>("/api/capabilities", signal);
 }
 
 /** Read monitoring data through the same configured Admin BFF origin as other pages. */
@@ -2084,77 +2092,37 @@ export async function deactivateModelPolicy(
   );
 }
 
-type SessionProbe = "active" | "anonymous" | "unavailable";
-
-/**
- * Probe the operator RP session at the BFF-root /auth/session (verified RP claims,
- * no ops.* DB hit) — lighter and with fewer failure modes than /api/auth/session.
- * Distinguish a definitive 401/403 (anonymous → route to login) from a transient
- * 5xx/network blip (unavailable → caller retries instead of treating as logged out).
- */
-async function probeSession(): Promise<SessionProbe> {
-  try {
-    const response = await fetch(
-      `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/auth/session`,
-      {
-        credentials: "include",
-        cache: "no-store",
-      },
-    );
-
-    if (response.ok) {
-      return "active";
-    }
-    if (response.status === 401 || response.status === 403) {
-      return "anonymous";
-    }
-    return "unavailable";
-  } catch {
-    return "unavailable";
-  }
-}
-
-/** Probe with one retry on a transient blip (e.g. cold BFF right after the OIDC redirect). */
-async function probeSessionWithRetry(): Promise<SessionProbe> {
-  const first = await probeSession();
-  if (first !== "unavailable") {
-    return first;
-  }
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  return probeSession();
-}
-
-async function loadAuthenticatedSnapshot(): Promise<SessionSnapshot> {
-  const [user, capabilities] = await Promise.all([
-    fetchCurrentUser(),
-    fetchCapabilities(),
+export async function restoreSession(
+  signal?: AbortSignal,
+): Promise<SessionSnapshot> {
+  const bounded = AbortSignal.any([
+    ...(signal ? [signal] : []),
+    AbortSignal.timeout(15000),
   ]);
-
-  return {
-    isAuthenticated: Boolean(user),
-    user,
-    capabilities,
-  };
-}
-
-export async function restoreSession(): Promise<SessionSnapshot> {
-  const probe = await probeSessionWithRetry();
-  if (probe !== "active") {
-    // anonymous (no session) or persistently unavailable → treat as logged out.
-    return EMPTY_SESSION;
-  }
-
-  // Session is active. Profile + capabilities go through the heavier /api/* path
-  // (ops.* re-query); a single transient failure there must not drop an
-  // authenticated operator back to the login screen — retry once before giving up.
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/auth/session`,
+    {
+      credentials: "include",
+      cache: "no-store",
+      signal: bounded,
+    },
+  );
+  if (response.status === 401) return EMPTY_SESSION;
+  if (!response.ok)
+    throw new AdminBffError("Session unavailable", response.status);
+  const identity = (await response.json()) as { claims?: { sub?: string } };
   try {
-    return await loadAuthenticatedSnapshot();
-  } catch {
-    try {
-      return await loadAuthenticatedSnapshot();
-    } catch {
+    const [user, capabilities] = await Promise.all([
+      fetchCurrentUser(bounded),
+      fetchCapabilities(bounded),
+    ]);
+    if (!user || identity.claims?.sub !== `opr_${user.id}` || bounded.aborted)
+      throw new AdminBffError("Session view unavailable", 503);
+    return { isAuthenticated: true, user, capabilities };
+  } catch (error) {
+    if (error instanceof AdminBffError && error.status === 401)
       return EMPTY_SESSION;
-    }
+    throw error;
   }
 }
 

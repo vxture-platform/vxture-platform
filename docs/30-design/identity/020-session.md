@@ -1,12 +1,46 @@
 ---
 title: Session 管理设计
 category: design
-updated: 2026-05-28
+updated: 2026-11-24
 ---
 
 # Session 管理设计
 
-## 核心约定
+## 当前中央会话与 RP 会话
+
+> 2026-11-24：客户中央会话可靠退出第一单元已本地实现，未部署。当前入口为 OIDC `/oidc/*`；下文历史 token-cookie / source 接入流程仅保留迁移参考，不能用于新产品接入。
+
+- Accounts 中央会话以 sid 标识；客户 durable authority 为 `session.auth_sessions`，Redis 为交互状态。缺失、撤销或到期的持久记录不能继续授权；读取故障返回不可用，不把故障解释成退出。
+- `finishTenantLogin` 先持久创建，再写 Redis，成功后才返回中央 cookie / 授权码。两层共用绝对到期时间，补偿失败也不能变成登录成功。
+- 产品 BFF 自建 HttpOnly 本地 RP 会话并保管 token；浏览器通过自己的 BFF 获取视图。中央 cookie 清除本身不会删除别的产品会话。
+- 授权码发布前写 `oidc_session_clients`；客户撤销/自然到期在同一事务写入 `logout_deliveries`。标准 OIDC 后台退出可重试，按 sid 幂等处理；发送成功与所有页面刷新是不同阶段。
+- 客户当前组织/空间由成员关系验证后，作为一对持久保存，变化时增加 context_version；没有持久上下文的旧记录允许读旧 Redis 上下文过渡。切换不延长会话寿命，权限不从事件载荷授予。
+- workforce 继续独立会话与授权检查，本批不把客户表当作员工事实源。
+
+```mermaid
+sequenceDiagram
+  participant A as Accounts
+  participant D as PostgreSQL
+  participant W as 退出投递作业
+  participant P as 产品 BFF
+  A->>D: 撤销客户 sid
+  Note over D: 同事务保存接收方退出任务
+  D-->>A: 提交成功
+  D-->>W: NOTIFY 唤醒
+  W->>D: 领取持久任务与租约
+  W->>P: 标准 logout_token
+  P-->>W: 应用失效后 200/204
+  W->>D: 有效租约确认送达
+  Note over W,P: 断连重试，允许重复，超时任务可重领
+```
+
+当前仍有既有页面同步与按需中央状态查询。SSE、丢事件快照恢复、产品持久 inbox 完成并验收后，才按客户端退役身份轮询。服务端后台补扫未完成任务保留。
+
+接口状态见 [150-event-sync-api.md](./150-event-sync-api.md)，部署和恢复见[运行手册](../../60-operations/50-run-identity-events.md)，实施记录见[批次计划](../../70-workplan/110-identity-center-batches.md)。
+
+## 历史 token-cookie 机制（迁移参考）
+
+### 核心约定
 
 - JWT 由 **auth-bff 独家签发**，任何其他 BFF 禁止自行生成 Token
 - Access Token（短周期）+ Refresh Token（长周期）双 Token 机制

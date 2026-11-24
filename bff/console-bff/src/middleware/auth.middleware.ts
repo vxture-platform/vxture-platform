@@ -1,4 +1,9 @@
-import { Inject, Injectable, type NestMiddleware } from "@nestjs/common";
+import {
+  Inject,
+  Injectable,
+  Optional,
+  type NestMiddleware,
+} from "@nestjs/common";
 import {
   JwtAuthScope,
   JwtUserType,
@@ -6,18 +11,23 @@ import {
   type JwtAccessPayload,
 } from "@vxture/core-auth";
 import {
+  rpAuthFailure,
   mapAccessClaims,
   rpSessionCookieName,
   type RpAuthService,
+  type RpSessionStore,
 } from "@vxture/core-oidc-rp";
 import type { NextFunction, Request, Response } from "express";
 import { ConsoleAuthService } from "../auth/auth.service";
 import {
   RP_AUTH_SERVICE,
   RP_RUNTIME,
+  RP_CHANGES,
+  RP_SESSION_STORE,
   type RpRuntime,
 } from "../oidc/oidc-rp.tokens";
 import type { RequestContext } from "../types/console.types";
+import type { IdentityChangesAuthority } from "../oidc/identity-changes.authority";
 
 /** Org-scope governance role from the scope-prefixed roles claim (e.g. org:owner → owner). */
 function deriveOrgRole(roles: string[]): string {
@@ -52,6 +62,12 @@ export class AuthMiddleware implements NestMiddleware {
     private readonly consoleAuthService: ConsoleAuthService,
     @Inject(RP_AUTH_SERVICE) private readonly rpAuth: RpAuthService,
     @Inject(RP_RUNTIME) private readonly rpRuntime: RpRuntime,
+    @Optional()
+    @Inject(RP_CHANGES)
+    private readonly changes?: IdentityChangesAuthority | null,
+    @Optional()
+    @Inject(RP_SESSION_STORE)
+    private readonly store?: RpSessionStore,
   ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
@@ -91,11 +107,45 @@ export class AuthMiddleware implements NestMiddleware {
       return;
     }
     const outcome = await this.rpAuth.resolve(rpsid);
+    if (outcome.status === "unavailable") {
+      res.status(503).setHeader("Cache-Control", "no-store");
+      res.json(rpAuthFailure(outcome));
+      return;
+    }
     if (outcome.status !== "ok") {
       unauthorized();
       return;
     }
-    const payload = claimsToPayload(outcome.claims);
+    let claims = outcome.claims;
+    if (this.changes) {
+      try {
+        const session = await this.store?.get(rpsid);
+        if (!session || session.sub !== claims.sub) {
+          unauthorized();
+          return;
+        }
+        const view = await this.changes.view(session);
+        if (!view || !(await this.store?.get(rpsid))) {
+          unauthorized();
+          return;
+        }
+        // This is a server view, not a new JWT. Governance is read from its facts.
+        claims = {
+          ...claims,
+          active_org: view.context?.org_id ?? null,
+          active_workspace: view.context?.workspace_id ?? null,
+          roles: [],
+        };
+      } catch {
+        res.status(503).setHeader("Cache-Control", "no-store");
+        res.json({
+          code: "IDENTITY_UNAVAILABLE",
+          message: "Identity recovery unavailable",
+        });
+        return;
+      }
+    }
+    const payload = claimsToPayload(claims);
     const user = await this.consoleAuthService.getCurrentUser(payload.sub);
     if (!user) {
       unauthorized();
@@ -103,9 +153,8 @@ export class AuthMiddleware implements NestMiddleware {
     }
     const context = req as Request & RequestContext;
     context.auth = payload;
-    if (typeof outcome.claims.sid === "string")
-      context.centralSessionId = outcome.claims.sid;
-    const workspaceId = mapAccessClaims(outcome.claims).activeWorkspace;
+    if (typeof claims.sid === "string") context.centralSessionId = claims.sid;
+    const workspaceId = mapAccessClaims(claims).activeWorkspace;
     if (workspaceId) context.activeWorkspaceId = workspaceId;
     else delete context.activeWorkspaceId;
     context.user = user;

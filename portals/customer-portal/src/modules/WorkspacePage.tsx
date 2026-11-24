@@ -8,6 +8,7 @@
  * @author AI-Generated
  * @date 2026-11-15
  */
+import { startSessionSync } from "@vxture/core-identity-sdk";
 import { useEffect, useState, type CSSProperties } from "react";
 import { Button, Icon, Input } from "@vxture/design-system";
 import type { PortalBrand, WorkspaceData } from "../lib/contracts";
@@ -17,39 +18,48 @@ import { ResearchArtwork } from "./ResearchArtwork";
 /** Render application links supplied only by the authenticated server projection. */
 export function WorkspacePage({
   brand,
-  data,
+  data: initialData,
   designPreview = false,
 }: {
   brand: PortalBrand;
   data: WorkspaceData;
   designPreview?: boolean;
 }) {
+  const [data, setData] = useState(initialData);
   useEffect(() => {
     if (designPreview) return;
     const url = new URL(window.location.href);
     url.searchParams.delete("vx_sso_checked");
     window.history.replaceState(null, "", url.href);
-    const check = async () => {
-      if (document.visibilityState !== "visible") return;
-      try {
-        const response = await fetch("/auth/session", { cache: "no-store" });
-        if (response.status === 401 || response.status === 403)
-          window.location.replace(
-            response.status === 403 ? "/?access=denied" : "/",
-          );
-      } catch {
-        // Connectivity failures do not establish central logout.
+    const sync = startSessionSync(async (signal) => {
+      const response = await fetch("/api/portal/workspace", {
+        credentials: "same-origin",
+        cache: "no-store",
+        signal,
+      });
+      if (signal.aborted) return "unavailable";
+      if (
+        response.status === 401 ||
+        response.status === 403 ||
+        response.status === 404
+      ) {
+        window.location.replace(
+          response.status === 403 ? "/?access=denied" : "/",
+        );
+        return "anonymous";
       }
-    };
-    const timer = window.setInterval(() => void check(), 15_000);
-    const foreground = () => void check();
-    window.addEventListener("focus", foreground);
-    document.addEventListener("visibilitychange", foreground);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", foreground);
-      document.removeEventListener("visibilitychange", foreground);
-    };
+      if (!response.ok) return "unavailable";
+      const current = (await response.json()) as WorkspaceData;
+      if (
+        signal.aborted ||
+        !Array.isArray(current.apps) ||
+        typeof current.name !== "string"
+      )
+        return "unavailable";
+      setData(current);
+      return "active";
+    });
+    return sync.stop;
   }, [designPreview]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("全部应用");

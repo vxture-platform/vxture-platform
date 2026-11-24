@@ -38,7 +38,10 @@ function build(registered: string[]) {
       deleteOidcSession: vi.fn(async () => undefined),
     },
     token: { revokeSession: vi.fn(async () => undefined) },
-    durableSession: { revoke: vi.fn(async () => undefined) },
+    durableSession: {
+      revoke: vi.fn(async () => undefined),
+      customerOwner: vi.fn(async () => null),
+    },
     logger: { warn: vi.fn() },
   });
   return { service, clients };

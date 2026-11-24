@@ -15,9 +15,19 @@ import {
   HttpOidcRpClient,
   RpAuthService,
   RpSessionStore,
+  HttpIdentityRecoveryClient,
+  HttpIdentityChangesClient,
+  IdentityEventVerifier,
+  type IdentityEnvironment,
   type OidcRpConfig,
 } from "@vxture/core-oidc-rp";
 import Redis from "ioredis";
+import { Pool, type PoolConfig } from "pg";
+import { SessionRecoveryAuthority } from "./session-recovery.authority";
+import { SessionEventsHub } from "./session-events.hub";
+import { IdentityChangesAuthority } from "./identity-changes.authority";
+import { IdentityEventsRouter } from "../routers/identity-events.router";
+import { SessionEventsRouter } from "../routers/session-events.router";
 import { OidcAuthRouter } from "../routers/oidc-auth.router";
 import {
   RP_AUTH_SERVICE,
@@ -25,22 +35,65 @@ import {
   RP_REDIS,
   RP_RUNTIME,
   RP_SESSION_STORE,
+  RP_RECOVERY,
+  RP_SESSION_EVENTS,
+  RP_CHANGES,
+  RP_EVENT_VERIFIER,
   type RpRuntime,
 } from "./oidc-rp.tokens";
 
 const CLIENT_ID = "console";
 
+/** @returns The same bounded database configuration for recovery and LISTEN. */
+function recoveryPostgres(c: VxConfigService): PoolConfig {
+  const database = c.database;
+  return {
+    ...(database.DATABASE_URL
+      ? { connectionString: database.DATABASE_URL }
+      : {
+          host: database.DB_HOST,
+          port: database.DB_PORT,
+          database: database.DB_NAME,
+          user: database.DB_USER,
+          password: database.DB_PASSWORD,
+          ssl:
+            database.DB_SSL === "require"
+              ? { rejectUnauthorized: false }
+              : undefined,
+        }),
+    max: database.DB_POOL_MAX,
+    connectionTimeoutMillis: 5000,
+    statement_timeout: 10000,
+  };
+}
+
 @Module({
   imports: [
-    VxConfigModule.register({ domains: ["auth", "redis", "platform"] }),
+    VxConfigModule.register({
+      domains: ["auth", "redis", "platform", "database"],
+    }),
   ],
-  controllers: [OidcAuthRouter],
+  controllers: [OidcAuthRouter, SessionEventsRouter, IdentityEventsRouter],
   providers: [
     {
       provide: RP_RUNTIME,
       inject: [VxConfigService],
       useFactory: (c: VxConfigService): RpRuntime => {
         const consoleBase = c.platform.CONSOLE_BASE_URL;
+        const sessionPollingRetirement =
+          process.env.RP_SESSION_POLLING_RETIREMENT_ENABLED === "true";
+        if (
+          sessionPollingRetirement &&
+          [
+            process.env.OIDC_RP_ENABLED,
+            process.env.RP_IDENTITY_RECOVERY_ENABLED,
+            process.env.RP_SESSION_EVENTS_ENABLED,
+            process.env.RP_IDENTITY_CHANGES_ENABLED,
+          ].some((value) => value !== "true")
+        )
+          throw new Error(
+            "Polling retirement requires the RP, recovery, changes and session events",
+          );
         const cfg: OidcRpConfig = {
           issuer: c.auth.OIDC_ISSUER,
           // Back-channel (token + JWKS) over the internal IdP URL so it never
@@ -62,6 +115,7 @@ const CLIENT_ID = "console";
         };
         return {
           config: cfg,
+          sessionPollingRetirement,
           enabled: (process.env.OIDC_RP_ENABLED ?? "false") === "true",
           allowedReturnOrigins: [consoleBase],
           defaultReturnTo: `${consoleBase}/`,
@@ -99,10 +153,129 @@ const CLIENT_ID = "console";
       useFactory: (rt: RpRuntime) => new HttpOidcRpClient(rt.config),
     },
     {
+      provide: RP_RECOVERY,
+      inject: [VxConfigService, RP_RUNTIME, RP_REDIS],
+      useFactory: (c: VxConfigService, rt: RpRuntime, redis: Redis) => {
+        if (process.env.RP_IDENTITY_RECOVERY_ENABLED !== "true") return null;
+        const environment = process.env.RP_IDENTITY_ENVIRONMENT;
+        if (
+          !rt.enabled ||
+          !["prod", "beta", "dev"].includes(environment ?? "") ||
+          !rt.config.clientSecret
+        )
+          throw new Error(
+            "Identity recovery requires an enabled confidential RP and explicit environment",
+          );
+        const pool = new Pool(recoveryPostgres(c));
+        const scope = {
+          issuer: rt.config.issuer,
+          clientId: rt.config.clientId,
+          environment: environment as IdentityEnvironment,
+        };
+        const authority = new SessionRecoveryAuthority(
+          pool,
+          new HttpIdentityRecoveryClient(rt.config, scope.environment),
+          scope,
+        );
+        redis.on("ready", () => authority.reset());
+        redis.on("close", () => authority.reset());
+        return authority;
+      },
+    },
+    {
+      provide: RP_CHANGES,
+      inject: [VxConfigService, RP_RUNTIME, RP_REDIS, RP_RECOVERY],
+      useFactory: (
+        c: VxConfigService,
+        rt: RpRuntime,
+        redis: Redis,
+        logout: SessionRecoveryAuthority | null,
+      ) => {
+        if (process.env.RP_IDENTITY_CHANGES_ENABLED !== "true") return null;
+        if (!logout || process.env.RP_SESSION_EVENTS_ENABLED !== "true")
+          throw new Error(
+            "Identity changes require recovery and session events",
+          );
+        const environment = process.env
+          .RP_IDENTITY_ENVIRONMENT as IdentityEnvironment;
+        const authority = new IdentityChangesAuthority(
+          new Pool(recoveryPostgres(c)),
+          new HttpIdentityChangesClient(rt.config, environment),
+          {
+            issuer: rt.config.issuer,
+            clientId: rt.config.clientId,
+            environment,
+          },
+          logout,
+        );
+        redis.on("ready", () => authority.reset());
+        redis.on("close", () => authority.reset());
+        return authority;
+      },
+    },
+    {
+      provide: RP_EVENT_VERIFIER,
+      inject: [RP_RUNTIME, RP_CHANGES],
+      useFactory: (rt: RpRuntime, changes: IdentityChangesAuthority | null) =>
+        changes
+          ? new IdentityEventVerifier(
+              rt.config,
+              process.env.RP_IDENTITY_ENVIRONMENT as IdentityEnvironment,
+            )
+          : null,
+    },
+    {
+      provide: RP_SESSION_EVENTS,
+      inject: [VxConfigService, RP_RUNTIME, RP_REDIS, RP_RECOVERY, RP_CHANGES],
+      useFactory: (
+        c: VxConfigService,
+        rt: RpRuntime,
+        redis: Redis,
+        authority: SessionRecoveryAuthority | null,
+        changes: IdentityChangesAuthority | null,
+      ) => {
+        if (process.env.RP_SESSION_EVENTS_ENABLED !== "true") return null;
+        if (!authority)
+          throw new Error("Session events require durable identity recovery");
+        const hub = new SessionEventsHub(
+          {
+            ...recoveryPostgres(c),
+            application_name: "console-session-events",
+          },
+          {
+            issuer: rt.config.issuer,
+            clientId: rt.config.clientId,
+            environment: process.env.RP_IDENTITY_ENVIRONMENT!,
+          },
+          () => redis.status === "ready",
+          undefined,
+          () => {
+            authority.reset();
+            changes?.reset();
+          },
+          Boolean(changes),
+        );
+        redis.on("close", () => hub.invalidate());
+        redis.on("ready", () => hub.invalidate());
+        return hub;
+      },
+    },
+    {
       provide: RP_SESSION_STORE,
-      inject: [RP_REDIS, VxConfigService],
-      useFactory: (redis: Redis, c: VxConfigService) =>
-        new RpSessionStore(redis, CLIENT_ID, c.redis.REDIS_KEY_PREFIX ?? "vx:"),
+      inject: [RP_REDIS, VxConfigService, RP_RUNTIME, RP_RECOVERY],
+      useFactory: (
+        redis: Redis,
+        c: VxConfigService,
+        rt: RpRuntime,
+        authority: SessionRecoveryAuthority | null,
+      ) =>
+        new RpSessionStore(
+          redis,
+          rt.config.clientId,
+          c.redis.REDIS_KEY_PREFIX ?? "vx:",
+          rt.config.sessionTtlSec,
+          authority ?? undefined,
+        ),
     },
     {
       provide: RP_AUTH_SERVICE,
@@ -117,6 +290,7 @@ const CLIENT_ID = "console";
   // RP_REDIS 也导出:根模块里的 TenantSwitchRouter 要把待授权请求暂存到与
   // OidcAuthRouter 同一把 key 下(/auth/callback 才找得到 PKCE verifier)。
   exports: [
+    RP_CHANGES,
     RP_AUTH_SERVICE,
     RP_SESSION_STORE,
     RP_OIDC_CLIENT,

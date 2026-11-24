@@ -22,6 +22,10 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
+  app.use(
+    "/auth/identity-events",
+    express.text({ type: "application/jwt", limit: "64kb" }),
+  );
   // Portal assets are authenticated and validated by their domain service.
   app.use(
     "/api/customer-portal/assets",

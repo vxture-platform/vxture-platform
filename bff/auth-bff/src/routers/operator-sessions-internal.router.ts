@@ -18,6 +18,7 @@ import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
 import { InternalAuthGuard } from "../authn/internal-auth.guard";
 import { InternalRoute } from "../authn/internal-route-policy";
 import { RedisService } from "../redis/redis.service";
+import { SessionService } from "../authn/session.service";
 
 export interface InternalOperatorSession {
   sessionRef: string;
@@ -39,7 +40,10 @@ const OPERATOR_SUB_PREFIX = "opr_";
 @Controller("internal/operator/sessions")
 @UseGuards(InternalAuthGuard)
 export class OperatorSessionsInternalRouter {
-  constructor(@Inject(RedisService) private readonly redis: RedisService) {}
+  constructor(
+    @Inject(RedisService) private readonly redis: RedisService,
+    @Inject(SessionService) private readonly authority: SessionService,
+  ) {}
 
   @InternalRoute({
     risk: "read",
@@ -49,9 +53,20 @@ export class OperatorSessionsInternalRouter {
   @Get()
   async list(): Promise<{ sessions: InternalOperatorSession[] }> {
     const sessions = await this.redis.listOperatorSessions();
+    const owners =
+      process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true"
+        ? await this.authority.activeWorkforceOwners(
+            sessions.map((session) => session.sid),
+          )
+        : undefined;
     return {
       sessions: sessions
         .filter((session) => session.sub.startsWith(OPERATOR_SUB_PREFIX))
+        .filter(
+          (session) =>
+            !owners ||
+            session.sub === `${OPERATOR_SUB_PREFIX}${owners.get(session.sid)}`,
+        )
         .map((session) => ({
           sessionRef: sessionRefOf(session.sid),
           operatorId: session.sub.slice(OPERATOR_SUB_PREFIX.length),

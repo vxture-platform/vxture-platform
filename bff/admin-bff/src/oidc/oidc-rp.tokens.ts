@@ -12,6 +12,9 @@ export const RP_AUTH_SERVICE = Symbol("RP_AUTH_SERVICE");
 
 /** Runtime knobs derived from config/env for the RP routes + middleware. */
 export interface RpRuntime {
+  enabled?: boolean;
+  sessionPollingRetirement?: boolean;
+  postLogoutRedirectUri?: string;
   config: OidcRpConfig;
   /** allowlist of origins accepted as post-login returnTo */
   allowedReturnOrigins: string[];
@@ -21,3 +24,8 @@ export interface RpRuntime {
   /** Redis key prefix (matches the session store) */
   keyPrefix: string;
 }
+
+export const RP_RECOVERY = Symbol("RP_RECOVERY");
+export const RP_CHANGES = Symbol("RP_CHANGES");
+export const RP_SESSION_EVENTS = Symbol("RP_SESSION_EVENTS");
+export const RP_EVENT_VERIFIER = Symbol("RP_EVENT_VERIFIER");

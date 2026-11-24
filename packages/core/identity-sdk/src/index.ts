@@ -46,3 +46,7 @@ export {
   type CookieOptions,
   type CookieSpec,
 } from "./presence";
+
+export { startSessionEvents } from "./session-events";
+export type { SessionRecheck } from "./session-events";
+export { startSessionSync } from "./session-sync";

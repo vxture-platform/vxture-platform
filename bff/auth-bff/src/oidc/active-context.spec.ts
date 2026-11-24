@@ -20,6 +20,8 @@ import { OidcService } from "./oidc.service";
 // ============================================================================
 function fixture() {
   const data = new Map<string, string>();
+  let durableContext: { orgId: string; workspaceId: string | null } | null =
+    null;
   const raw = {
     status: "ready",
     hget: vi.fn(
@@ -103,7 +105,16 @@ function fixture() {
         redirectUris: ["https://app.example/callback"],
       }),
     },
-    durableSession: { isRevoked: async () => false },
+    durableSession: {
+      isRevoked: async () => false,
+      getContext: async () => durableContext,
+      setContext: async (
+        _sid: string,
+        context: { orgId: string; workspaceId: string | null },
+      ) => {
+        durableContext = { ...context };
+      },
+    },
     customerMfa: { enabled: async () => false },
     issueAuthCode,
   });

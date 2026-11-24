@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   type ReactNode,
 } from "react";
 import {
@@ -13,6 +14,7 @@ import {
   onSignOutBroadcast,
   signOutBroadcastKey,
   startIdleWatcher,
+  startSessionSync,
 } from "@vxture/core-identity-sdk";
 import { buildRpLoginUrl, logout, restoreSession } from "@/api/admin-bff";
 import type { SessionSnapshot } from "@/entities/console";
@@ -45,12 +47,9 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionSnapshot>(EMPTY_SESSION);
   const [status, setStatus] = useState<SessionStatus>("loading");
 
-  // Probe independently: restoreSession also returns an empty snapshot on outages.
+  const refreshRef = useRef<(() => Promise<unknown>) | null>(null);
+
   useEffect(() => {
-    let active = true;
-    let inFlight = false;
-    let lastSyncAt = 0;
-    const controller = new AbortController();
     const params = new URLSearchParams(window.location.search);
     const silentJustFailed = params.get("vx_sso_silent") === "0";
     if (silentJustFailed) {
@@ -61,65 +60,30 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
         `${window.location.pathname}${params.size ? `?${params}` : ""}${window.location.hash}`,
       );
     }
-    const sessionUrl = new URL(buildRpLoginUrl(), window.location.origin);
-    sessionUrl.pathname = sessionUrl.pathname.replace(/\/login$/, "/session");
-    sessionUrl.search = "";
-    const sync = async () => {
-      if (
-        !active ||
-        inFlight ||
-        document.visibilityState !== "visible" ||
-        Date.now() - lastSyncAt < 1500
-      )
-        return;
-      inFlight = true;
-      lastSyncAt = Date.now();
-      try {
-        const response = await fetch(sessionUrl.href, {
-          credentials: "include",
-          cache: "no-store",
-          signal: AbortSignal.any([
-            controller.signal,
-            AbortSignal.timeout(15_000),
-          ]),
-        });
-        if (!active) return;
-        if (response.status === 401 || response.status === 403) {
-          setSession(EMPTY_SESSION);
-          setStatus("loading");
-          window.location.replace(
-            silentJustFailed
-              ? buildRpLoginUrl(window.location.href)
-              : buildRpLoginUrl(window.location.href, { prompt: "none" }),
-          );
-          return;
-        }
-        if (!response.ok) return;
-        const snapshot = await restoreSession();
-        if (!active || !snapshot.isAuthenticated) return;
-        setSession(snapshot);
-        setStatus("ready");
-      } catch {
-        // Retain the authenticated shell on transient failures; retry on focus.
-      } finally {
-        inFlight = false;
+    const stream = new URL(buildRpLoginUrl(), window.location.origin);
+    stream.pathname = stream.pathname.replace(/\/login$/, "/events");
+    stream.search = "";
+    const sync = startSessionSync(async (signal, event) => {
+      const snapshot = await restoreSession(signal);
+      if (signal.aborted) return "unavailable";
+      if (!snapshot.isAuthenticated) {
+        setSession(EMPTY_SESSION);
+        setStatus("loading");
+        window.location.replace(
+          silentJustFailed || event
+            ? buildRpLoginUrl(window.location.href)
+            : buildRpLoginUrl(window.location.href, { prompt: "none" }),
+        );
+        return "anonymous";
       }
-    };
-    const reconcile = () => {
-      void sync();
-    };
-    reconcile();
-    const interval = window.setInterval(reconcile, 300_000);
-    window.addEventListener("focus", reconcile);
-    window.addEventListener("pageshow", reconcile);
-    document.addEventListener("visibilitychange", reconcile);
+      setSession(snapshot);
+      setStatus("ready");
+      return "active";
+    }, stream.pathname);
+    refreshRef.current = sync.refresh;
     return () => {
-      active = false;
-      controller.abort();
-      window.clearInterval(interval);
-      window.removeEventListener("focus", reconcile);
-      window.removeEventListener("pageshow", reconcile);
-      document.removeEventListener("visibilitychange", reconcile);
+      refreshRef.current = null;
+      sync.stop();
     };
   }, []);
 
@@ -183,10 +147,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshSession() {
-    setStatus("loading");
-    const snapshot = await restoreSession();
-    setSession(snapshot);
-    setStatus("ready");
+    await refreshRef.current?.();
   }
 
   return (

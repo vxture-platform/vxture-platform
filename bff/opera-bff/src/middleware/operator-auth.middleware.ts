@@ -10,7 +10,11 @@
  * **只挂在 /api/* 上**：`/auth/*` 是登录出入口，挂上去会把自己锁在门外。
  */
 import { Inject, Injectable, type NestMiddleware } from "@nestjs/common";
-import { rpSessionCookieName, type RpAuthService } from "@vxture/core-oidc-rp";
+import {
+  rpAuthFailure,
+  rpSessionCookieName,
+  type RpAuthService,
+} from "@vxture/core-oidc-rp";
 import type { NextFunction, Request, Response } from "express";
 import { OperatorAuthzService } from "../auth/operator-authz.service";
 import { PLANE_GATE_EXEMPT_PATHS, PLANE_ROOT } from "../auth/plane";
@@ -61,6 +65,11 @@ export class OperatorAuthMiddleware implements NestMiddleware {
     }
 
     const outcome = await this.rpAuth.resolve(rpsid);
+    if (outcome.status === "unavailable") {
+      res.status(503).setHeader("Cache-Control", "no-store");
+      res.json(rpAuthFailure(outcome));
+      return;
+    }
     if (outcome.status !== "ok") {
       unauthorized();
       return;

@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import cookieParser from "cookie-parser";
+import { text } from "express";
 import { AppModule } from "./app.module";
 import type { Pool } from "pg";
 import { AllExceptionsFilter } from "./filters/all-exceptions.filter";
@@ -22,6 +23,10 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
+  app.use(
+    "/auth/identity-events",
+    text({ type: "application/jwt", limit: "64kb" }),
+  );
   // X-1：封套的保证放在出口，框架自己造的错误（404 路由、非法 JSON 体）也在内。
   // 池子在这里取、构造器传入——**不能**让过滤器自己 DI 注入 useFactory provider，
   // 那会在 bootstrap 时静默死锁（见 step-up.guard.ts 头部记录的同一个坑）。

@@ -16,6 +16,10 @@ import { AuthnService } from "./authn.service";
 import { UserOnboardingService } from "./user-onboarding.service";
 import { PasswordResetRepository } from "./password-reset.repository";
 import { SessionService } from "./session.service";
+import { SessionLogoutRepository } from "./session-logout.repository";
+import { IdentityRecoveryRepository } from "./identity-recovery.repository";
+import { IdentityDeliveryRepository } from "./identity-delivery.repository";
+import { CentralEventsHub } from "./central-events.hub";
 import { SESSION_PG_POOL } from "./tokens";
 
 @Module({
@@ -33,8 +37,8 @@ import { SESSION_PG_POOL } from "./tokens";
       inject: [VxConfigService],
       useFactory: (config: VxConfigService) => {
         const database = config.database;
-        return new Pool(
-          database.DATABASE_URL
+        return new Pool({
+          ...(database.DATABASE_URL
             ? { connectionString: database.DATABASE_URL }
             : {
                 host: database.DB_HOST,
@@ -42,16 +46,24 @@ import { SESSION_PG_POOL } from "./tokens";
                 database: database.DB_NAME,
                 user: database.DB_USER,
                 password: database.DB_PASSWORD,
-                max: database.DB_POOL_MAX,
                 ssl:
                   database.DB_SSL === "require"
                     ? { rejectUnauthorized: false }
                     : undefined,
-              },
-        );
+              }),
+          // LISTEN holds one connection; transactions must always have another.
+          max: Math.max(5, database.DB_POOL_MAX),
+          connectionTimeoutMillis: 5000,
+          statement_timeout: 10000,
+          idle_in_transaction_session_timeout: 15000,
+        });
       },
     },
     SessionService,
+    CentralEventsHub,
+    SessionLogoutRepository,
+    IdentityRecoveryRepository,
+    IdentityDeliveryRepository,
     PasswordResetRepository,
     UserOnboardingService,
     AuthnService,
@@ -61,6 +73,10 @@ import { SESSION_PG_POOL } from "./tokens";
     CustomerPhoneCodeService,
     AuthnService,
     SessionService,
+    CentralEventsHub,
+    SessionLogoutRepository,
+    IdentityRecoveryRepository,
+    IdentityDeliveryRepository,
     UserOnboardingService,
   ],
 })

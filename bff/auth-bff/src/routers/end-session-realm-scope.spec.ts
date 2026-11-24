@@ -130,6 +130,7 @@ describe("Accounts realm isolation", () => {
         undefined,
         undefined,
         `accounts-self:${realm}`,
+        realm,
       );
       expect(res.clearCookie.mock.calls.map(([cookie]) => cookie)).toEqual([
         ...expectedCookies,

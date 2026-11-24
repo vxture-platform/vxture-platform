@@ -1,15 +1,13 @@
--- ═══════════════════════════════════════════════════════════════════════════
--- 30_session.sql — schema session（会话 / 令牌 / 验证码 / 登录风控，短命高频）
--- 设计权威：docs/design/data_identity_200_schema.md §8
--- refresh_tokens.session_id = Redis 会话 sid 的松引用（会话 Redis-primary，登录不写 auth_sessions，不建 FK）；
--- 全表对 account.users 用裸 UUID 不建 FK（边界#2 realm 安全隔离，铁律七）——见 90。
--- 表序 = 域内依赖序：auth_sessions → refresh_tokens → user_verifications
---   → password_reset_tokens → login_attempts。
--- append-only 审计表（login_attempts）不设 updated_at/deleted_at，行不可变（触发器见 triggers_ddl）。
--- ═══════════════════════════════════════════════════════════════════════════
+-- Durable customer sessions and short-lived authentication records.
+-- Authority: docs/30-design/data_identity_200_schema.md section 8.
+-- Customer login commits auth_sessions before Redis; workforce stays independent.
+-- Bare user UUIDs intentionally do not cross identity-realm boundaries with FKs.
+-- @package @vxture/repo
+-- @layer Infrastructure
+-- @category schema
+-- @author AI-Generated
+-- @date 2026-11-24
 
--- 中心会话持久镜像（Redis 为主，此表为持久镜像）。realm 区分 customer/workforce，
--- 与 admin.operator_* 会话结构对称隔离，绝不交叉解引用。user_id 裸 UUID（边界#2）。
 CREATE TABLE session.auth_sessions (
     id             uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
     sid            varchar(64)   NOT NULL,                          -- 会话不透明标识
@@ -22,6 +20,9 @@ CREATE TABLE session.auth_sessions (
     last_active_at timestamptz   NOT NULL DEFAULT now(),
     expires_at     timestamptz   NOT NULL,
     revoked_at     timestamptz,
+    active_org_id uuid,
+    active_workspace_id uuid,
+    context_version bigint NOT NULL DEFAULT 0,
     created_at     timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT uq_auth_sessions_sid    UNIQUE (sid),
     CONSTRAINT chk_auth_sessions_realm  CHECK (realm IN ('customer','workforce')),
@@ -32,14 +33,72 @@ CREATE INDEX idx_auth_sessions_realm      ON session.auth_sessions (realm);
 CREATE INDEX idx_auth_sessions_status     ON session.auth_sessions (status);
 CREATE INDEX idx_auth_sessions_expires_at ON session.auth_sessions (expires_at);
 
--- opaque refresh token：服务端存储、轮换、重放检测（§6.3）。token_hash 唯一；
--- rotated_from 串起轮换链。session_id = Redis 会话 sid 的松引用（会话 Redis-primary，OIDC 登录
---   不写 durable auth_sessions；2026-07-04 撤回评审时误加的 FK，集成验证发现登录热路径会 FK 违约）。
--- user_id 裸 UUID（边界#2，不建 FK）。
+-- Customer-only bindings survive Redis eviction and central revocation.
+CREATE TABLE IF NOT EXISTS session.oidc_session_clients (
+  sid varchar(64) NOT NULL REFERENCES session.auth_sessions(sid),
+  client_id varchar(64) NOT NULL,
+  release_channel varchar(16) NOT NULL CHECK (release_channel IN ('stable','beta','canary')),
+  logout_uri varchar(512),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (sid, client_id)
+);
+
+-- The same immutable logical event is signed afresh for each delivery attempt.
+CREATE TABLE IF NOT EXISTS session.logout_deliveries (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id uuid NOT NULL,
+  sid varchar(64) NOT NULL REFERENCES session.auth_sessions(sid),
+  user_id uuid NOT NULL,
+  client_id varchar(64) NOT NULL,
+  release_channel varchar(16) NOT NULL CHECK (release_channel IN ('stable','beta','canary')),
+  logout_uri varchar(512) NOT NULL,
+  status varchar(16) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','delivered','quarantined')),
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  available_at timestamptz NOT NULL DEFAULT now(),
+  retry_until timestamptz NOT NULL DEFAULT (now() + interval '24 hours'),
+  lease_id uuid,
+  lease_until timestamptz,
+  last_error varchar(48),
+  delivered_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (sid, client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_logout_deliveries_pending
+  ON session.logout_deliveries(available_at) WHERE status='pending';
+
+-- Every revocation writer (including account security transactions) uses this
+-- boundary. Notification is only a wake-up hint; the table is the durable queue.
+CREATE OR REPLACE FUNCTION session.enqueue_customer_logout()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE logical_event uuid := gen_random_uuid();
+BEGIN
+  IF OLD.realm='customer' AND OLD.status<>'active' AND NEW.status='active' THEN
+    RAISE EXCEPTION 'Ended customer sessions cannot be reactivated';
+  END IF;
+  IF NEW.realm = 'customer' AND OLD.status = 'active'
+     AND NEW.status IN ('revoked','expired') THEN
+    INSERT INTO session.logout_deliveries
+      (event_id, sid, user_id, client_id, release_channel, logout_uri)
+    SELECT logical_event, NEW.sid, NEW.user_id, b.client_id, b.release_channel, b.logout_uri
+      FROM session.oidc_session_clients b
+     WHERE b.sid=NEW.sid AND b.logout_uri IS NOT NULL
+    ON CONFLICT (sid,client_id) DO NOTHING;
+    PERFORM pg_notify('customer_session_logout', '');
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE OR REPLACE TRIGGER trg_customer_session_logout
+  AFTER UPDATE OF status ON session.auth_sessions
+  FOR EACH ROW EXECUTE FUNCTION session.enqueue_customer_logout();
+
+-- Refresh rotation chains retain a loose sid reference for legacy and realm isolation.
+-- Bare user UUIDs must never resolve into the workforce authority.
 CREATE TABLE session.refresh_tokens (
     id           uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      uuid         NOT NULL,                             -- 裸值→account.users（不建 FK，边界#2）
-    session_id   uuid         NOT NULL,                             -- 松引用 Redis 会话 sid（Redis-primary，不建 FK）
+    session_id   uuid         NOT NULL,                             -- Loose central sid reference; no cross-realm FK.
     client_id    varchar(64)  NOT NULL,
     token_hash   varchar(64)  NOT NULL,
     rotated_from uuid,                                              -- 轮换链前驱（同表 id，弱引用不建 FK 自环）

@@ -62,6 +62,16 @@ passed 'unknown and malformed cutoffs are rejected'
 MIGRATE_UNTIL=01-a run_ok --plan
 grep -q '^MIGRATION_FULL=0$' "$T/output"
 passed 'one unique prefix produces a partial plan'
+MIGRATE_FROM=01 run_bad --plan; no_docker
+MIGRATE_FROM=missing run_bad --plan; no_docker
+MIGRATE_FROM='../01-a' run_bad --plan; no_docker
+MIGRATE_FROM=02-c MIGRATE_UNTIL=01-a run_bad --plan; no_docker
+passed 'ambiguous, unknown, unsafe and reversed lower bounds are rejected'
+MIGRATE_FROM=01-b MIGRATE_UNTIL=02-c run_ok --plan
+grep -q '^MIGRATION_SELECTED_COUNT=2$' "$T/output"
+grep -q '^MIGRATION_FULL=0$' "$T/output"
+grep -q '^skip .*migrations/01-a.sql$' "$T/output"
+passed 'inclusive range skips historical migrations and remains a partial plan'
 run_bad; no_docker
 passed 'apply requires explicit confirmation'
 export CONFIRM_MIGRATE=yes
@@ -94,6 +104,8 @@ passed 'invalid timeout policy is rejected'
 for file in 2026-12-09-promotion-ownership-foundation.sql 2026-12-10-wallet-source-ledger.sql 2026-12-11-recharge-card-funding.sql; do printf 'SELECT 1;\n' > "$T/deploy/database/migrations/$file"; done
 MIGRATE_UNTIL=2026-12-10 run_bad --plan; no_docker
 passed 'voucher upgrades cannot stop between B02 and B11'
+MIGRATE_FROM=2026-12-10 run_bad --plan; no_docker
+passed 'lower bound cannot split the atomic voucher upgrade group'
 
 # ===========================================================================
 # Actual entry, session boundaries, failure propagation and receipt validation.
@@ -119,4 +131,15 @@ run_ok
 grep -Fq 'COLUMN_LOCKS_DEFERRED_PARTIAL_PLAN' "$T/sql"
 if grep -Fq '\i /column_locks.sql' "$T/sql"; then echo 'Future column grants executed on partial schema'; exit 1; fi
 passed 'partial migration defers grants for the full schema'
+clear_calls
+export MIGRATE_FROM=01-b MIGRATE_UNTIL=02-c
+run_bad; no_docker
+passed 'changing range invalidates the previously reviewed hash'
+refresh_hash
+run_ok
+grep -Fq '\i /migrations/01-b.sql' "$T/sql"
+grep -Fq '\i /migrations/02-c.sql' "$T/sql"
+if grep -Fq '\i /migrations/01-a.sql' "$T/sql"; then echo 'Historical migration replayed'; exit 1; fi
+grep -Fq 'COLUMN_LOCKS_DEFERRED_PARTIAL_PLAN' "$T/sql"
+passed 'actual entry executes only the reviewed inclusive range'
 printf 'S04_GATE_TESTS_PASSED=%s\n' "$count"

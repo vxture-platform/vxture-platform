@@ -28,10 +28,12 @@ describe.runIf(run)("central session status (live Redis)", () => {
     redis: { REDIS_URL: url, REDIS_KEY_PREFIX: prefix },
   } as unknown as ConstructorParameters<typeof RedisService>[0]);
   const raw = new Redis(url);
+  const durable = new Map<string, { realm: string; userId: string }>();
   const oidc = Object.assign(
     Object.create(OidcService.prototype) as OidcService,
     {
       redis: service,
+      durableSession: { get: async (sid: string) => durable.get(sid) ?? null },
       clients: {
         findEnabledByClientId: async (clientId: string) => ({
           clientId,
@@ -74,7 +76,7 @@ describe.runIf(run)("central session status (live Redis)", () => {
     await service.createOidcSession(
       sid,
       {
-        sub: "synthetic-user",
+        sub: "usr_synthetic-user",
         realm: overrides.realm ?? "customer",
         authMethod: "password",
         createdAt: now - 60,
@@ -83,6 +85,10 @@ describe.runIf(run)("central session status (live Redis)", () => {
       },
       overrides.ttl ?? 3600,
     );
+    durable.set(sid, {
+      realm: overrides.realm ?? "customer",
+      userId: "synthetic-user",
+    });
     await service.addOidcSessionClient(sid, overrides.client ?? "yucer");
     return sid;
   };

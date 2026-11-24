@@ -202,7 +202,7 @@ jobs:
 
       - name: Type check
         if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm type-check:all
+        run: pnpm --recursive --no-bail type-check
 
       - name: Lint
         if: steps.changes.outputs.docs_only != 'true'
@@ -516,6 +516,7 @@ jobs:
         run: |
           pnpm lint:data-design
           pnpm lint:schema-residue
+          node --test scripts/guardrails/check-schema-residue.test.mjs
           pnpm lint:seed
           pnpm lint:catalog-domains
           # 产品生命周期状态机住在四处(@shared 值域 / opera-bff STATE_TRANSITIONS /
@@ -727,6 +728,12 @@ jobs:
     name: test-coverage
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
       postgres:
         image: postgres:18-alpine
         env:
@@ -782,6 +789,20 @@ jobs:
             echo "base '$BASE_SHA' unavailable — running all tests"
             pnpm --recursive --if-present test
           fi
+
+      - name: Identity persistence and event recovery regressions
+        if: needs.check.outputs.docs_only != 'true'
+        env:
+          IDENTITY_PG_ITEST_URL: postgresql://postgres@127.0.0.1:5432/postgres
+          REDIS_ITEST_URL: redis://127.0.0.1:6379
+        run: |
+          set -euo pipefail
+          pnpm --filter @vxture/core-oidc-rp test --maxWorkers=1
+          pnpm --filter @vxture/bff-auth exec vitest run src/authn/session-logout.itest.spec.ts src/authn/workforce-identity.itest.spec.ts src/routers/identity-recovery.itest.spec.ts src/routers/identity-changes.itest.spec.ts --maxWorkers=1 --no-file-parallelism
+          pnpm --filter @vxture/bff-console exec vitest run src/oidc/session-recovery.itest.spec.ts src/routers/session-events.itest.spec.ts src/routers/identity-events.itest.spec.ts --maxWorkers=1 --no-file-parallelism
+          bash deploy/scripts/lib/migration-plan.test.sh
+          bash deploy/scripts/lib/customer-portal-deploy.test.sh
+          node --test scripts/identity/inspect-sync.test.mjs scripts/identity/collect-sync.test.mjs
 
       - name: Invoice application database regression
         if: needs.check.outputs.docs_only != 'true'

@@ -1,0 +1,57 @@
+# Identity queue observation, independent of browser or session polling.
+# @package @vxture/repo
+# @layer Infrastructure
+# @category monitoring
+# @author AI-Generated
+# @date 2026-11-24
+groups:
+  - name: vxture-identity-platform
+    rules:
+      - alert: IdentityCollectorMissing
+        expr: absent(vxture_identity_scope_expected)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Identity collector has no configured scope series
+      - alert: IdentityCollectionFailed
+        expr: vxture_identity_collection_success == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Identity scope could not be inspected
+      - alert: IdentityInspectionStale
+        expr: (vxture_identity_scope_expected unless vxture_identity_inspection_timestamp_seconds) or (time() - vxture_identity_inspection_timestamp_seconds > 120)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Identity inspection is missing or stale
+      - alert: IdentityBindingOrSchemaNotReady
+        expr: vxture_identity_database_ready == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Identity registration, schema or queued work needs attention
+      - alert: IdentityPendingTooOld
+        expr: vxture_identity_changes_oldest_pending_seconds > 60 or vxture_identity_logout_oldest_pending_seconds > 60
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Identity delivery is delayed
+      - alert: IdentityDeliveryQuarantined
+        expr: vxture_identity_changes_quarantined > 0 or vxture_identity_logout_quarantined > 0 or vxture_identity_changes_exhausted > 0 or vxture_identity_logout_exhausted > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Identity delivery requires explicit recovery
+      - alert: IdentityDeadlineSweepDelayed
+        expr: vxture_identity_global_oldest_due_seconds > 90
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: A durable identity time boundary is overdue

@@ -22,6 +22,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  Optional,
   Post,
   Query,
   Req,
@@ -31,6 +32,7 @@ import {
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import {
+  rpAuthFailure,
   generatePkce,
   checkOidcSession,
   mapAccessClaims,
@@ -51,6 +53,7 @@ import {
 } from "@vxture/core-identity-sdk";
 import type { Redis } from "ioredis";
 import {
+  RP_CHANGES,
   RP_AUTH_SERVICE,
   RP_OIDC_CLIENT,
   RP_REDIS,
@@ -58,6 +61,8 @@ import {
   RP_SESSION_STORE,
   type RpRuntime,
 } from "../oidc/oidc-rp.tokens";
+
+import type { IdentityChangesAuthority } from "../oidc/identity-changes.authority";
 
 interface AuthReq {
   codeVerifier: string;
@@ -74,6 +79,9 @@ export class OidcAuthRouter {
     @Inject(RP_AUTH_SERVICE) private readonly auth: RpAuthService,
     @Inject(RP_REDIS) private readonly redis: Redis,
     @Inject(RP_RUNTIME) private readonly rt: RpRuntime,
+    @Optional()
+    @Inject(RP_CHANGES)
+    private readonly changes?: IdentityChangesAuthority | null,
   ) {}
 
   private authReqKey(state: string): string {
@@ -233,6 +241,7 @@ export class OidcAuthRouter {
   }
 
   @Get("session")
+  @Header("Cache-Control", "no-store")
   async session(@Req() req: Request): Promise<Record<string, unknown>> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
     const record = rpsid ? await this.store.get(rpsid) : null;
@@ -260,8 +269,38 @@ export class OidcAuthRouter {
       throw new UnauthorizedException("Central session ended");
     }
     const out = await this.auth.resolve(rpsid);
+    if (out.status === "unavailable") {
+      throw new ServiceUnavailableException(rpAuthFailure(out));
+    }
     if (out.status !== "ok") {
       throw new UnauthorizedException("No active session");
+    }
+    if (this.changes) {
+      try {
+        const session = await this.store.get(out.rpsid);
+        if (!session || session.sub !== out.claims.sub)
+          throw new UnauthorizedException("No active session");
+        const view = await this.changes.view(session);
+        if (!view || !(await this.store.get(out.rpsid)))
+          throw new UnauthorizedException("No active session");
+        return {
+          status: "active",
+          claims: {
+            ...out.claims,
+            active_org: view.context?.org_id ?? null,
+            active_workspace: view.context?.workspace_id ?? null,
+            active_org_name: null,
+            active_org_type: null,
+            active_workspace_name: null,
+            roles: [],
+            context_version: view.context_version,
+            authorization_version: view.authorization_version,
+          },
+        };
+      } catch (error) {
+        if (error instanceof UnauthorizedException) throw error;
+        throw new ServiceUnavailableException("Identity recovery unavailable");
+      }
     }
     return { status: "active", claims: out.claims };
   }

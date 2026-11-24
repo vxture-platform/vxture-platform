@@ -64,7 +64,7 @@ if [ "$WORKBENCH_DESKTOP_ENABLED" = 1 ] && [ ! -f "$ruyin_template" ]; then
 fi
 
 # Read the same non-secret host list as the targeted OIDC seed without sourcing credentials.
-customer_portal_env="${CUSTOMER_PORTAL_ENV_FILE:-$COMPOSE_ENV_RUNTIME_DIR/.env.customer-portal-bff}"
+customer_portal_env="${CUSTOMER_PORTAL_ENV_FILE:-$COMPOSE_ENV_RUNTIME_DIR/.env.tenant-bff}"
 customer_portal_template="$SRC/templates/customer-portal.vhost.template"
 customer_portal_hosts=()
 if [ -f "$customer_portal_env" ]; then

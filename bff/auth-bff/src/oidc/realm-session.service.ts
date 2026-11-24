@@ -98,6 +98,15 @@ export class RealmSessionService {
     ) {
       throw new UnauthorizedException("operator_session_required");
     }
+    if (process.env.WORKFORCE_IDENTITY_SYNC_ENABLED === "true") {
+      const durable = await this.sessions.get(sid);
+      if (
+        !durable ||
+        durable.realm !== "workforce" ||
+        session.sub !== `opr_${durable.userId}`
+      )
+        throw new UnauthorizedException("operator_session_required");
+    }
     const operatorId = session.sub.slice("opr_".length);
     // The repository excludes disabled accounts and inactive operator roles.
     if (

@@ -252,7 +252,10 @@ it("does not delete another customer's or workforce cache", async () => {
     redis,
     token,
     sendBackChannelLogouts: logout,
-    durableSession: { revoke: vi.fn(async () => {}) },
+    durableSession: {
+      revoke: vi.fn(async () => {}),
+      customerOwner: vi.fn(async () => null),
+    },
     logger: { warn: vi.fn(), error: vi.fn() },
   });
   await oidc.cleanupCustomerSessions("123", ["owned", "other"]);
