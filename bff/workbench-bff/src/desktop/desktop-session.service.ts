@@ -15,10 +15,12 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 // ⚠️ 跨层引用: Identity verification and storage remain in shared RP components.
 import {
   checkOidcSession,
+  rpAuthFailure,
   generatePkce,
   mapAccessClaims,
   randomToken,
@@ -124,6 +126,8 @@ export class DesktopSessionService {
     rpsid: string,
   ): Promise<{ user: RpUser; claims: Record<string, unknown> }> {
     const result = await this.rt.auth.resolve(rpsid);
+    if (result.status === "unavailable")
+      throw new ServiceUnavailableException(rpAuthFailure(result));
     if (result.status !== "ok")
       throw new UnauthorizedException({
         code: "UNAUTHORIZED",

@@ -72,32 +72,78 @@ export class TestRedis implements DesktopRedis {
     return 1;
   }
 
+  // ========================================================================
+  // Atomic session lifecycle and refresh fencing for HTTP orchestration tests
+  // ========================================================================
   async eval(
     script: string,
     keyCount: number,
-    ...args: (string | number)[]
+    ...input: (string | number)[]
   ): Promise<unknown> {
-    if (keyCount !== 2) throw new Error("Unexpected RP script key count");
-    const [sessionKey, indexKey, serialized, ttl, rpsid, expectedRefresh] =
-      args.map(String);
-    const raw = await this.get(sessionKey!);
-    if (!raw) return 0;
-    if (script.includes("destroy-unchanged-session")) {
-      if (raw !== serialized) return 0;
-      await this.del(sessionKey!);
-      await this.srem(indexKey!, ttl!);
+    if (this.failWrites) throw new Error("Synthetic Redis write outage");
+    const keys = input.slice(0, keyCount).map(String);
+    const args = input.slice(keyCount).map(String);
+    const key = keys[0]!;
+    const now = Date.now() + this.offset;
+    const read = (name: string) => {
+      const row = this.values.get(name);
+      return row && row.expires > now ? row : undefined;
+    };
+    if (script.includes("local requested")) {
+      if (read(keys[2]!) || read(key)) return 0;
+      this.values.set(key, {
+        value: args[0]!,
+        expires: now + Number(args[1]) * 1000,
+      });
+      const set = this.sets.get(keys[1]!) ?? new Set<string>();
+      set.add(args[2]!);
+      this.sets.set(keys[1]!, set);
       return 1;
     }
-    const current = JSON.parse(raw) as Record<string, unknown>;
-    const replacement = JSON.parse(serialized!) as Record<string, unknown>;
-    if (
-      current.sid !== replacement.sid ||
-      current.sub !== replacement.sub ||
-      (expectedRefresh && current.refreshToken !== expectedRefresh)
-    )
-      return 0;
-    await this.setex(sessionKey!, Number(ttl), serialized!);
-    await this.sadd(indexKey!, rpsid!);
-    return 1;
+    if (script.includes("math.min(lifetime")) {
+      const row = read(key);
+      if (
+        read(keys[1]!) ||
+        row?.value !== args[0] ||
+        (args[3] && read(keys[2]!)?.value !== args[3])
+      )
+        return 0;
+      this.values.set(key, {
+        value: args[1]!,
+        expires: Math.min(row!.expires, now + Number(args[2]) * 1000),
+      });
+      return 1;
+    }
+    if (script.includes("'srem'")) {
+      if (read(key)?.value !== args[0]) return 0;
+      this.values.delete(key);
+      this.sets.get(keys[1]!)?.delete(args[1]!);
+      return 1;
+    }
+    if (script.includes("local ids")) {
+      this.values.set(keys[1]!, {
+        value: "1",
+        expires: now + Number(args[0]) * 1000,
+      });
+      const ids = this.sets.get(key) ?? new Set<string>();
+      for (const id of ids) this.values.delete(args[1]! + id);
+      this.sets.delete(key);
+      return ids.size;
+    }
+    if (keyCount === 3 && script.includes("'NX'")) {
+      if (read(keys[1]!) || read(key)?.value !== args[0] || read(keys[2]!))
+        return 0;
+      this.values.set(keys[2]!, {
+        value: args[1]!,
+        expires: now + Number(args[2]),
+      });
+      return 1;
+    }
+    if (keyCount === 1 && script.includes("'del'")) {
+      if (read(key)?.value !== args[0]) return 0;
+      this.values.delete(key);
+      return 1;
+    }
+    throw new Error("Unsupported Redis script in HTTP fixture");
   }
 }

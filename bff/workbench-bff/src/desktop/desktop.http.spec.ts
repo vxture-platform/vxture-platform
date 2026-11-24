@@ -1214,11 +1214,38 @@ describe("minimal desktop backend", () => {
     expect(await response.json()).toMatchObject({
       code: "SESSION_SCOPE_CHANGED",
     });
-    expect((await rt.store.get(s.rpsid))?.activeOrg).toBe(ORG);
+    expect(Reflect.get((await rt.store.get(s.rpsid))!, "desktopScope")).toEqual(
+      { tenantId: ORG, workspaceId: WORKSPACE },
+    );
     expect(
       (await request("/api/me", { headers: { "x-vxture-session": s.rpsid } }))
         .status,
     ).toBe(409);
+  });
+
+  it("preserves the native session when token refresh is temporarily unavailable", async () => {
+    const s = await login();
+    const record = (await rt.store.get(s.rpsid))!;
+    await rt.store.update(
+      s.rpsid,
+      { ...record, accessExpiresAt: 1 },
+      3600,
+      record,
+    );
+    const refresh = vi
+      .spyOn(rt.client, "refresh")
+      .mockRejectedValueOnce(new Error("IdP unavailable"));
+    const response = await request("/api/me", {
+      headers: { "x-vxture-session": s.rpsid },
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ retryable: true });
+    expect(await rt.store.get(s.rpsid)).not.toBeNull();
+    refresh.mockRestore();
+    expect(
+      (await request("/api/me", { headers: { "x-vxture-session": s.rpsid } }))
+        .status,
+    ).toBe(200);
   });
 
   it("requires reauthorization for an old RP session that has no original scope binding", async () => {

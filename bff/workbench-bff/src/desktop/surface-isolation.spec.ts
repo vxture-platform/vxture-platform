@@ -20,7 +20,7 @@ import { WorkbenchOidcClient } from "../auth/oidc-client";
 import { ScopeService } from "../scope-service";
 import { CatalogService } from "../catalog-service";
 import { ResourceOverview } from "../resource-overview";
-import { CONFIG } from "../tokens";
+import { CONFIG, PRIMARY_POOL } from "../tokens";
 import { configureHttp } from "../bootstrap";
 import { DesktopRouter } from "./desktop.router";
 import { DesktopSessionService } from "./desktop-session.service";
@@ -78,6 +78,22 @@ it("does not authenticate native headers as browser cookies or browser cookies a
       { provide: ScopeService, useValue: {} },
       { provide: CatalogService, useValue: {} },
       { provide: ResourceOverview, useValue: {} },
+      {
+        provide: PRIMARY_POOL,
+        useValue: {
+          query: async () => ({
+            rows: [
+              {
+                account: "fixture",
+                name: "Fixture",
+                email: null,
+                phone: null,
+                avatar_hash: null,
+              },
+            ],
+          }),
+        },
+      },
       DesktopSessionService,
       DesktopEnabledGuard,
       { provide: DESKTOP_RUNTIME, useValue: rt },
@@ -86,6 +102,7 @@ it("does not authenticate native headers as browser cookies or browser cookies a
   app = await NestFactory.create(BothSurfaces, {
     logger: false,
     bodyParser: false,
+    abortOnError: false,
   });
   configureHttp(app);
   await app.listen(0, "127.0.0.1");

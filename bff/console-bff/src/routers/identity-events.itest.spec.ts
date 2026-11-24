@@ -366,8 +366,19 @@ describe.skipIf(!pgUrl || !redisUrl)(
         for await (const chunk of req) chunks.push(Buffer.from(chunk));
         const body = JSON.parse(Buffer.concat(chunks).toString()) as {
           sids?: string[];
+          sid?: string;
         };
         centralReads++;
+        if (req.url === "/oidc/session/status") {
+          const session = central.get(body.sid!);
+          res.end(
+            JSON.stringify({
+              valid: session?.active === true,
+              next_check_at: Math.floor(Date.now() / 1000) + 60,
+            }),
+          );
+          return;
+        }
         const binding = {
           issuer,
           audience: "console",

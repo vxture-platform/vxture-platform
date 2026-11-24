@@ -345,7 +345,7 @@ Workbench 的语言偏好仍有独立焦点同步：`/auth/language` 请求单�
 
 - [x] 完成 N10 整包验收与清理。
 - [x] 在 D 盘建立独立发布工作区与 codex/identity-sync-release 分支，保留原工作区和其他任务改动。
-- [ ] 合并本次身份改造及命名调整，保留最新主线已有修复。
+- [x] 合并本次身份改造及命名调整，保留最新主线已有修复。
 - [ ] 发布分支回归、接口与迁移预检、备份与回退包。
 - [ ] 提交、CI、不可变镜像与生产部署。
 - [ ] 目标登录/退出/恢复/域隔离和事件启用验收。
@@ -364,3 +364,18 @@ N11 合并审查补充：
 - 数据库升级整包验证完成：本机 PostgreSQL 17.12 上从当前 main 的 DDL 建库，八份迁移连续执行两遍，与发布分支全新安装的实际 catalog 对比，结构、触发器、函数及有效权限 **0 差异**。临时库和本次新建角色已清理；生产为 PostgreSQL 18.3，生产备份恢复和目标核验仍单独执行。证据：`output/identity-upgrade-check.log`、`output/identity-upgrade-parity.json`。
 
 创建 Codex 默认工作区时系统盘空间不足，已改在 D 盘建立 Git 工作区并附加到当前任务。未清理其他任务文件。生产尚未迁移、变更配置或部署，后续只按实测结果更新状态。
+
+### N11 发布门禁与回退准备补充（05:45 CST）
+
+- [x] 已提交并推送发布 PR [#743](https://github.com/vxture-platform/vxture-platform/pull/743)，当前保持草稿，CI 未全部通过前不合并。
+- [x] 五个有门户测试脚本的入口整组通过：Accounts 27、Console 326、Opera 93、Website 70、Workbench 72。Website/Workbench 使用实际 SDK 与受控 SSE，覆盖停轮询、隐藏页事件、503 和旧请求竞态。
+- [x] Auth 首轮 1,231 项通过，修复四组旧夹具后相关 60 项通过；其余六 BFF 测试通过。Console PostgreSQL/Redis 集成与 HTTP 夹具修复后累计 578 项通过；Workbench 累计 210 项通过，包含真实 Redis 会话存储。跳过的商业专项集成不计入通过数。
+- [x] 修复 Workbench 桌面刷新暂时失败被误判 401：改为可重试 503，保留会话；HTTP 回归验证恢复后可访问，组织/空间漂移仍返回 409，原始授权范围不变。
+- [x] 发布包全部类型、Lint、格式、设计守卫、配置审计已通过；CI 后续暴露的 Auth Redis HTTP 夹具缺少持久 owner 已补齐，待新一轮 Redis 7 实跑。本地 Redis 3 不支持 Auth 测试所需命令，其失败不得标为服务缺陷或通过证据。
+- [x] Tenant 独立前端/BFF 镜像构建成功（workflow 45490995480，publish=false）；尚未发布镜像。
+- [x] 生产只读核对七个 active/platform/stable RP 的 realm 和退出地址，全部符合登记计划。生产仍运行旧版。
+- [x] 服务器内备份数据库、runtime/deploy 和所有运行应用镜像，文件受限保留于 `/srv/vxture/backups/identity-20261125/`。没有下载生产数据或凭据。
+- [x] 备份在同机无网络 PostgreSQL 18 容器恢复成功，236 张业务表；恢复时不重放原 owner/ACL，八份迁移执行两遍成功。此项是备份可读/数据恢复与迁移演练，权限对齐沿用独立非 owner 回归，不能称生产角色恢复已演练。
+- [ ] 最终 CI、成对发布镜像、停写迁移、生产配置切换和逐入口事件启用验收。
+
+证据：发布工作区 `output/portal-retest.log`、`auth-retest.log`、`console-retest.log`、`console-final-retest.log`、`workbench-retest.log`、`workbench-final-retest.log`、`production-preflight.log`、`production-backup.log`、`production-restore.log`。旧失败日志保留；本机证据不纳入 Git。数据库备份 SHA-256：`a491e700131e69752c767a5487d2052557d7dcbb47d0a4806311edff18dee0b1`。
