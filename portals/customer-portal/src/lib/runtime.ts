@@ -28,7 +28,7 @@ export async function loadBrand(): Promise<PortalBrand> {
       name: "如影智能研究院",
       title: "具身智能体\n空间服务平台",
       subtitle: "连接物理空间与智能体，支撑空间感知、场景建模与协同执行。",
-      brandColor: "#2548C5",
+      brandColor: "var(--vx-color-brand-700)",
       appearance: "light",
       density: "comfortable",
       logo: null,

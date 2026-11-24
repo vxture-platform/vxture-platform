@@ -10,7 +10,7 @@
  */
 import { startSessionSync } from "@vxture/core-identity-sdk";
 import { useEffect, useState, type CSSProperties } from "react";
-import { Icon } from "@vxture/design-system";
+import { Button, Icon, Input } from "@vxture/design-system";
 import type { PortalBrand, WorkspaceData } from "../lib/contracts";
 import { BrandIdentity } from "./BrandIdentity";
 import { ResearchArtwork } from "./ResearchArtwork";
@@ -28,6 +28,9 @@ export function WorkspacePage({
   const [data, setData] = useState(initialData);
   useEffect(() => {
     if (designPreview) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("vx_sso_checked");
+    window.history.replaceState(null, "", url.href);
     const sync = startSessionSync(async (signal) => {
       const response = await fetch("/api/portal/workspace", {
         credentials: "same-origin",
@@ -40,7 +43,9 @@ export function WorkspacePage({
         response.status === 403 ||
         response.status === 404
       ) {
-        window.location.replace("/");
+        window.location.replace(
+          response.status === 403 ? "/?access=denied" : "/",
+        );
         return "anonymous";
       }
       if (!response.ok) return "unavailable";
@@ -128,7 +133,7 @@ export function WorkspacePage({
             </div>
             <label className="research-search">
               <Icon name="search" size="sm" />
-              <input
+              <Input
                 type="search"
                 aria-label="搜索应用"
                 placeholder="搜索应用"
@@ -139,14 +144,16 @@ export function WorkspacePage({
           </div>
           <div className="research-app-filters" aria-label="应用分类">
             {categories.map((item) => (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 key={item}
                 type="button"
                 aria-pressed={category === item}
                 onClick={() => setCategory(item)}
               >
                 {item}
-              </button>
+              </Button>
             ))}
           </div>
           <div className="research-app-grid">
