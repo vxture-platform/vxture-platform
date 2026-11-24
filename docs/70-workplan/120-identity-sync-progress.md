@@ -10,9 +10,9 @@
 
 > 持续更新入口；最近更新：2026-11-25（Asia/Shanghai）。
 > 目标：变化主动通知，漏消息可恢复，页面及时收敛，最终按客户端撤除身份轮询。
-> 当前阶段：**N9 / N10 八入口完整本地链路完成；用户已授权完成工作并上线，N11 正在合并最新生产主线与准备发布，尚未部署**。此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
+> 当前阶段：**N11 生产主平台 v0.33.17 与 Tenant 镜像对已部署，18 个应用容器健康；七 RP 持久恢复、变化接收和 SSE 已启用，5 条真实变化投递完成。轮询退役仍关闭。** 此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
 > 实现基线：**N6 平台八入口统一接入事件同步/恢复/协商停轮询；N7 七 RP 登记计划、批量采集、告警及发布准备已完成。运营域持久会话与退出独立隔离，默认开关关闭。**
-> 最新收口：**N10 六入口七组身份域完整页面通过 32 项行为检查，修复 Admin / Opera / Arche 接收器与 SSE 遗漏 workforce 身份域的问题。35 条变化和 5 条退出投递全部完成；N9 两入口及 N8 的 126 项证据保留。真实登录/MFA与生产部署仍待验收。**
+> 最新收口：**PR #743 已合并，CI、镜像构建和生产发布工作流均通过；八份迁移完成，4 个有可信上下文的客户会话完成回填。真实登录/MFA、生产浏览器轮询退役与外部产品迁移仍分别待验收。**
 
 ## 总览
 
@@ -31,8 +31,9 @@
 | 外部产品迁移                            | ⏳ 待接入                  | vxtpl → Karda/Arda，不能以平台结果代替产品验收                          |
 | 真实浏览器与本机 nginx                  | ✅ 八入口完整链路通过      | N9 两入口 + N10 六入口；实际 BFF / 完整 Next 页面 / PG / Redis / nginx  |
 | 独立进程故障与本机容量                  | ✅ N5 本地通过             | 发送/接收进程强杀、真实 60 秒租约、发送停机时恢复、256 SSE，详见本页 N5 |
-| 部署预检、指标与告警模板                | ✅ 本地工具完成            | 只读 CLI、故障不报健康零值；实际采集/面板/告警送达待接线                |
-| 目标代理/跨产品、容量认证与发布         | ⏳ 待验收                  | 本机证据不代替目标环境；默认关闭，未提交、未部署                        |
+| 部署预检、指标与告警模板                | ✅ 七 RP 主机采集已运行    | 每 30 秒只读检查，七范围就绪且无积压；外部面板/告警送达待接线           |
+| 平台生产部署与目标代理                  | ✅ v0.33.17 已部署         | 18 个镜像/健康匹配；八入口公开边界通过；完整互动登录/MFA仍待验收        |
+| 跨产品、生产容量与轮询退役              | ⏳ 待验收                  | 外部产品未迁移；七 RP 退役开关 false；不以本地证据代替目标验收          |
 
 ## 上轮合并工作包（M1–M5）
 
@@ -58,7 +59,7 @@
 | N8   | 八入口九组身份域真实浏览器本地联调                 | ✅ 本地会话适配通过   | 126 项行为检查；真实前端会话代码与可控 HTTP，目标登录和代理仍待验收                                    |
 | N9   | 实际 BFF、代理及完整页面的本地链路联调             | ✅ 两入口本地通过     | Workbench / Tenant，真实存储、签名投递、重启/退出/撤权及 403 页面修复；详见本页 N9                     |
 | N10  | 其余六入口完整页面与实际 BFF 的本地联调            | ✅ 本地通过           | Accounts 双域、Website、Console、Admin、Opera、Arche；32 项行为检查，运营域缺陷修复后复验通过          |
-| N11  | 最新主线合并、生产迁移/配置/发布及目标验收         | 🔄 执行中             | 用户已授权上线；独立分支保留最新生产修复，迁移/登记/镜像/目标验收逐项记录，当前尚未部署                |
+| N11  | 最新主线合并、生产迁移/配置/发布及目标验收         | ✅ 已部署 / 部分验收  | v0.33.17 与 Tenant 上线，七 RP 事件/采集运行；互动验收与轮询退役仍待完成                               |
 
 本批请求路径：已验证 RP 会话 → 本地持久失效版本 → 必要时中心快照/有限补拉 → 领域事实重读 → 当前 Cookie 视图。健康空闲时新增链路只有 SSE 注释心跳；服务端 30 秒补扫处理持久投递/到期任务，不要求平台页面或产品定时查询身份。
 
@@ -71,7 +72,7 @@
 | 仓库迁移放置检查   | ✅ 已修复并验证 | 跟随现有 planner 解析，保留旧入口与未知结构拒绝；4 种隔离夹具通过                              |
 | 并行 PG 清理超时   | ✅ 已复验解决   | 初跑用例1135全过，但旧恢复测试删除临时库等待PG checkpoint超时；串行/明确清理期限后全量成功     |
 | 真实部署链路与容量 | ⏳ 待验收       | 本机浏览器/nginx、256 SSE 与独立进程证据已齐；目标代理/规模、跨产品、锁压力与 P95 保证尚未验证 |
-| 目标采集与告警送达 | ⏳ 待接线       | CLI 和告警模板已提供；接入实际监控并完成失败告警演练后才算完成                                 |
+| 目标采集与告警送达 | 🔄 部分完成     | 七 RP 主机采集已运行；外部面板与告警送达仍待接线和演练                                         |
 
 ## 跟进规则
 
@@ -346,8 +347,8 @@ Workbench 的语言偏好仍有独立焦点同步：`/auth/language` 请求单�
 - [x] 完成 N10 整包验收与清理。
 - [x] 在 D 盘建立独立发布工作区与 codex/identity-sync-release 分支，保留原工作区和其他任务改动。
 - [x] 合并本次身份改造及命名调整，保留最新主线已有修复。
-- [ ] 发布分支回归、接口与迁移预检、备份与回退包。
-- [ ] 提交、CI、不可变镜像与生产部署。
+- [x] 发布分支回归、接口与迁移预检、备份与回退包。
+- [x] 提交、CI、不可变镜像与生产部署。
 - [ ] 目标登录/退出/恢复/域隔离和事件启用验收。
 
 N11 合并审查补充：
@@ -379,3 +380,34 @@ N11 合并审查补充：
 - [ ] 最终 CI、成对发布镜像、停写迁移、生产配置切换和逐入口事件启用验收。
 
 证据：发布工作区 `output/portal-retest.log`、`auth-retest.log`、`console-retest.log`、`console-final-retest.log`、`workbench-retest.log`、`workbench-final-retest.log`、`production-preflight.log`、`production-backup.log`、`production-restore.log`。旧失败日志保留；本机证据不纳入 Git。数据库备份 SHA-256：`a491e700131e69752c767a5487d2052557d7dcbb47d0a4806311edff18dee0b1`。
+
+### N11 发布门禁通过与切换准备（06:20 CST）
+
+- [x] CI [45497806533](https://github.com/vxture-platform/vxture-platform/actions/runs/45497806533) 全部通过：格式、类型/Lint/守卫、审计、秘密扫描、应用构建、整包测试、PG/Redis 7 身份恢复专项及 SonarQube。数据库夹具改为自然排空连接后删除专属库，保留全部断言；本地 Auth 93、Console 52 项专项通过。
+- [x] PR #743 已合并，main 提交 `9b5690055eaed8d4c1f1aabac7ba0a926f4234d1`；发布 tag `v0.33.17` 已推送。平台镜像构建运行中，生产部署仍停在既有审批门。
+- [x] Tenant 生产镜像对构建发布成功，workflow [45497823031](https://github.com/vxture-platform/vxture-platform/actions/runs/45497823031)，源码 `e9b3fb02123b9db4c0418f2208bd736434446e41` 与合并提交的文件树一致。前端 digest `8d4ce030a2d8102edd38a22fa603c694f21536cc89e641ec1d45adea0784a8e4`；BFF digest `0702c20e6b5bbc14b3fbcdbf029e110d52594c09ab6572d7a0338fd9ead2565a`。
+- [x] 补做保留原对象所有者和 ACL 的 PostgreSQL 18 备份恢复；八份迁移及七 RP 禁用登记通过，迁移后 251 张业务表可读，原会话表 owner 保留，平台上下文写权限及专用身份角色权限验证通过。此证据补齐上一节明确未覆盖的 owner/ACL。
+- [x] 生产客户会话只读盘点：当时 4 个有效持久会话均具有合法、成对的共享组织/工作区，并通过当前成员资格核验。切换时重新核验后回填，不猜旧客户端选项、不延长到期时间；最终数量以停写时记录为准。
+- [x] 八 BFF 待发布配置已在服务器独立目录准备，事件与轮询退役开关关闭。Console 额外需要 `OIDC_RP_ENABLED=true`，运行配置已纳入计划，仓库模板补齐此既有开关；它不能替代恢复/变化/SSE 开关。
+- [ ] 预拉取镜像、停写后最新备份及其恢复验证、生产迁移/配置切换、事件分阶段启用和目标验收。
+
+本节记录时，生产仍运行 v0.33.16，尚未执行生产迁移或应用切换。服务器运维脚本和脱敏证据保存在发布工作区 `output/production-*` 与服务器 `/srv/vxture/backups/identity-20261125/`；生产数据和凭据仅留服务器。主机采集计划使用专用只读身份观察角色和 systemd，外部告警送达仍不计为已验证。
+
+### N11 生产部署与事件启用结果（2026-11-25 06:55 CST）
+
+- [x] 主平台 [v0.33.17](https://github.com/vxture-platform/vxture-platform/tree/v0.33.17) 对应 `9b5690055eaed8d4c1f1aabac7ba0a926f4234d1`；平台构建 [45499723253](https://github.com/vxture-platform/vxture-platform/actions/runs/45499723253) 与部署 [45499723423](https://github.com/vxture-platform/vxture-platform/actions/runs/45499723423) 成功。18 个实际应用容器的镜像引用与本次不可变清单逐一匹配且全部健康。
+- [x] 停写后数据库备份 SHA-256 `2c36634366ff6d8865b623fdeb270c569649a55b063f1b4553f006abac22939d`；隔离 PostgreSQL 18 保留 owner/ACL 恢复验证成功。精确八份迁移执行完成，计划 SHA-256 `d6c1a80317fc3413a9a894cdab059933b299e5d60f961303f1dc036e1ed66084`；4 个客户会话按真实共享上下文和有效成员资格回填，没有延长会话或回填虚构 MFA。
+- [x] Tenant 已同时切换前端/BFF digest、新 compose 和 `.env.tenant-bff`，真实容器无旧 BFF 环境变量名；旧配置仅留在受限回退备份。标准 managed release 只记录新镜像身份，未将旧 BFF 镜像伪装为合法 previous。
+- [x] 七 RP 的恢复流、变化流、receiver 均启用；恢复/变化/SSE 开关为 true，环境为 prod。Auth 的 workforce 持久身份、Accounts 双域事件和变化发送均开启。Workbench/Tenant 使用专用身份角色，原业务连接权限不扩大。
+- [x] 七个真实 RP 分别验证 logout-v1 与 changes-v1：快照 200、补拉 200、篡改游标 403，返回作用域与禁缓存契约匹配。初始 5 条真实变化任务全部 delivered；检查时 pending/quarantined/exhausted/过期租约/超期待处理时间边界均为 0。
+- [x] 八入口公开首页/跳转和匿名 SSE 边界共 18 项检查通过；Accounts 双域匿名 401、非法 realm 400，七 RP 匿名 401 且 no-store。40-verify-platform-runtime、nginx 配置、内部别名与健康检查通过。
+- [x] Chrome 真实浏览器确认升级后 Console 与 Workbench 的既有登录会话可读取完整页面；Tenant 品牌页与登录跳转正常。Tenant 新登录停在用户验证码/人机验证入口，未自动完成登录或代替用户 MFA。
+- [x] `vxture-identity-observer.timer` 每 30 秒使用专用只读角色采集七个范围；service 首次及后续运行成功，七范围 databaseReady=true，原子 `.prom` 和 `status.json` 持续更新。没有安装外部 Prometheus/仪表盘或验证告警送达。
+- [x] 本次本机 PostgreSQL/Redis 已按精确数据目录、程序路径和端口停止；服务器隔离恢复容器经任务标签与无网络属性核验后停止并移除。操作脚本与最终脱敏清单已归档到备份目录 `execution/`，数据库、镜像和配置回退备份保留。
+- [ ] 七 RP 的 `RP_SESSION_POLLING_RETIREMENT_ENABLED` 仍全部 false。完成真实新登录/MFA、跨标签退出/撤权、代理恢复及正常闲置无身份请求矩阵后，才逐入口开启。当前不能宣称“平台轮询全部停用”。
+- [ ] Accounts 双域完整浏览器退出、生产改密/强制下线、真实休眠与容量认证仍待验证；不对用户现有账号执行破坏性验收。
+- [ ] 外部通则/范本原件仍待账号验证和可编辑入口，仓内 150 v0.7 已交付；#726/#731 外部产品接入保持 OPEN。
+
+部署故障与恢复记录：停写迁移后首次 Compose 预演失败，容器尚未替换，06:33 左右重新启动原 18 个容器恢复服务，约 7 分钟停写/不可用窗口。预演原始错误已被脚本清理，原因未完全定性；恢复运行态后同一新版预演通过。随后发现 root 运维运行 Buildx 留下 `/home/ecs-user/.docker/buildx/current` 属主错误，精确改回部署账号后镜像解析和发布成功。主平台清理旧镜像时回收了尚无容器引用的新 Tenant BFF，按原 digest 重新拉取后成对切换。新 Tenant env 安装后补跑 20-sync-nginx-config，恢复其精确域名路由并通过公网复验；已将这些顺序约束写入运行手册 §17。
+
+证据留存在独立发布工作区 `output/production-deploy-success.log`、`production-tenant-deploy.log`、`production-enable-*.log`、`production-protocol-probe.log`、`production-public-probe.log`、`production-final-inventory.jsonl`、`production-runtime-verification.log`、`production-observer-install.log`。服务器备份、阶段标记和配置回退在 `/srv/vxture/backups/identity-20261125/`；凭据和生产备份未下载、未提交 Git。

@@ -8,7 +8,7 @@
 
 # 客户身份事件同步：运行与恢复
 
-> 2026-11-24：客户可靠退出、logout-v1 / changes-v1、Console 持久接收/视图重建/SSE/可选轮询退役已本地实现。N5 增加只读预检、指标/告警模板与独立进程验收；尚未部署。N6 已补齐八个平台入口和 workforce 的本地实现；外部产品及目标监控接线仍待完成。§1–§8 保留各子集部署步骤，最新能力与验收入口见 §12。
+> 2026-11-25：主平台 v0.33.17 与 Tenant 镜像对已部署，七 RP 事件能力和主机只读采集已启用；轮询退役保持关闭。最新生产记录见 §17 和 [120 进展页](../70-workplan/120-identity-sync-progress.md)。§1–§16 保留实现、操作和各批次证据；其中历史“尚未部署”只描述记录当时。互动登录/MFA、生产浏览器轮询退役、外部产品及告警送达继续分别验收。
 
 ## 1. 部署顺序与旧会话
 
@@ -441,7 +441,7 @@ promtool test rules deploy/identity-sync/alerts.test.yml
 
 ### 13.4 八入口目标验收矩阵
 
-每行都记录目标版本/digest、实际 origin、执行时间、操作者和证据位置。下表属于待执行清单；本机 SQL、HTTP 或规则测试不能填成目标环境已通过。
+每行都记录目标版本/digest、实际 origin、执行时间、操作者和证据位置。2026-11-25 已完成 §17 的生产镜像、协议和公开代理检查；下表的完整行为验收仍单列，不能用本机 SQL、HTTP 或规则测试替代。
 
 | 入口      | 身份域 / SSE 地址                                     | 必须核验的特殊边界                                             | 目标状态     |
 | --------- | ----------------------------------------------------- | -------------------------------------------------------------- | ------------ |
@@ -535,3 +535,27 @@ Workbench 的语言偏好仍有独立焦点同步：`/auth/language` 请求单�
 本批 32 项行为检查、35 条变化/5 条退出投递、三个模块类型/Lint/格式及源码指纹全部通过。客户/运营同 UUID 独立隔离，完整页面在事件后收敛；语言偏好和通知业务读取单独计数。Website 检查真实 API 重读，菜单展开展示不在结果内；最终登录落点受本地浏览器 allowlist 限制。
 
 清理仅针对记录且命令行匹配的 Next 子进程树、运行器拥有的 BFF/Redis/nginx、精确随机验收库及新增角色；运行器停止后再停本批启动的 PG。不要全局强杀 Node。生产矩阵 §13.4 仍需目标证据；最新授权已允许进入 N11 发布阶段。
+
+## 17. N11 生产运行记录与后续门禁（2026-11-25）
+
+### 17.1 当前版本和开关
+
+主平台 v0.33.17 / `9b569005` 已部署；独立 Tenant 前端/BFF 为同树源码 `e9b3fb0` 构建的 digest 对，完整引用见 [120 N11](../70-workplan/120-identity-sync-progress.md)。18 个应用容器全部健康。精确八份迁移、停写后备份及 PostgreSQL 18 owner/ACL 恢复验证已完成，保留加法结构与原事实。
+
+七 RP（Console、Website、Admin、Opera、Arche、Workbench、Tenant）使用 `RP_IDENTITY_ENVIRONMENT=prod`，RECOVERY、CHANGES、SESSION_EVENTS 均 true，POLLING_RETIREMENT 均 false。Console 还必须设置 `OIDC_RP_ENABLED=true`。Auth 的 WORKFORCE_IDENTITY_SYNC、ACCOUNTS_SESSION_EVENTS、IDENTITY_CHANGE_DELIVERY 均 true。三个运营 RP 的 realm 为 workforce，历史 Redis-only 运营会话需重新登录，不能以旧缓存伪造持久身份或 MFA。
+
+七 RP 的机密恢复协议通过，5 条真实变化投递完成；18 项公开首页/匿名事件边界检查与标准运行态检查通过。真实浏览器验证 Console/Workbench 既有登录页面、Tenant 品牌页及登录跳转；没有完成用户验证码/MFA、生产撤权/改密或完整跨标签退出测试，§13.4 不标为完整通过。轮询退役须等待该矩阵的实际证据，Accounts 的双域推送已上线也不等于整站停止所有查询。
+
+### 17.2 部署及回退顺序修正
+
+- 先在运行态完成镜像解析及 Compose 只读预演，再进入迁移停写窗口。若停写后预演/发布失败，及时按备份容器清单恢复已有应用服务，保留加法迁移；不能让生产无限等待工作流，也不能通过回灌数据库覆盖后续真实写入。
+- Docker/Buildx 使用部署账号；需要 root 执行的独立备份操作不要以该账号的 DOCKER_CONFIG 运行 Buildx。若已出现该目录下单个状态文件属主漂移，检查真实属主后精确修复；不要输出登录凭据或整体放宽目录权限。本次仅修复 `buildx/current`。
+- Tenant 命名迁移时，新 `.env.tenant-bff` 必须在 nginx 读取 CUSTOMER_PORTAL_HOSTS 前就绪；完成成对切换后运行 `20-sync-nginx-config.sh`，验证精确域名 vhost、`nginx -t`、公开页面和 `/auth/events`。缺少精确 vhost 会落入拒绝未知子域的通配规则，HTTP/2 可能表现为协议错误，不能凭容器健康判定入口可用。
+- 主平台 31 流程会回收没有容器引用的 `platform_*` 镜像，可能回收预拉取但尚未启用的 Tenant BFF；Tenant 切换前重新核对两个 digest 的本机存在性，必要时按既定 digest 拉取。不得更换为浮动 tag 或放宽旧 BFF 身份 guard。
+- 原版本镜像、配置及数据备份保留在 `/srv/vxture/backups/identity-20261125/`。应用回退先恢复兼容读取，保留持久撤销与事实；Tenant 必须保持镜像/compose/env 成对恢复。原镜像可能已由标准流程清理，不能只假设它仍在 Docker cache，应先核验备份与所需镜像。
+
+### 17.3 主机采集与剩余验收
+
+主机 `vxture-identity-observer.service` / `.timer` 每 30 秒运行，专用 `svc_identity_observer` 默认只读；七个范围必须完整。输出在 `/srv/vxture/runtime/identity-sync/identity-sync.prom` 与 `status.json`，包含采集时间、就绪状态和有范围的队列指标。service 失败或快照超过 120 秒必须按不可用处理，不可把旧的健康文件当现状。用 `systemctl show vxture-identity-observer.service -p Result -p ExecMainStatus`、timer 状态和快照时间共同检查；日志仅写本机 journal。
+
+这不是 Prometheus 抓取或外部告警送达，后两项尚未接线。本次没有发送邮件、聊天通知或替用户完成验证码/MFA。当前剩余合并批为：完整目标浏览器矩阵 → 按入口开启轮询退役并记录正常闲置请求 → 外部告警接线/演练 → 独立产品接入。外部产品 #726/#731 与通则/范本引用仍分别保留待办，平台上线不能替代产品侧迁移。
