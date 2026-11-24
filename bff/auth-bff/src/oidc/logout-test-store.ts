@@ -19,6 +19,15 @@ export function logoutTestStore(
   return {
     records,
     leases,
+    getOidcSession: vi.fn(async (sid: string) => {
+      const identity = snapshot(sid);
+      return identity.sub
+        ? {
+            sub: identity.sub,
+            realm: identity.sub.startsWith("opr_") ? "workforce" : "customer",
+          }
+        : null;
+    }),
     beginOidcLogout: vi.fn(async (sid: string) => {
       const identity = snapshot(sid);
       if (!records.has(sid))

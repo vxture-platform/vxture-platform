@@ -15,12 +15,10 @@ import type { HomeCopy } from "../../lib/presentation";
 
 const mocks = vi.hoisted(() => ({
   load: vi.fn(),
-  probe: vi.fn(),
   login: vi.fn(),
 }));
 vi.mock("../../lib/api", () => ({
   loadWorkData: mocks.load,
-  loadWorkSession: mocks.probe,
 }));
 vi.mock("../../lib/navigation", () => ({ authNavigation: mocks.login }));
 vi.mock("../../lib/locale", () => ({
@@ -117,6 +115,16 @@ const runtime: WorkRuntime = {
 let host: HTMLDivElement;
 let root: Root;
 let now: number;
+let stream: ReadableStreamDefaultController<Uint8Array>;
+async function emit(name: string, reason: string) {
+  await act(async () => {
+    stream.enqueue(
+      new TextEncoder().encode(
+        `event: ${name}\ndata: ${JSON.stringify({ reason })}\n\n`,
+      ),
+    );
+  });
+}
 async function foreground() {
   now += 2000;
   await act(async () => {
@@ -141,6 +149,30 @@ async function mount() {
 beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("BroadcastChannel", undefined);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, options: RequestInit) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          stream = controller;
+        },
+      });
+      options.signal?.addEventListener("abort", () => {
+        try {
+          stream.close();
+        } catch {
+          /* Already cancelled. */
+        }
+      });
+      return new Response(body, {
+        headers: {
+          "content-type": "text/event-stream",
+          "x-vxture-session-sync": "events-v1",
+        },
+      });
+    }),
+  );
   now = 1_000_000;
   vi.spyOn(Date, "now").mockImplementation(() => now);
   Object.defineProperty(document, "visibilityState", {
@@ -150,7 +182,6 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/?vx_sso_checked=1");
   sessionStorage.clear();
   mocks.load.mockReset().mockResolvedValue(ready);
-  mocks.probe.mockReset().mockResolvedValue({ status: "ready", data: true });
   mocks.login.mockReset().mockReturnValue("/auth/login");
   host = document.createElement("div");
   document.body.append(host);
@@ -192,7 +223,11 @@ describe("WorkPortal session reconciliation", () => {
     await foreground();
     expect(host.textContent).toContain("Verified workspace");
     await act(async () => resolveRead(ready));
-    mocks.load.mockRejectedValueOnce(new Error("offline"));
+    mocks.load.mockResolvedValueOnce({
+      status: "error",
+      code: 503,
+      message: "连接失败",
+    });
     await foreground();
     expect(host.textContent).toContain("Verified workspace");
     expect(host.textContent).toContain("连接失败");
@@ -210,68 +245,71 @@ describe("WorkPortal session reconciliation", () => {
     expect(mocks.login).not.toHaveBeenCalled();
   });
 
-  it("clears application data on a lightweight heartbeat without reloading the catalog", async () => {
+  it("retires periodic and foreground reads after SSE negotiation", async () => {
     vi.useFakeTimers();
     await mount();
-    mocks.probe.mockResolvedValue(anonymous);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
-    });
+    await emit("resync-required", "connected");
+    for (let i = 0; i < 13; i++) {
+      now += 25000;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25000);
+        stream.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
+        window.dispatchEvent(new Event("focus"));
+      });
+    }
+    expect(mocks.load).toHaveBeenCalledTimes(2);
+    mocks.load.mockResolvedValue(anonymous);
+    await emit("session-ended", "revoked");
     expect(host.textContent).toContain("Anonymous");
     expect(host.textContent).not.toContain("Verified workspace");
-    expect(mocks.load).toHaveBeenCalledTimes(1);
     expect(mocks.login).not.toHaveBeenCalled();
-    vi.useRealTimers();
   });
-  it("does not restore stale application data when logout wins a concurrent full refresh", async () => {
-    vi.useFakeTimers();
+  it("reads again after an older request when logout arrives concurrently", async () => {
     await mount();
-    let finishProbe!: (value: LoadResult<boolean>) => void;
     let finishRead!: (value: LoadResult<WorkData>) => void;
-    mocks.probe.mockImplementationOnce(
-      () =>
-        new Promise<LoadResult<boolean>>((resolve) => {
-          finishProbe = resolve;
-        }),
-    );
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
-    });
     mocks.load.mockImplementationOnce(
       () =>
-        new Promise<LoadResult<WorkData>>((resolve) => {
+        new Promise((resolve) => {
           finishRead = resolve;
         }),
     );
     await foreground();
-    await act(async () => finishProbe(anonymous));
+    await emit("session-ended", "revoked");
+    expect(mocks.load).toHaveBeenCalledTimes(2);
+    mocks.load.mockResolvedValue(anonymous);
     await act(async () => finishRead(ready));
+    expect(mocks.load).toHaveBeenCalledTimes(3);
     expect(host.textContent).toContain("Anonymous");
     expect(host.textContent).not.toContain("Verified workspace");
-    vi.useRealTimers();
   });
-
-  it("retains login on heartbeat outages and skips hidden tabs", async () => {
+  it("retains identity on outages and skips hidden compatibility reads", async () => {
     vi.useFakeTimers();
     await mount();
-    mocks.probe.mockResolvedValue({
+    mocks.load.mockResolvedValue({
       status: "error",
       code: 503,
       message: "Unavailable",
     });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
-    });
+    await emit("access-changed", "access-changed");
     expect(host.textContent).toContain("Verified workspace");
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
       value: "hidden",
     });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
+    now += 300000;
+    await act(async () => vi.advanceTimersByTimeAsync(300000));
+    expect(mocks.load).toHaveBeenCalledTimes(2);
+  });
+  it("updates authorization from events even while hidden", async () => {
+    await mount();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
     });
-    expect(mocks.probe).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
+    mocks.load.mockResolvedValue(anonymous);
+    await emit("session-ended", "revoked");
+    expect(host.textContent).toContain("Anonymous");
+    expect(mocks.login).not.toHaveBeenCalled();
   });
 
   it("keeps a failed silent callback anonymous on later foreground checks", async () => {

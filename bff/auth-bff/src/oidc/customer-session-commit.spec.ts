@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 // ⚠️ 跨层引用: Use the public client-registration contract.
 import type { OidcClientConfig } from "@vxture/service-iam";
 import { OidcService } from "./oidc.service";
+import { logoutTestStore } from "./logout-test-store";
 
 // ============================================================================
 // Public orchestration with failing persistence boundaries
@@ -156,6 +157,10 @@ describe("customer durable commit boundary", () => {
     );
     const notify = vi.fn(async () => {});
     Object.assign(f.redis, {
+      ...logoutTestStore(() => ({
+        sub: "opr_operator",
+        clientIds: ["operator"],
+      })),
       getOidcSession: async () => ({ realm: "workforce", sub: "opr_operator" }),
       getOidcSessionClients: async () => ["operator"],
     });
@@ -170,9 +175,12 @@ describe("customer durable commit boundary", () => {
       ),
     ).resolves.toBe("https://vxture.com/");
     expect(f.durableSession.customerOwner).not.toHaveBeenCalled();
-    expect(notify).toHaveBeenCalledWith("operator-sid", "opr_operator", [
-      "operator",
-    ]);
+    expect(notify).toHaveBeenCalledWith(
+      "operator-sid",
+      "opr_operator",
+      ["operator"],
+      true,
+    );
   });
 
   it("does not end a customer session through a workforce cookie", async () => {

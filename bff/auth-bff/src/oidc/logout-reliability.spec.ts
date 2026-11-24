@@ -43,7 +43,7 @@ function fixture(ids = ["website", "yucer", "cospace"]) {
     Object.assign(Object.create(OidcService.prototype), {
       redis,
       token: { revokeSession: tokenRevoke },
-      durableSession: { revoke },
+      durableSession: { revoke, customerOwner: vi.fn(async () => null) },
       clients,
       keys: { sign: vi.fn(() => "synthetic-logout-token") },
       logger,
