@@ -86,11 +86,11 @@ jobs:
         env:
           CUSTOMER_PORTAL_TEST_DATABASE_URL: postgresql://postgres@localhost:5432/postgres
         run: |
-          pnpm --filter @vxture/bff-customer-portal build
+          pnpm --filter @vxture/bff-tenant build
           pnpm --filter @vxture/service-customer-portal type-check
-          pnpm --filter @vxture/bff-customer-portal type-check
+          pnpm --filter @vxture/bff-tenant type-check
           pnpm --filter @vxture/service-customer-portal test
-          pnpm --filter @vxture/bff-customer-portal test
+          pnpm --filter @vxture/bff-tenant test
           pnpm --filter "@vxture/bff-console^..." --if-present build
           pnpm --filter @vxture/bff-console exec vitest run src/routers/customer-portal.http.spec.ts
       - name: Validate Accounts authentication regressions

@@ -44,7 +44,7 @@ L0 各面的**段归属与段内取号规则**(x0=UI / x1=BFF / x2–x9 归本�
 | varda(非面,内嵌)   | 无域名(console/admin `/varda/*` 反代)                    | varda-bff / varda-agent               | worker-02 发布(UFW 仅放行 tailnet)             |
 
 2026-11-23 纠偏：端口登记中的 workbench 即 RUYIN，网页和既有 BFF 沿用原分配。
-桌面适配迁入同一 `bff/workbench`，复用 `platform_bff-workbench`、现有连接及运行文件；
+桌面适配迁入同一 `bff/workbench-bff`，复用 `platform_bff-workbench`、现有连接及运行文件；
 不新增 `ruyin-bff` 容器、独立镜像、数据库角色或监听端口，3062 方案未获批准。
 `api.ruyin.work` 已在 v0.33.8 启用并完成真实桌面账号试点，受控路径映射到既有后端；
 网页和桌面使用分开的 RP 凭据及会话空间，不代表两套业务服务。

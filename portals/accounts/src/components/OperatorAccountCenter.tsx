@@ -8,6 +8,7 @@
 "use client";
 import { PhoneNumber } from "@vxture/design-system";
 import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
+import { startSessionSync } from "@vxture/core-identity-sdk";
 import {
   SecurityVerification,
   useSecurityVerificationControls,
@@ -77,9 +78,7 @@ export function OperatorAccountCenter() {
   const section =
     useSearchParams().get("section") === "security" ? "security" : "profile";
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const inFlight = useRef(false);
-  const active = useRef(false);
-
+  const refreshRef = useRef<(() => Promise<unknown>) | null>(null);
   useEffect(() => {
     if (load.state !== "ready") return;
     updateMenu({
@@ -92,55 +91,39 @@ export function OperatorAccountCenter() {
   }, [load, updateMenu]);
 
   const refresh = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    try {
-      const self = await fetchOperatorSelf();
-      if (active.current) setLoad({ state: "ready", self });
-    } catch (e) {
-      if (!active.current) return;
-      if (e instanceof OperatorUnauthenticatedError) {
-        setLoad({ state: "unauth" });
-        expire();
-      } else
+    await refreshRef.current?.();
+  }, []);
+  useEffect(() => {
+    const sync = startSessionSync(async (signal) => {
+      try {
+        const self = await fetchOperatorSelf(signal);
+        if (signal.aborted) return "unavailable";
+        setLoad({ state: "ready", self });
+        return "active";
+      } catch (error) {
+        if (signal.aborted) return "unavailable";
+        if (error instanceof OperatorUnauthenticatedError) {
+          setLoad({ state: "unauth" });
+          expire();
+          return "anonymous";
+        }
         setLoad((previous) =>
           previous.state === "ready"
             ? previous
             : {
                 state: "error",
-                message: e instanceof Error ? e.message : "",
+                message: error instanceof Error ? error.message : "",
               },
         );
-    } finally {
-      inFlight.current = false;
-    }
-  }, [expire]);
-
-  useEffect(() => {
-    active.current = true;
-    let lastReadAt = Date.now();
-    void refresh();
-    const reconcile = () => {
-      if (
-        document.visibilityState !== "visible" ||
-        Date.now() - lastReadAt < 1500
-      )
-        return;
-      lastReadAt = Date.now();
-      void refresh();
-    };
-    const interval = window.setInterval(reconcile, 300_000);
-    window.addEventListener("focus", reconcile);
-    window.addEventListener("pageshow", reconcile);
-    document.addEventListener("visibilitychange", reconcile);
+        return "unavailable";
+      }
+    }, "/oidc/session-events?realm=workforce");
+    refreshRef.current = sync.refresh;
     return () => {
-      active.current = false;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", reconcile);
-      window.removeEventListener("pageshow", reconcile);
-      document.removeEventListener("visibilitychange", reconcile);
+      refreshRef.current = null;
+      sync.stop();
     };
-  }, [refresh]);
+  }, [expire]);
 
   if (load.state === "unauth") return null;
   return (

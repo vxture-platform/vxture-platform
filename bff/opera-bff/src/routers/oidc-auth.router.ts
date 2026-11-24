@@ -30,6 +30,7 @@ import {
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import {
+  rpAuthFailure,
   generatePkce,
   randomToken,
   safeReturnTo,
@@ -48,7 +49,7 @@ import {
 } from "@vxture/core-identity-sdk";
 import type { Redis } from "ioredis";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
-import { invalidRequest, unauthenticated } from "../errors/api-error";
+import { ApiError, invalidRequest, unauthenticated } from "../errors/api-error";
 import {
   RP_AUTH_SERVICE,
   RP_OIDC_CLIENT,
@@ -288,9 +289,16 @@ export class OidcAuthRouter {
 
   /** Current login state (verified claims) for the shell bootstrap. */
   @Get("session")
+  @Header("Cache-Control", "no-store")
   async session(@Req() req: Request): Promise<Record<string, unknown>> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
     const out = await this.auth.resolve(rpsid);
+    if (out.status === "unavailable") {
+      const failure = rpAuthFailure(out);
+      throw new ApiError(503, failure.code, failure.message, {
+        retryable: failure.retryable,
+      });
+    }
     if (out.status !== "ok") {
       throw unauthenticated("AUTH_NO_SESSION", "No active session");
     }
@@ -306,6 +314,7 @@ export class OidcAuthRouter {
    * session read on the hot path.
    */
   @Get("check")
+  @Header("Cache-Control", "no-store")
   async check(
     @Req() req: Request,
     @Headers("x-original-uri") originalUri: string | undefined,
@@ -313,6 +322,12 @@ export class OidcAuthRouter {
   ): Promise<void> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
     const out = await this.auth.resolve(rpsid);
+    if (out.status === "unavailable") {
+      const failure = rpAuthFailure(out);
+      throw new ApiError(503, failure.code, failure.message, {
+        retryable: failure.retryable,
+      });
+    }
     if (out.status !== "ok") {
       res.status(401).end();
       return;

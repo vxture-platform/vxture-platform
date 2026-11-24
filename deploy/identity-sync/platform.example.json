@@ -1,0 +1,67 @@
+{
+  "scopes": [
+    {
+      "clientId": "console",
+      "issuer": "https://accounts.example.test",
+      "realm": "customer",
+      "environment": "prod",
+      "releaseChannel": "stable",
+      "logoutUri": "https://console.example.test/auth/backchannel-logout",
+      "receiverUri": "https://console.example.test/auth/identity-events"
+    },
+    {
+      "clientId": "website",
+      "issuer": "https://accounts.example.test",
+      "realm": "customer",
+      "environment": "prod",
+      "releaseChannel": "stable",
+      "logoutUri": "https://website.example.test/auth/backchannel-logout",
+      "receiverUri": "https://website.example.test/auth/identity-events"
+    },
+    {
+      "clientId": "admin",
+      "issuer": "https://accounts.example.test",
+      "realm": "workforce",
+      "environment": "prod",
+      "releaseChannel": "stable",
+      "logoutUri": "https://admin.example.test/auth/backchannel-logout",
+      "receiverUri": "https://admin.example.test/auth/identity-events"
+    },
+    {
+      "clientId": "opera",
+      "issuer": "https://accounts.example.test",
+      "realm": "workforce",
+      "environment": "prod",
+      "releaseChannel": "stable",
+      "logoutUri": "https://opera.example.test/auth/backchannel-logout",
+      "receiverUri": "https://opera.example.test/auth/identity-events"
+    },
+    {
+      "clientId": "arche",
+      "issuer": "https://accounts.example.test",
+      "realm": "workforce",
+      "environment": "prod",
+      "releaseChannel": "stable",
+      "logoutUri": "https://arche.example.test/auth/backchannel-logout",
+      "receiverUri": "https://arche.example.test/auth/identity-events"
+    },
+    {
+      "clientId": "workbench",
+      "issuer": "https://accounts.example.test",
+      "realm": "customer",
+      "environment": "prod",
+      "releaseChannel": "stable",
+      "logoutUri": "https://workbench.example.test/auth/backchannel-logout",
+      "receiverUri": "https://workbench.example.test/auth/identity-events"
+    },
+    {
+      "clientId": "customer-portal",
+      "issuer": "https://accounts.example.test",
+      "realm": "customer",
+      "environment": "prod",
+      "releaseChannel": "stable",
+      "logoutUri": "https://tenant.example.test/auth/backchannel-logout",
+      "receiverUri": "https://tenant.example.test/auth/identity-events"
+    }
+  ]
+}

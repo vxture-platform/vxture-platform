@@ -7,6 +7,7 @@
  * @date 2026-11-07
  */
 "use client";
+import { startSessionSync } from "@vxture/core-identity-sdk";
 
 import {
   createContext,
@@ -190,34 +191,18 @@ export function AccountCenterShell({
     },
   ];
   useEffect(() => {
-    const controller = new AbortController();
-    let inFlight = false;
-    let lastReadAt = 0;
-    async function read() {
-      if (
-        controller.signal.aborted ||
-        leaving.current ||
-        inFlight ||
-        document.visibilityState !== "visible" ||
-        Date.now() - lastReadAt < 1500
-      )
-        return;
-      inFlight = true;
-      lastReadAt = Date.now();
+    const sync = startSessionSync(async (signal) => {
       try {
         const resource = realm === "customer" ? "customer" : "operator";
         const response = await fetch(`${API_BASE}/oidc/${resource}/self`, {
           credentials: "include",
           cache: "no-store",
-          signal: AbortSignal.any([
-            controller.signal,
-            AbortSignal.timeout(10000),
-          ]),
+          signal,
         });
-        if (controller.signal.aborted || leaving.current) return;
+        if (signal.aborted || leaving.current) return "unavailable";
         if (response.status === 401) {
           expire();
-          return;
+          return "anonymous";
         }
         if (!response.ok) throw new Error("account_session_unavailable");
         const data: unknown = await response.json();
@@ -233,7 +218,7 @@ export function AccountCenterShell({
         )
           throw new Error("invalid_account_realm");
         const identityKey = `${realm}:${realm === "customer" ? profile.id : account}`;
-        if (controller.signal.aborted || leaving.current) return;
+        if (signal.aborted || leaving.current) return "unavailable";
         setAccountUser((previous) => ({
           ...(previous?.identityKey === identityKey ? previous : {}),
           identityKey,
@@ -255,30 +240,16 @@ export function AccountCenterShell({
               }),
         }));
         setSession("authenticated");
+        return "active";
       } catch {
-        if (!controller.signal.aborted && !leaving.current)
+        if (!signal.aborted && !leaving.current)
           setSession((previous) =>
             previous === "authenticated" ? previous : "error",
           );
-      } finally {
-        inFlight = false;
+        return "unavailable";
       }
-    }
-    void read();
-    const reconcile = () => {
-      void read();
-    };
-    const interval = window.setInterval(reconcile, 300_000);
-    window.addEventListener("focus", reconcile);
-    window.addEventListener("pageshow", reconcile);
-    document.addEventListener("visibilitychange", reconcile);
-    return () => {
-      controller.abort();
-      window.clearInterval(interval);
-      window.removeEventListener("focus", reconcile);
-      window.removeEventListener("pageshow", reconcile);
-      document.removeEventListener("visibilitychange", reconcile);
-    };
+    }, `/oidc/session-events?realm=${realm}`);
+    return sync.stop;
   }, [realm, pathname, active, revision, expire]);
   useEffect(() => {
     setOpen(false);

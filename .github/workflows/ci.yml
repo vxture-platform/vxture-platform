@@ -516,6 +516,7 @@ jobs:
         run: |
           pnpm lint:data-design
           pnpm lint:schema-residue
+          node --test scripts/guardrails/check-schema-residue.test.mjs
           pnpm lint:seed
           pnpm lint:catalog-domains
           # 产品生命周期状态机住在四处(@shared 值域 / opera-bff STATE_TRANSITIONS /

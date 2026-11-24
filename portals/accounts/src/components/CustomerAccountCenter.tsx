@@ -7,6 +7,7 @@
  * @date 2026-11-07
  */
 "use client";
+import { startSessionSync } from "@vxture/core-identity-sdk";
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -113,31 +114,19 @@ export function CustomerAccountCenter() {
   }, [load, updateMenu]);
 
   useEffect(() => {
-    const controller = new AbortController();
     setLoad({ state: "loading" });
-    let inFlight = false;
-    let lastReadAt = 0;
-    async function read() {
-      if (
-        controller.signal.aborted ||
-        inFlight ||
-        document.visibilityState !== "visible" ||
-        Date.now() - lastReadAt < 1500
-      )
-        return;
-      inFlight = true;
-      lastReadAt = Date.now();
+    const sync = startSessionSync(async (signal) => {
       try {
-        const profile = await fetchCustomerSelf("", controller.signal);
+        const profile = await fetchCustomerSelf("", signal);
         // A route must never display an account from the other identity domain.
         if (profile.realm !== "customer")
           throw new CustomerReadError("unavailable");
         const results = await Promise.allSettled([
-          fetchCustomerSelf("/security", controller.signal),
-          fetchCustomerSelf("/sessions", controller.signal),
-          fetchCustomerSelf("/login-history", controller.signal),
+          fetchCustomerSelf("/security", signal),
+          fetchCustomerSelf("/sessions", signal),
+          fetchCustomerSelf("/login-history", signal),
         ]);
-        if (controller.signal.aborted) return;
+        if (signal.aborted) return "unavailable";
         if (
           results.some(
             (result) =>
@@ -148,7 +137,7 @@ export function CustomerAccountCenter() {
         ) {
           setLoad({ state: "unauthenticated" });
           expire();
-          return;
+          return "anonymous";
         }
         setLoad({
           state: "ready",
@@ -157,38 +146,27 @@ export function CustomerAccountCenter() {
           sessions: projection(results[1]),
           history: projection(results[2]),
         });
+        return results.every((result) => result.status === "fulfilled")
+          ? "active"
+          : "unavailable";
       } catch (error) {
-        if (controller.signal.aborted) return;
+        if (signal.aborted) return "unavailable";
         if (
           error instanceof CustomerReadError &&
           error.kind === "unauthenticated"
         ) {
           setLoad({ state: "unauthenticated" });
           expire();
+          return "anonymous";
         } else {
           setLoad((previous) =>
             previous.state === "ready" ? previous : { state: "error" },
           );
         }
-      } finally {
-        inFlight = false;
+        return "unavailable";
       }
-    }
-    void read();
-    const reconcile = () => {
-      void read();
-    };
-    const interval = window.setInterval(reconcile, 300_000);
-    window.addEventListener("focus", reconcile);
-    window.addEventListener("pageshow", reconcile);
-    document.addEventListener("visibilitychange", reconcile);
-    return () => {
-      controller.abort();
-      window.clearInterval(interval);
-      window.removeEventListener("focus", reconcile);
-      window.removeEventListener("pageshow", reconcile);
-      document.removeEventListener("visibilitychange", reconcile);
-    };
+    }, "/oidc/session-events?realm=customer");
+    return sync.stop;
   }, [revision, expire]);
 
   function date(value: string | undefined) {

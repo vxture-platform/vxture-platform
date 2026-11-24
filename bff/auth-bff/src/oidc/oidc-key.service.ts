@@ -45,6 +45,8 @@ export interface OidcSignInput {
   claims?: Record<string, unknown>;
   /** explicit jti; generated if omitted */
   jwtid?: string;
+  /** Explicit media type for the separate identity invalidation protocol. */
+  type?: "vxture-identity-event+jwt";
 }
 
 /** 管理面令牌的 scope 前缀。供给面是 `tool:`，两者结构上不可互相通过守卫。 */
@@ -177,6 +179,7 @@ export class OidcKeyService {
       privateKey: this.privateKeyPem,
       algorithm: this.alg,
       keyid: this.kid,
+      ...(input.type ? { header: { typ: input.type, alg: this.alg } } : {}),
       issuer: this.issuer,
       audience: input.audience,
       // Omit the option entirely (not `subject: undefined`) so no `sub`

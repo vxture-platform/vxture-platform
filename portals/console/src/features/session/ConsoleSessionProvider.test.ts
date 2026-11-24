@@ -17,8 +17,8 @@ import { ConsoleSessionProvider } from "./ConsoleSessionProvider";
 const harness = vi.hoisted(() => ({
   effects: [] as Array<() => void | (() => void)>,
   writeState: vi.fn(),
-  probe: vi.fn<() => Promise<boolean>>(),
   restore: vi.fn<() => Promise<SessionSnapshot>>(),
+  events: vi.fn(),
 }));
 vi.mock("react", async (original) => ({
   ...(await original<typeof React>()),
@@ -35,12 +35,12 @@ vi.mock("@vxture/core-identity-sdk", () => ({
 }));
 vi.mock("@/api/console-bff", () => ({
   restoreSession: harness.restore,
-  hasActiveSession: harness.probe,
   buildLogoutUrl: vi.fn(),
   buildRpLoginUrl: vi.fn(),
   buildTenantSwitchUrl: vi.fn(),
   buildWorkspaceSwitchUrl: vi.fn(),
 }));
+vi.mock("./session-events", () => ({ startSessionEvents: harness.events }));
 
 const initial: SessionSnapshot = {
   isAuthenticated: true,
@@ -65,10 +65,10 @@ class ContextChannel {
     ContextChannel.current = this;
   }
 }
-function mount() {
+function mount(initialSession: SessionSnapshot | null = initial) {
   const element = ConsoleSessionProvider({
     children: null,
-    initialSession: initial,
+    initialSession,
   });
   const cleanup = harness.effects[0]?.();
   const value = (
@@ -82,15 +82,9 @@ beforeEach(() => {
   harness.effects.length = 0;
   vi.clearAllMocks();
   harness.restore.mockReset();
-  harness.probe.mockReset();
   vi.stubGlobal("React", React);
   vi.stubGlobal("BroadcastChannel", ContextChannel);
-  vi.stubGlobal("window", {
-    location: { reload },
-    setInterval: vi.fn(),
-    clearInterval: vi.fn(),
-  });
-  vi.stubGlobal("document", { visibilityState: "visible" });
+  vi.stubGlobal("window", { location: { reload } });
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -100,6 +94,124 @@ afterEach(() => {
 // Changed scope invalidates panels; defaults and stale requests cannot switch it.
 // ============================================================================
 describe("Console session context synchronization", () => {
+  it("suppresses timer and focus reads only while negotiated event sync is active", async () => {
+    const browser = new EventTarget();
+    const page = new EventTarget();
+    let timer!: () => void;
+    vi.stubGlobal(
+      "window",
+      Object.assign(browser, {
+        location: { reload },
+        setInterval: vi.fn((callback: () => void) => {
+          timer = callback;
+          return 1;
+        }),
+        clearInterval: vi.fn(),
+      }),
+    );
+    vi.stubGlobal(
+      "document",
+      Object.assign(page, { visibilityState: "visible" }),
+    );
+    mount();
+    const cleanup = harness.effects[2]?.();
+    harness.effects[3]?.();
+    const mode = harness.events.mock.calls[0]![1] as (active: boolean) => void;
+    harness.restore.mockResolvedValue(initial);
+    mode(true);
+    timer();
+    browser.dispatchEvent(new Event("focus"));
+    page.dispatchEvent(new Event("visibilitychange"));
+    expect(harness.restore).not.toHaveBeenCalled();
+    mode(false);
+    timer();
+    await Promise.resolve();
+    expect(harness.restore).toHaveBeenCalledOnce();
+    if (typeof cleanup === "function") cleanup();
+  });
+  it("applies an SSE-triggered anonymous snapshot and rejects an older authenticated response", async () => {
+    const f = mount();
+    harness.effects[3]?.();
+    const reconcile = harness.events.mock.calls[0]![0] as () => Promise<string>;
+    let finish!: (snapshot: SessionSnapshot) => void;
+    harness.restore.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const old = f.refreshSession();
+    const anonymous: SessionSnapshot = {
+      isAuthenticated: false,
+      user: null,
+      tenant: null,
+      tenantOptions: [],
+      capabilities: [],
+    };
+    harness.restore.mockResolvedValueOnce(anonymous);
+    expect(await reconcile()).toBe("anonymous");
+    finish(initial);
+    expect(await old).toEqual(anonymous);
+    expect(harness.writeState).toHaveBeenCalledWith(anonymous);
+  });
+
+  it("keeps a new account selected when an old connection asks for a recheck", async () => {
+    mount();
+    harness.effects[3]?.();
+    const reconcile = harness.events.mock.calls[0]![0] as () => Promise<string>;
+    harness.restore.mockResolvedValue({
+      ...initial,
+      user: { ...initial.user!, id: "new-user" },
+    });
+    expect(await reconcile()).toBe("active");
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("reports unavailable to the stream when the view cannot be verified", async () => {
+    mount();
+    harness.effects[3]?.();
+    const reconcile = harness.events.mock.calls[0]![0] as () => Promise<string>;
+    harness.restore.mockRejectedValue(new Error("HTTP 503"));
+    expect(await reconcile()).toBe("unavailable");
+    expect(reload).not.toHaveBeenCalled();
+  });
+  it("preserves the current identity when a manual refresh fails", async () => {
+    const f = mount();
+    harness.restore.mockRejectedValue(new Error("HTTP 503"));
+    expect(await f.refreshSession()).toEqual(initial);
+    expect(
+      harness.writeState.mock.calls.every(
+        ([value]) => typeof value === "string",
+      ),
+    ).toBe(true);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("accepts an explicit anonymous snapshot after confirmed session absence", async () => {
+    const f = mount();
+    const anonymous: SessionSnapshot = {
+      isAuthenticated: false,
+      user: null,
+      tenant: null,
+      tenantOptions: [],
+      capabilities: [],
+    };
+    harness.restore.mockResolvedValue(anonymous);
+    expect(await f.refreshSession()).toEqual(anonymous);
+    expect(harness.writeState).toHaveBeenCalledWith(anonymous);
+  });
+
+  it("does not start silent login when the initial session request fails", async () => {
+    const replace = vi.fn();
+    vi.stubGlobal("window", { location: { search: "", replace } });
+    mount(null);
+    harness.restore.mockRejectedValue(new Error("Network unavailable"));
+    harness.effects[1]?.();
+    await vi.waitFor(() =>
+      expect(harness.writeState).toHaveBeenCalledWith("ready"),
+    );
+    expect(replace).not.toHaveBeenCalled();
+  });
+
   it("reloads panel caches after a change to a non-default workspace", async () => {
     const f = mount();
     harness.restore.mockResolvedValue({
@@ -145,31 +257,6 @@ describe("Console session context synchronization", () => {
     expect(f.channel.postMessage).toHaveBeenCalledTimes(1);
   });
 
-  it("does not restore authentication after the central session probe expires", async () => {
-    const f = mount();
-    let finishRestore!: (snapshot: SessionSnapshot) => void;
-    harness.restore.mockReturnValueOnce(
-      new Promise((resolve) => {
-        finishRestore = resolve;
-      }),
-    );
-    harness.probe.mockResolvedValueOnce(false);
-    const pendingRestore = f.refreshSession();
-    const cleanupProbe = harness.effects[3]?.();
-    const probe = vi.mocked(window.setInterval).mock.calls[0]?.[0];
-    if (typeof probe !== "function") throw new Error("missing session probe");
-    probe();
-    await vi.waitFor(() =>
-      expect(harness.writeState).toHaveBeenCalledWith(
-        expect.objectContaining({ isAuthenticated: false }),
-      ),
-    );
-    finishRestore(initial);
-    expect(await pendingRestore).toMatchObject({ isAuthenticated: false });
-    expect(f.channel.postMessage).not.toHaveBeenCalled();
-    expect(reload).not.toHaveBeenCalled();
-    if (typeof cleanupProbe === "function") cleanupProbe();
-  });
   it("uses other tabs only as invalidation signals and closes the channel", () => {
     const f = mount();
     const receive = (data: unknown) =>

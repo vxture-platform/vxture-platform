@@ -166,7 +166,7 @@ GRANT UPDATE (user_id, client_id, scopes, granted_at, revoked_at, updated_at) ON
 
 -- session.auth_sessions  [anchor: id, created_at]
 REVOKE UPDATE ON session.auth_sessions FROM platform_svc;
-GRANT UPDATE (sid, user_id, realm, auth_method, ip_address, user_agent, status, last_active_at, expires_at, revoked_at) ON session.auth_sessions TO platform_svc;
+GRANT UPDATE (sid, user_id, realm, auth_method, ip_address, user_agent, status, last_active_at, expires_at, revoked_at, active_org_id, active_workspace_id, context_version) ON session.auth_sessions TO platform_svc;
 
 -- session.refresh_tokens  [anchor: id, created_at]
 REVOKE UPDATE ON session.refresh_tokens FROM platform_svc;

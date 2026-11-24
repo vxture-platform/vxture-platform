@@ -393,6 +393,7 @@ export class OidcRouter {
          中央会话已过期时,会话上的 client 名单没了,不带它就一个客户端都比不到,
          回跳被当成开放重定向挡掉,人停在 IdP 侧。 */
       q.client_id,
+      realm,
     );
 
     // Clear only the cookie belonging to the resolved realm.

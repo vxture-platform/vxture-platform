@@ -120,8 +120,11 @@ export interface ChangePasswordRequest {
 }
 
 /** Current user (RP session → website-bff MeRouter, DB-real-time). */
-export async function getProfile(): Promise<AuthUserDto> {
-  const response = await apiClient.get(AUTH_CONSTANTS.API_ENDPOINTS.ME);
+export async function getProfile(signal?: AbortSignal): Promise<AuthUserDto> {
+  const response = await apiClient.get(
+    AUTH_CONSTANTS.API_ENDPOINTS.ME,
+    signal ? { signal } : {},
+  );
   return response.data;
 }
 

@@ -6,9 +6,10 @@
  * @author AI-Generated
  * @date 2026-11-10
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { OidcService } from "./oidc.service";
 import { operatorSessionCurrent } from "./realm-session.service";
+afterEach(() => vi.unstubAllEnvs());
 
 // ============================================================================
 // Public login methods, real orchestration with isolated injected boundaries.
@@ -47,6 +48,7 @@ function fixture(enrollRequired = false) {
     getOperatorMfaPending: vi.fn(async () => pending),
     deleteOperatorMfaPending: vi.fn(),
     createOidcSession: vi.fn(),
+    deleteOidcSession: vi.fn(async () => undefined),
   };
   const operatorMfa = {
     resolveLoginMfa: vi.fn(async () => ({ decision, methods: ["totp"] })),
@@ -75,7 +77,8 @@ function fixture(enrollRequired = false) {
   const service = Object.create(OidcService.prototype) as OidcService;
   Object.assign(service, {
     redis,
-    operators: { findById: vi.fn(async () => operator) },
+    operators: { findById: vi.fn(async () => ({ ...operator })) },
+    logger: { error: vi.fn() },
     operatorMfa,
     operatorWebauthn,
     config: { auth: { OPERATOR_SESSION_ABS_TTL: 3600 } },
@@ -201,6 +204,59 @@ describe("workforce stale first factors", () => {
       return true;
     });
     await expect(invoke(f, "totp")).rejects.toThrow("mfa_session_expired");
+    expect(f.redis.createOidcSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("workforce durable login commit", () => {
+  function durableFixture() {
+    vi.stubEnv("WORKFORCE_IDENTITY_SYNC_ENABLED", "true");
+    const f = fixture();
+    const durable = {
+      create: vi.fn(async () => undefined),
+      revoke: vi.fn(async () => undefined),
+    };
+    Object.assign(f.service, { durableSession: durable });
+    return { ...f, durable };
+  }
+  it("commits the same SID and absolute expiry before publishing an interactive session", async () => {
+    const f = durableFixture();
+    const result = await f.service.completeOperatorMfa({
+      mfaToken: "pending",
+      method: "totp",
+      code: "123456",
+    });
+    expect(f.durable.create).toHaveBeenCalledWith(
+      expect.objectContaining({ sid: result.sid, realm: "workforce" }),
+    );
+    expect(f.durable.create.mock.invocationCallOrder[0]).toBeLessThan(
+      f.redis.createOidcSession.mock.invocationCallOrder[0]!,
+    );
+    expect(f.durable.revoke).not.toHaveBeenCalled();
+  });
+  it("does not publish a login if durable creation fails", async () => {
+    const f = durableFixture();
+    f.durable.create.mockRejectedValue(new Error("database offline"));
+    await expect(invoke(f, "totp")).rejects.toThrow("database offline");
+    expect(f.redis.createOidcSession).not.toHaveBeenCalled();
+  });
+  it("revokes a committed SID when Redis publication fails", async () => {
+    const f = durableFixture();
+    f.redis.createOidcSession.mockRejectedValue(new Error("cache offline"));
+    await expect(invoke(f, "totp")).rejects.toThrow("cache offline");
+    expect(f.durable.revoke).toHaveBeenCalledWith(
+      expect.any(String),
+      "workforce",
+    );
+    expect(f.redis.deleteOidcSession).toHaveBeenCalled();
+  });
+  it("rejects a security mutation between authentication and durable creation", async () => {
+    const f = durableFixture();
+    f.durable.create.mockImplementation(async () => {
+      f.operator.authenticationVersion = "changed";
+    });
+    await expect(invoke(f, "totp")).rejects.toThrow("mfa_session_expired");
+    expect(f.durable.revoke).toHaveBeenCalled();
     expect(f.redis.createOidcSession).not.toHaveBeenCalled();
   });
 });

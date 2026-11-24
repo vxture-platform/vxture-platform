@@ -105,6 +105,18 @@ app/
 
 ---
 
+## 退出事件流（C6 本地试点）
+
+`src/features/session/session-events.ts` 导出 `startSessionEvents(recheck)`；本包导入示例：`import { startSessionEvents } from "@/features/session/session-events";`。`ConsoleSessionProvider` 仅在已登录时启动，卸载中止请求与定时器。通过同源 fetch 消费 `/auth/events`，使用现有 HttpOnly Cookie；用 HTTP 状态区分未启用、未认证和暂时故障。
+
+事件只调用现有 `refreshSession({silent:true})` 重读当前 Cookie，返回 active/anonymous/unavailable；不依据旧流事件直接清空账号。既有请求版本屏障防止晚到响应恢复旧身份。健康心跳不查询会话，75 秒无字节才重连；503 保留身份展示。接口及退避/事件边界见 [150 §2.3](../../../30-design/identity/150-event-sync-api.md#23-console-退出-sse本地实现默认关闭)。
+
+每个标签页独立连接，现有 BroadcastChannel 上下文同步继续有效。默认保留 300 秒、focus/visibility 兼容刷新；N4 的显式退役模式见下节，其他客户端仍独立验收。服务端开关默认 false，只有启用后页面才能收到退出推送。
+
+## changes-v1 页面通知（本地未发布）
+
+`startSessionEvents` 同时识别 `context-changed` 和 `access-changed`，仅触发当前 Cookie 的 `refreshSession`。不把事件正文当作权限或租户数据，旧流也不能清除新账号。上下文变化沿用 provider 的请求版本屏障和页面重载机制。两种事件的 transport 测试已加入，N4 新增显式协商退役及故障回退，见下节。
+
 ## 依赖约束
 
 ```typescript
@@ -113,3 +125,9 @@ app/
 ❌ @vxture/service-* / core-auth / core-api / core-config / core-tenant
 ❌ @vxture/model-runtime-client / agent-server/*
 ```
+
+## Console 轮询退役协商（N4）
+
+`startSessionEvents(recheck, onEventSync)` 仅在响应头为 `X-Vxture-Session-Sync: events-v1`、connected 触发的当前 Cookie 视图成功、连接仍有效时通知 true。Provider 随之卸载原 300 秒定时器和 focus/visibility 监听；异常/断线通知 false，恢复兼容刷新。旧服务或只有退出模式不会关闭轮询。清理后的异步回调不能覆盖新流状态。
+
+`restoreSession` 对探测和四个子视图使用同一 15 秒信号，子请求失败抛出不可用，避免把 503 当成匿名/空权限。闲置安全时钟、上下文 BroadcastChannel、请求版本屏障继续工作。启用条件与兼容范围见接口文档 §2.6 和运行手册 §10。

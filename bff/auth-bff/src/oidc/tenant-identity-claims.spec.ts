@@ -185,6 +185,11 @@ function presentationFixture() {
         expiresAt: new Date((now + 300) * 1000),
       })),
       isRevoked: vi.fn(async () => false),
+      bindClient: vi.fn(async () => {}),
+      getContext: vi.fn(async () => ({
+        orgId: context.activeOrg,
+        workspaceId: context.activeWorkspace ?? null,
+      })),
     },
     appScope: { resolveClaims: vi.fn(async () => ({})) },
     redis: {

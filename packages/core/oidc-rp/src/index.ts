@@ -22,13 +22,24 @@ export { generatePkce, pkceChallenge, randomToken, safeReturnTo } from "./pkce";
 export type { PkcePair } from "./pkce";
 
 export { RpSessionStore } from "./rp-session.store";
-export type { RpRedis } from "./rp-session.store";
+export type { RpRedis, RpSessionAuthority } from "./rp-session.store";
+export { HttpIdentityRecoveryClient } from "./identity-recovery.client";
+export type {
+  IdentityEnvironment,
+  IdentityRealm,
+  IdentityRecoveryClient,
+  RecoverySession,
+  RecoverySnapshot,
+  LogoutRecoveryPage,
+} from "./identity-recovery.client";
 
 export { HttpOidcRpClient } from "./http-client";
 export { checkOidcSession } from "./session-status";
 
 export { RpAuthService } from "./rp-auth.service";
-export type { RpAuthOutcome } from "./rp-auth.service";
+export type { RpAuthOutcome, RpAuthStore } from "./rp-auth.service";
+export { rpAuthFailure, OidcTokenRequestError } from "./rp-auth.failure";
+export type { RpAuthUnavailable } from "./rp-auth.failure";
 
 /**
  * RP session cookie naming.
@@ -44,3 +55,36 @@ export {
   RP_SESSION_COOKIE_BASE as RP_SESSION_COOKIE_INSECURE,
   rpSessionCookieName,
 } from "@vxture/core-identity-sdk";
+export {
+  HttpIdentityChangesClient,
+  IdentityEventVerifier,
+  IdentityEventVerificationError,
+  parseIdentityChange,
+} from "./identity-changes.client";
+export type {
+  IdentityChangeEvent,
+  IdentityChangeScope,
+  IdentityChangeSnapshot,
+  IdentityChangesClient,
+} from "./identity-changes.client";
+
+export { SessionRecoveryAuthority } from "./session-recovery.authority";
+export {
+  IdentityChangesAuthority,
+  IdentityChangeConflict,
+} from "./identity-changes.authority";
+export { SessionEventsHub } from "./session-events.hub";
+export type {
+  IdentitySql,
+  IdentitySqlPool,
+  IdentitySqlTransaction,
+  IdentityNotificationClient,
+  IdentityNotification,
+} from "./identity-persistence";
+export { SessionEventsEndpoint } from "./session-events.endpoint";
+export { IdentitySyncRuntime } from "./identity-sync.runtime";
+export type {
+  SessionEventRuntime,
+  SessionEventRequest,
+  SessionEventResponse,
+} from "./session-events.endpoint";

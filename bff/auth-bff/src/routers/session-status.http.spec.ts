@@ -55,12 +55,14 @@ const workforceSession = () => ({
   absExpiresAt: Math.floor(Date.now() / 1000) + 300,
 });
 const redis = { checkOidcSessionStatus: vi.fn(), getOidcSession: vi.fn() };
+const durableSession = { get: vi.fn() };
 const operators = { findById: vi.fn() };
 const service = Object.assign(
   Object.create(OidcService.prototype) as OidcService,
   {
     clients,
     redis,
+    durableSession,
     operators,
   },
 );
@@ -102,7 +104,12 @@ afterAll(async () => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
-  redis.getOidcSession.mockReset().mockResolvedValue(workforceSession());
+  redis.getOidcSession
+    .mockReset()
+    .mockResolvedValue({ realm: "customer", sub: "usr_customer-1" });
+  durableSession.get
+    .mockReset()
+    .mockResolvedValue({ realm: "customer", userId: "customer-1" });
   operators.findById.mockReset().mockResolvedValue({
     id: "operator-1",
     authenticationVersion: "auth-v1",
@@ -230,11 +237,28 @@ describe("central session status HTTP", () => {
   // ── Status projection and unavailable authority ──
 
   it.each([
+    null,
+    { realm: "workforce", userId: "customer-1" },
+    { realm: "customer", userId: "other" },
+  ])(
+    "does not authorize a stale Redis session against durable state %j",
+    async (record) => {
+      durableSession.get.mockResolvedValueOnce(record);
+      const res = await post();
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ valid: false });
+      expect(redis.checkOidcSessionStatus).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
     ["yucer", "customer", false],
     ["admin", "workforce", true],
   ] as const)(
     "derives identity and realm for %s",
     async (id, realm, active) => {
+      if (realm === "workforce")
+        redis.getOidcSession.mockResolvedValueOnce(workforceSession());
       const res = await post({ sid: "session-test", active }, basic(id));
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({
@@ -270,13 +294,15 @@ describe("central session status HTTP", () => {
     expect(await res.json()).toEqual({ valid: false });
   });
 
-  it.each(["repository", "redis"])(
+  it.each(["repository", "redis", "durable-session"])(
     "preserves identity uncertainty on %s failure",
     async (boundary) => {
       if (boundary === "repository")
         clients.findEnabledByClientId.mockRejectedValueOnce(
           new Error("database down"),
         );
+      else if (boundary === "durable-session")
+        durableSession.get.mockRejectedValueOnce(new Error("database down"));
       else
         redis.checkOidcSessionStatus.mockRejectedValueOnce(
           new Error("store down"),

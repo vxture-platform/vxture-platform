@@ -344,3 +344,15 @@ GRANT SELECT (product_id, home_url) ON product.product_webhooks TO svc_customer_
 REVOKE UPDATE, DELETE ON metering.capability_usage_events
   FROM platform_svc, svc_platform_api, svc_console_bff, svc_admin_bff;
 GRANT SELECT ON admin.maintenance_window_products TO svc_platform_api;
+-- Identity deadline emitter owns only invalidation, not commerce status transitions.
+GRANT EXECUTE ON FUNCTION session.emit_due_identity_boundaries() TO platform_svc,svc_auth_bff;
+
+-- Dedicated protocol persistence for independent RPs; no business-table writes.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='svc_rp_identity') THEN
+    CREATE ROLE svc_rp_identity LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+END $$;
+GRANT USAGE ON SCHEMA session TO svc_rp_identity;
+GRANT SELECT,INSERT ON session.rp_revocation_receipts,session.rp_identity_inbox TO svc_rp_identity;
+GRANT SELECT,INSERT,UPDATE ON session.rp_identity_versions TO svc_rp_identity;

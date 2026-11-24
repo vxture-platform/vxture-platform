@@ -8,7 +8,7 @@
  */
 import Redis from "ioredis";
 import { randomUUID } from "node:crypto";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { RpSessionStore } from "./rp-session.store";
 import type { RpSession } from "./types";
 
@@ -36,6 +36,10 @@ describe.runIf(!!url)("RP session revocation (live Redis)", () => {
     accessToken: "rotated-access",
     refreshToken: "rotated-refresh",
   };
+  beforeEach(async () => {
+    const keys = await redis.keys(`${prefix}*`);
+    if (keys.length) await redis.del(...keys);
+  });
   afterAll(async () => {
     const keys = await redis.keys(`${prefix}*`);
     if (keys.length) await redis.del(...keys);
@@ -44,12 +48,8 @@ describe.runIf(!!url)("RP session revocation (live Redis)", () => {
 
   it("rotates only the expected generation and maintains the TTL and sid index", async () => {
     await store.create("rotation", original, 120);
-    expect(
-      await store.update("rotation", rotated, 60, original.refreshToken),
-    ).toBe(true);
-    expect(
-      await store.update("rotation", original, 60, original.refreshToken),
-    ).toBe(false);
+    expect(await store.update("rotation", rotated, 60, original)).toBe(true);
+    expect(await store.update("rotation", original, 60, original)).toBe(false);
     expect(await store.get("rotation")).toEqual(rotated);
     expect(
       await redis.ttl(`${prefix}rp:console:sess:rotation`),
@@ -64,9 +64,7 @@ describe.runIf(!!url)("RP session revocation (live Redis)", () => {
     await store.create("revoked", original, 120);
     await other.create("revoked", original, 120);
     await store.destroyBySid(original.sid);
-    expect(
-      await store.update("revoked", rotated, 60, original.refreshToken),
-    ).toBe(false);
+    expect(await store.update("revoked", rotated, 60, original)).toBe(false);
     expect(await store.get("revoked")).toBeNull();
     expect(await other.get("revoked")).toEqual(original);
     expect(
@@ -76,7 +74,7 @@ describe.runIf(!!url)("RP session revocation (live Redis)", () => {
 
   it("cannot erase a concurrent winner when a stale refresh fails", async () => {
     await store.create("winner", original, 120);
-    await store.update("winner", rotated, 60, original.refreshToken);
+    await store.update("winner", rotated, 60, original);
     await store.destroy("winner", original);
     expect(await store.get("winner")).toEqual(rotated);
     await store.destroy("winner", rotated);
@@ -86,12 +84,22 @@ describe.runIf(!!url)("RP session revocation (live Redis)", () => {
   it("rejects identity replacement and expired sessions", async () => {
     await store.create("identity", original, 120);
     expect(
-      await store.update("identity", { ...rotated, sub: "usr_other" }, 60),
+      await store.update(
+        "identity",
+        { ...rotated, sub: "usr_other" },
+        60,
+        original,
+      ),
     ).toBe(false);
     expect(
-      await store.update("identity", { ...rotated, sid: "other-central" }, 60),
+      await store.update(
+        "identity",
+        { ...rotated, sid: "other-central" },
+        60,
+        original,
+      ),
     ).toBe(false);
     await redis.del(`${prefix}rp:console:sess:identity`);
-    expect(await store.update("identity", rotated, 60)).toBe(false);
+    expect(await store.update("identity", rotated, 60, original)).toBe(false);
   });
 });

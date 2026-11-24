@@ -595,34 +595,90 @@ ALTER TABLE tenancy.workspace_memberships
 
 ### 8.1 `auth_sessions`
 
-| 字段             | 类型         | 约束                                | 说明 |
-| ---------------- | ------------ | ----------------------------------- | ---- |
-| `id`             | uuid         | PK                                  |      |
-| `sid`            | varchar(64)  | UNIQUE NOT NULL                     |      |
-| `user_id`        | uuid         | NOT NULL（loose）                   |      |
-| `realm`          | varchar(16)  | NOT NULL, CHECK(customer/workforce) |      |
-| `auth_method`    | varchar(32)  | NOT NULL                            |      |
-| `ip_address`     | varchar(64)  | NULL                                |      |
-| `user_agent`     | varchar(512) | NULL                                |      |
-| `status`         | varchar(16)  | NOT NULL DEFAULT `'active'`         |      |
-| `last_active_at` | timestamptz  | NOT NULL DEFAULT now()              |      |
-| `expires_at`     | timestamptz  | NOT NULL                            |      |
-| `revoked_at`     | timestamptz  | NULL                                |      |
-| `created_at`     | timestamptz  | NOT NULL DEFAULT now()              |      |
+2026-11-24 本地实现（未部署）：客户持久有效性与撤销的事实源，登录必须先成功写入。customer 已终止 sid 禁止恢复 active；workforce 不从客户会话表推导授权。当前组织/空间成对更新，版本只在改变时递增，绝对到期时间不随活动改变。
+
+| 字段                  | 类型         | 约束                                | 说明                 |
+| --------------------- | ------------ | ----------------------------------- | -------------------- |
+| `id`                  | uuid         | PK                                  |                      |
+| `sid`                 | varchar(64)  | UNIQUE NOT NULL                     |                      |
+| `user_id`             | uuid         | NOT NULL（loose）                   |                      |
+| `realm`               | varchar(16)  | NOT NULL, CHECK(customer/workforce) |                      |
+| `auth_method`         | varchar(32)  | NOT NULL                            |                      |
+| `ip_address`          | varchar(64)  | NULL                                |                      |
+| `user_agent`          | varchar(512) | NULL                                |                      |
+| `status`              | varchar(16)  | NOT NULL DEFAULT `'active'`         |                      |
+| `last_active_at`      | timestamptz  | NOT NULL DEFAULT now()              |                      |
+| `expires_at`          | timestamptz  | NOT NULL                            |                      |
+| `revoked_at`          | timestamptz  | NULL                                |                      |
+| `created_at`          | timestamptz  | NOT NULL DEFAULT now()              |                      |
+| `active_org_id`       | uuid         | NULL（loose）                       | 验证后的当前组织     |
+| `active_workspace_id` | uuid         | NULL（loose）                       | 与组织一致的当前空间 |
+| `context_version`     | bigint       | NOT NULL DEFAULT 0                  | 当前上下文单调版本   |
+
+#### 8.1.1 客户 RP 绑定与退出任务
+
+`session.oidc_session_clients`：PK(sid,client_id)，sid 外键到 auth_sessions.sid，保存可信登记的 release_channel 与 logout_uri；跨 schema 的 client_id 保持裸值。绑定前锁会话行并校验 owner、customer、active 与未到期。
+
+`session.logout_deliveries`：uuid id、稳定 event_id、sid 外键、裸 user_id、client_id、release_channel、logout_uri；UNIQUE(sid,client_id)。状态 pending/delivered/quarantined；attempts、available_at、retry_until、lease_id、lease_until、last_error、delivered_at、created_at 提供租约与恢复记录。pending 部分索引按 available_at 领取。
+
+客户 active→revoked/expired 的 AFTER UPDATE 触发器与事实同事务写任务并 pg_notify。事务回滚不留通知任务；其他 realm 不产生客户事件。实际 DDL、迁移与[运行手册](../60-operations/50-run-identity-events.md)同步维护。
+
+#### 8.1.2 logout-v1 恢复与 RP 持久撤销（C4 本地试点）
+
+DDL25 / `2026-12-16-identity-logout-recovery.sql` 新增三个表，迁移不登记或启用客户端：
+
+| 表                                  | 主键/约束                                                          | 作用                                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session.identity_recovery_streams` | PK(client_id)，UNIQUE(stream_id UUID)                              | 固定 issuer/customer/environment/release_channel/logout_uri；enabled 默认 false；last_sequence 为事务行锁保护的提交流头；cursor_key 仅中心使用 |
+| `session.identity_recovery_events`  | PK(stream_id,sequence)，UNIQUE(stream_id,event_id)，stream_id 外键 | 标准退出任务插入时同事务记录 event_id/sid/sub/occurred_at；disabled 仍记录，不因停用丢事件                                                     |
+| `session.rp_revocation_receipts`    | PK(issuer,client_id,realm,environment,sid)                         | Console 本地不可逆退出记录，只有 created_at，不含 token 或用户资料；标准 logout 按 scoped sid 去重                                             |
+
+快照状态与水位在同一 REPEATABLE READ 事务读取，不能用 PostgreSQL sequence 的分配值替代已提交水位。scope 更新由触发器拒绝；接收地址/环境变更采用新 client/stream。当前事件和 receipt 均无自动清理，不能在父会话或退出任务清理时随意丢弃恢复证据。跨 schema client_id 仍保持裸值；读取时联合 appoidc 登记复核可信绑定。变化 inbox 与权限版本见下方 N1–N3 小节。
+
+DDL26 / `2026-12-17-rp-session-notifications.sql` 增加 `session.notify_rp_revocation()` 与 receipt 表的 `trg_rp_revocation_notify` AFTER INSERT 触发器。原事务提交后在 `rp_session_revoked` 广播 `{issuer,client_id,realm,environment,sid}`，回滚不通知，重复 receipt 不重新插入也不通知。通知无 token/个人资料，仅作唤醒；各 Console 实例持久复核后才向浏览器发无标识的退出提示。LISTEN 不是持久队列，断线必须清除恢复确认并重读中央事实。没有新增表、轮询器、清理任务或自动客户端启用。
+
+#### 客户上下文/授权事实记录（C5 / changes-v1，本地未发布）
+
+DDL96 / `2026-12-18-identity-changes.sql` 在所有事实表已创建后增加：
+
+| 表                                  | 约束 / 含义                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `session.identity_subject_versions` | PK(user_id 裸 UUID)，customer 主体授权版本；0 为基线；行锁增量分配，不影响 workforce                                                  |
+| `session.identity_change_outbox`    | PK(event_id)，context_changed 或 access_changed；主体、可选 sid、version、可空范围、事实时间；不存 token/权限列表；即使无接收方也保留 |
+| `session.identity_change_streams`   | PK/FK(stream_id→现有 recovery stream)，enabled 默认 false，独立 last_sequence；原 issuer/环境/client 作用域继续不可变                 |
+| `session.identity_change_events`    | PK(stream_id,sequence)，UNIQUE(stream_id,event_id)，域内引用流与 outbox；每客户端同事务连续提交水位                                   |
+
+上下文 BEFORE UPDATE 规范版本：组织/空间改变则旧版本+1，同值不变，空间不能脱离组织；AFTER UPDATE 只为有效 customer 会话追加上下文失效。十类授权事实表通过实际相关列比较捕获变化，包括增删改和级联；版本与 outbox/流头都在原事务内提交，回滚不通知。绑定触发器与主体/会话锁协调首次订阅窗口。
+
+跨域捕获函数使用 SECURITY DEFINER + 固定 search_path，禁止应用直接调用事件写入函数；原事实表权限决定是否能发起变更。快照是恢复视图，不是授权副本。捕获范围、客户端能力和保留限制见 [150 §2.4–§2.5](./identity/150-event-sync-api.md) / [进展页](../70-workplan/120-identity-sync-progress.md)。发送和 inbox 已在下节补入；没有自动清理。
+
+#### 变化投递、RP 版本与时间边界（N1–N3，本地未发布）
+
+DDL `96_identity_delivery.sql`、`96_identity_extended_facts.sql` 与迁移 12-17/12-18 成对维护。
+
+| 表                                   | 约束与用途                                                                                                                                         |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session.identity_change_receivers`  | PK/FK(stream_id→changes stream)，receiver_uri 与 stream 不可变，enabled 默认 false；与标准 logout 地址分离                                         |
+| `session.identity_change_deliveries` | PK(id)，UNIQUE/FK(stream_id,sequence→change events)，绑定不可变地址；稳定逻辑载荷、租约/重试/隔离/送达状态，不保存签名 JWT                         |
+| `session.rp_identity_inbox`          | PK(issuer,client_id,environment,realm,event_id)，realm 限 customer；逻辑事实不含恢复 cursor，重复 ID 必须事实一致                                  |
+| `session.rp_identity_versions`       | PK(issuer,client_id,environment,realm,kind,subject_key)；context 以 sid 为 key，access 以 sub 为 key，独立单调版本；提交后通知，不覆盖退出 receipt |
+| `session.identity_time_boundaries`   | PK(source,source_id,edge)，原业务事务登记订阅 start/end/trial_end 和覆盖 expires_at；索引仅未发射行，时间改变重排；到期事件与 emitted 同事务       |
+
+产品/套餐/组件及手工覆盖变化按订阅所属组织/空间产生广泛授权失效，包含 bundled 权益。到期函数为受限 SECURITY DEFINER，由 auth worker 每30秒补扫；只发通知，不改订阅状态。新库角色授权由 DDL97 继承现行 schema 策略，升级迁移显式授予新增表/函数权限。登记前历史投递不自动回填，恢复快照建立现行基线；未来时间边界可幂等回填。实际保留、重放、灰度与回退见运行手册 §9。
 
 ### 8.2 `refresh_tokens`
 
-| 字段           | 类型        | 约束                                       | 说明                                                                                                                                                                                                    |
-| -------------- | ----------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`           | uuid        | PK                                         |                                                                                                                                                                                                         |
-| `user_id`      | uuid        | NOT NULL（loose）                          | 边界#2 realm 隔离，不建 FK                                                                                                                                                                              |
-| `session_id`   | uuid        | NOT NULL（松引用 Redis 会话 sid，不建 FK） | **2026-07-04 撤回**（**边界#1 跨物理存储**：session_id 指向 Redis 会话 sid，非本库 auth_sessions 行）：会话 Redis-primary、OIDC 登录不写 auth_sessions，FK 致登录热路径违约（集成验证发现）；改回松引用 |
-| `client_id`    | varchar(64) | NOT NULL                                   |                                                                                                                                                                                                         |
-| `token_hash`   | varchar(64) | UNIQUE NOT NULL                            |                                                                                                                                                                                                         |
-| `rotated_from` | uuid        | NULL                                       | 轮换链                                                                                                                                                                                                  |
-| `status`       | varchar(16) | NOT NULL DEFAULT `'active'`                |                                                                                                                                                                                                         |
-| `expires_at`   | timestamptz | NOT NULL                                   |                                                                                                                                                                                                         |
-| `created_at`   | timestamptz | NOT NULL DEFAULT now()                     |                                                                                                                                                                                                         |
+| 字段           | 类型        | 约束                        | 说明                                                                       |
+| -------------- | ----------- | --------------------------- | -------------------------------------------------------------------------- |
+| `id`           | uuid        | PK                          |                                                                            |
+| `user_id`      | uuid        | NOT NULL（loose）           | 边界#2 realm 隔离，不建 FK                                                 |
+| `session_id`   | uuid        | NOT NULL，松引用中央 sid    | 客户登录已先写持久会话；保留松引用兼容历史记录与 realm 隔离，不新增跨域 FK |
+| `client_id`    | varchar(64) | NOT NULL                    |                                                                            |
+| `token_hash`   | varchar(64) | UNIQUE NOT NULL             |                                                                            |
+| `rotated_from` | uuid        | NULL                        | 轮换链                                                                     |
+| `status`       | varchar(16) | NOT NULL DEFAULT `'active'` |                                                                            |
+| `expires_at`   | timestamptz | NOT NULL                    |                                                                            |
+| `created_at`   | timestamptz | NOT NULL DEFAULT now()      |                                                                            |
 
 ### 8.3 `user_verifications`（验证码，append-only）
 
@@ -779,32 +835,32 @@ ALTER TABLE tenancy.workspace_memberships
 
 ## 12. 跨 schema FK 速查表（本域内）
 
-| 从                                                             | 到                                                | 类型                                             | 依据                                                                                                  |
-| -------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `identity.identities.user_id`                                  | `account.users.id`                                | 真 FK                                            | 普通引用                                                                                              |
-| `credential.*.user_id`                                         | `account.users.id`                                | 真 FK                                            | 普通引用                                                                                              |
-| `kyc.user_kycs.user_id`                                        | `account.users.id`                                | 真 FK                                            | 普通引用                                                                                              |
-| `kyc.tenant_verifications.tenant_id`                           | `tenancy.tenants.id`                              | 真 FK                                            | 普通引用                                                                                              |
-| `kyc.verification_policies.product_id`                         | `product.products.id`                             | 真 FK（NULL 允许）                               | 普通引用；NULL=平台基准值                                                                             |
-| `tenancy.tenants.owner_user_id`                                | `account.users.id`                                | 真 FK                                            | 普通引用                                                                                              |
-| `tenancy.tenant_logos.tenant_id`                               | `tenancy.tenants.id`                              | 真 FK                                            | 普通引用（同 schema 内，域内主键级联）                                                                |
-| `tenancy.tenant_contacts.tenant_id`                            | `tenancy.tenants.id`                              | 真 FK（CASCADE）                                 | 普通引用（同 schema 内）                                                                              |
-| `tenancy.tenant_contacts.user_id`                              | `account.users.id`                                | 真 FK（SET NULL）                                | 联系人是平台用户时关联，见 §5.8                                                                       |
-| `tenancy.tenant_branding.tenant_id`                            | `tenancy.tenants.id`                              | 真 FK（CASCADE）                                 | 普通引用（同 schema 内），见 §5.9                                                                     |
-| `tenancy.tenant_memberships.user_id`                           | `account.users.id`                                | 真 FK                                            | 普通引用                                                                                              |
-| `tenancy.tenant_memberships.(role_id, role_scope)`             | `access.roles.(id, scope)`                        | 真 FK（复合）                                    | **2026-07-04 修正**：原误列边界#4，现改真 FK 并锁 scope，见 §5.5                                      |
-| `tenancy.workspace_memberships.(role_id, role_scope)`          | `access.roles.(id, scope)`                        | 真 FK（复合）                                    | 同上，见 §5.6                                                                                         |
-| `tenancy.workspace_memberships.(workspace_id, tenant_id)`      | `tenancy.workspaces.(id, tenant_id)`              | 真 FK（复合，CASCADE）                           | **2026-07-04 新增**：锁 ws 真实所属 tenant，见 §5.6                                                   |
-| `tenancy.workspace_memberships.(tenant_id, user_id)`           | `tenancy.tenant_memberships.(tenant_id, user_id)` | 真 FK（复合，CASCADE）                           | **2026-07-04 新增**：ws 成员 ⊆ tenant 成员不变量，见 §5.6                                             |
-| `tenancy.invitations.(role_id, scope)`                         | `access.roles.(id, scope)`                        | 真 FK（复合，复用既有 scope 列）                 | 同上，见 §5.7                                                                                         |
-| `access.permissions.parent_id`                                 | `access.permissions.id`                           | 真 FK（自引用）                                  | 普通引用（树形，同表）                                                                                |
-| `appoidc.oidc_consents.user_id`                                | `account.users.id`                                | 真 FK                                            | 普通引用                                                                                              |
-| `appoidc.oidc_clients.product_id`                              | `product.products.id`                             | 真 FK（NULL 允许）                               | **2026-07-04 修正**：同物理库普通引用，非物理库界（原误标边界#4）                                     |
-| `tenancy.tenant_memberships.(default_workspace_id, tenant_id)` | `tenancy.workspaces.(id, tenant_id)`              | 真 FK（复合）                                    | **2026-07-04 新增**：默认 ws 必属本 tenant                                                            |
-| `session.refresh_tokens.session_id`                            | Redis 会话 sid（非 auth_sessions.id）             | **裸值**，不建 FK（**边界#1** 跨物理存储 Redis） | **2026-07-04 撤回**：会话 Redis-primary、OIDC 登录不写 auth_sessions，FK 致登录热路径违约；改回松引用 |
-| `session.*.user_id`                                            | `account.users.id`                                | **裸值**，不建 FK                                | 边界#2（realm 安全隔离）                                                                              |
-| `loyalty.*.user_id`                                            | `account.users.id`                                | 真 FK                                            | 普通引用                                                                                              |
-| `kyc.*_kycs.reviewer_id` / `tenant_verifications.reviewer_id`  | `admin.operator_accounts.id`                      | **裸值**，不建 FK                                | 边界#2（realm 隔离，operator 主体）                                                                   |
+| 从                                                             | 到                                                | 类型                             | 依据                                                              |
+| -------------------------------------------------------------- | ------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------- |
+| `identity.identities.user_id`                                  | `account.users.id`                                | 真 FK                            | 普通引用                                                          |
+| `credential.*.user_id`                                         | `account.users.id`                                | 真 FK                            | 普通引用                                                          |
+| `kyc.user_kycs.user_id`                                        | `account.users.id`                                | 真 FK                            | 普通引用                                                          |
+| `kyc.tenant_verifications.tenant_id`                           | `tenancy.tenants.id`                              | 真 FK                            | 普通引用                                                          |
+| `kyc.verification_policies.product_id`                         | `product.products.id`                             | 真 FK（NULL 允许）               | 普通引用；NULL=平台基准值                                         |
+| `tenancy.tenants.owner_user_id`                                | `account.users.id`                                | 真 FK                            | 普通引用                                                          |
+| `tenancy.tenant_logos.tenant_id`                               | `tenancy.tenants.id`                              | 真 FK                            | 普通引用（同 schema 内，域内主键级联）                            |
+| `tenancy.tenant_contacts.tenant_id`                            | `tenancy.tenants.id`                              | 真 FK（CASCADE）                 | 普通引用（同 schema 内）                                          |
+| `tenancy.tenant_contacts.user_id`                              | `account.users.id`                                | 真 FK（SET NULL）                | 联系人是平台用户时关联，见 §5.8                                   |
+| `tenancy.tenant_branding.tenant_id`                            | `tenancy.tenants.id`                              | 真 FK（CASCADE）                 | 普通引用（同 schema 内），见 §5.9                                 |
+| `tenancy.tenant_memberships.user_id`                           | `account.users.id`                                | 真 FK                            | 普通引用                                                          |
+| `tenancy.tenant_memberships.(role_id, role_scope)`             | `access.roles.(id, scope)`                        | 真 FK（复合）                    | **2026-07-04 修正**：原误列边界#4，现改真 FK 并锁 scope，见 §5.5  |
+| `tenancy.workspace_memberships.(role_id, role_scope)`          | `access.roles.(id, scope)`                        | 真 FK（复合）                    | 同上，见 §5.6                                                     |
+| `tenancy.workspace_memberships.(workspace_id, tenant_id)`      | `tenancy.workspaces.(id, tenant_id)`              | 真 FK（复合，CASCADE）           | **2026-07-04 新增**：锁 ws 真实所属 tenant，见 §5.6               |
+| `tenancy.workspace_memberships.(tenant_id, user_id)`           | `tenancy.tenant_memberships.(tenant_id, user_id)` | 真 FK（复合，CASCADE）           | **2026-07-04 新增**：ws 成员 ⊆ tenant 成员不变量，见 §5.6         |
+| `tenancy.invitations.(role_id, scope)`                         | `access.roles.(id, scope)`                        | 真 FK（复合，复用既有 scope 列） | 同上，见 §5.7                                                     |
+| `access.permissions.parent_id`                                 | `access.permissions.id`                           | 真 FK（自引用）                  | 普通引用（树形，同表）                                            |
+| `appoidc.oidc_consents.user_id`                                | `account.users.id`                                | 真 FK                            | 普通引用                                                          |
+| `appoidc.oidc_clients.product_id`                              | `product.products.id`                             | 真 FK（NULL 允许）               | **2026-07-04 修正**：同物理库普通引用，非物理库界（原误标边界#4） |
+| `tenancy.tenant_memberships.(default_workspace_id, tenant_id)` | `tenancy.workspaces.(id, tenant_id)`              | 真 FK（复合）                    | **2026-07-04 新增**：默认 ws 必属本 tenant                        |
+| `session.refresh_tokens.session_id`                            | 中央 sid（非 auth_sessions.id）                   | **裸值**，不建 FK                | 历史兼容及 realm 隔离；客户登录已改为先持久创建                   |
+| `session.*.user_id`                                            | `account.users.id`                                | **裸值**，不建 FK                | 边界#2（realm 安全隔离）                                          |
+| `loyalty.*.user_id`                                            | `account.users.id`                                | 真 FK                            | 普通引用                                                          |
+| `kyc.*_kycs.reviewer_id` / `tenant_verifications.reviewer_id`  | `admin.operator_accounts.id`                      | **裸值**，不建 FK                | 边界#2（realm 隔离，operator 主体）                               |
 
 ---
 

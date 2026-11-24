@@ -428,6 +428,28 @@ SMTP_FROM="Vxture Studio <no-reply@<mail-host>>"
 
 ## 依赖约束
 
+### 可选退出恢复试点（2026-11-24，本地未部署）
+
+`oidc/oidc-rp.module.ts` 在 `RP_IDENTITY_RECOVERY_ENABLED=true` 时注入 SessionRecoveryAuthority；必须同时启用机密 OIDC RP 并设置 `RP_IDENTITY_ENVIRONMENT=prod|beta|dev`。默认 false。数据库连接使用现有 database 配置；表由 `2026-12-16-identity-logout-recovery.sql` 提供，先迁移后启动。
+
+标准退出验签后先写 PostgreSQL scoped sid receipt，再清 Redis、再 ACK。首次请求按中心 logout-v1 快照和水位补拉，之后每请求读本地撤销；重连清进程确认，不清持久撤销。中心或本地 DB 不可用映射 503，保留 Cookie。请求恢复不修改上下文或延期 TTL；可选退出 SSE 见下节，页面轮询尚未移除。
+
+同一客户不同环境必须独立 client/Redis namespace；RP store 现用受信 runtime.config.clientId，旧硬编码 console 的非默认客户端需重新登录或受控迁移。实施步骤、容量代价及回退边界见[退出运行手册](../../../60-operations/50-run-identity-events.md#6-logout-v1-恢复试点)。
+
+### 可选退出 SSE（C6 本地试点）
+
+`RP_SESSION_EVENTS_ENABLED=true` 依赖上节持久恢复和 `2026-12-17-rp-session-notifications.sql`，默认 false。`SessionEventsHub` 每实例持有一条 PG LISTEN，receipt 提交提示经 scope 过滤后唤醒本地 sid 连接。提示只触发持久复核；listener/Redis 断线关闭流并清恢复确认。Hub 实例由 Nest 管理启动/销毁，不能包装成丢失生命周期钩子的普通对象。
+
+`SessionEventsRouter` 提供 `/auth/events`，使用现有 Cookie、自行鉴权和同源检查。先订阅后最终核验，连接寿命不超 Redis TTL/中央绝对到期；25 秒注释心跳不读身份、不续期。连接限额、背压关闭、断线恢复、状态码及帧定义以 [150 §2.3 / OpenAPI](../../../30-design/identity/150-event-sync-api.md#23-console-退出-sse本地实现默认关闭) 为准。运行参数与代理配置见[运行手册 §7](../../../60-operations/50-run-identity-events.md#7-console-退出-sse-试点)。新增模块由本包内部注入，无跨 BFF 包引用。
+
+## 变化事件接收与视图重建（本地未发布）
+
+`RP_IDENTITY_CHANGES_ENABLED=true` 依赖现有退出恢复与 SSE。`IdentityEventsRouter` 在 `/auth/identity-events` 接收独立 application/jwt（64 KiB），`IdentityChangesAuthority` 验证后的消息同事务写 inbox/版本后 ACK。每次权限读取检查持久授权版本，缓存回填前再核对；治理源故障返回 503。`AuthMiddleware` 与 `/auth/session` 用快照+补拉重建中央 org/workspace，清除旧令牌角色和旧上下文展示标签，不伪造新 JWT。具体业务成员/权限仍由领域服务确认。
+
+`SessionEventsHub` 另监听 `rp_identity_changed`，按 sid/sub 唤醒后读取持久版本才向页面发 context/access 提示。掉线重置两种恢复确认，退出 receipt 仍优先。普通健康请求读本地版本，不定时请求中心。接收、并发与资源边界见 [150 §2.5](../../../30-design/identity/150-event-sync-api.md#25-changes-v1-签名投递与-console-应用本地实现默认关闭)，环境操作见运行手册 §9。新增类仅在本 BFF 内部注入。
+
+### 包边界
+
 ```
 ✅ @vxture/core-auth          — JWT verify + token 吊销检查
 ✅ @vxture/core-config
@@ -442,3 +464,17 @@ SMTP_FROM="Vxture Studio <no-reply@<mail-host>>"
 ❌ @vxture/model-runtime-client / agent-server/*
 ❌ @vxture/design-system / platform-*
 ```
+
+### 可协商轮询退役（N4）
+
+`RP_SESSION_POLLING_RETIREMENT_ENABLED` 默认 false。显式启用要求 OIDC RP、recovery、changes 和 SSE 四项开关同时开启，缺少则启动失败。Router 仅在完整 changes authority 存在且已 opt-in 时返回 `X-Vxture-Session-Sync: events-v1`；旧/退出模式不声明此能力。登记、投递、展示字段迁移和目标代理验收是部署前提；响应头不是中央投递健康探针。页面需要成功重读后才停止兼容轮询。参见接口 §2.6、运行手册 §10。
+
+### 运维与进程故障验收（N5）
+
+使用仓库 `scripts/identity/inspect-sync.mjs` 核对 DB 作用域、接收方和触发器，部署配置样例及告警模板位于 `deploy/identity-sync/`；具体操作见[运行手册 §11](../../../60-operations/50-run-identity-events.md#11-n5-部署预检监控与独立进程验收)。DB 就绪或 SSE 心跳均不能证明中央投递健康，退役前必须接通目标队列告警。
+
+`scripts/tests/identity-sync-acceptance.mjs` 已在两个独立 Console 进程验证 256 条真实 SSE、单实例单 sid 32 条上限、持久提交后 ACK 丢失幂等、接收进程重启且发送器未恢复时的快照版本追平、双实例标准退出。测试使用实际源码和随机隔离存储；不是完整 AppModule 部署、互动 OIDC 登录或目标容量认证。最新证据见 110 §13 / 120 进展。
+
+## N6 基础设施提取（2026-11-24）
+
+已验证的 recovery/changes/SSE 实现迁到 core-oidc-rp；Console 保留模块接线、PG 连接与 UUID→usr\_ 映射及权限/上下文业务投影。浏览器 session-events 迁到 core-identity-sdk，Console provider 保持其完整视图与退役协商行为。没有生产 BFF-to-BFF 包引用；共享协议不授予业务权限。最新多实例复验与平台入口覆盖见 [120](../../../70-workplan/120-identity-sync-progress.md)。

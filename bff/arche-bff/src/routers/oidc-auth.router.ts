@@ -11,6 +11,7 @@
  *   arche mounts no provider module, so it mints no operator-OBO token.
  */
 import {
+  ServiceUnavailableException,
   Body,
   Controller,
   Get,
@@ -25,6 +26,7 @@ import {
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import {
+  rpAuthFailure,
   generatePkce,
   randomToken,
   safeReturnTo,
@@ -257,9 +259,13 @@ export class OidcAuthRouter {
 
   /** Current login state (verified claims) for the shell bootstrap. */
   @Get("session")
+  @Header("Cache-Control", "no-store")
   async session(@Req() req: Request): Promise<Record<string, unknown>> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
     const out = await this.auth.resolve(rpsid);
+    if (out.status === "unavailable") {
+      throw new ServiceUnavailableException(rpAuthFailure(out));
+    }
     if (out.status !== "ok") {
       throw unauthenticated("AUTH_NO_SESSION", "No active session");
     }
@@ -272,9 +278,13 @@ export class OidcAuthRouter {
    * /auth/login). Per-request cost is one Redis session read.
    */
   @Get("check")
+  @Header("Cache-Control", "no-store")
   async check(@Req() req: Request, @Res() res: Response): Promise<void> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
     const out = await this.auth.resolve(rpsid);
+    if (out.status === "unavailable") {
+      throw new ServiceUnavailableException(rpAuthFailure(out));
+    }
     if (out.status !== "ok") {
       res.status(401).end();
       return;

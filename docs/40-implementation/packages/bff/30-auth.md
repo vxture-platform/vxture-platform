@@ -5,6 +5,34 @@
 
 ---
 
+## 当前 OIDC 会话执行基线（2026-11-24）
+
+本轮客户会话以 `src/authn/session.service.ts` 的 PostgreSQL 记录控制持久有效性，Redis 保存交互会话。`finishTenantLogin` 先持久创建，失败中止；`issueAuthCode`、code / refresh 换票持久绑定接收 client；状态查询核验 durable realm/owner。共享当前组织/空间持久成对更新，不延长绝对到期时间。
+
+`session.auth_sessions` 的客户状态转移触发器与业务撤销同事务生成 `session.logout_deliveries`。`SessionLogoutRepository` 在 AuthnModule 提供并导出，`SessionLogoutJob` 在 AppModule 注入并启动；多实例租约、LISTEN 唤醒、补扫和重试向现行 OIDC 退出地址投递。workforce 独立路径保留。迁移先于应用上线，详见[运行手册](../../../60-operations/50-run-identity-events.md)。
+
+`IdentityRecoveryRepository` 在 AuthnModule 提供并导出，`IdentityRecoveryRouter` 在 AppModule 注册 `POST /oidc/identity/snapshot` 与 `/events`。仅对显式启用、精确 customer/env/client/地址登记的机密客户端开放 logout-v1；默认无客户端可用。状态和流头同一数据库快照，事件位置在退出原事务内行锁分配；数据库失败为503，不能报告inactive。依赖 DDL25 / 第二份恢复迁移。
+
+本地测试不等于发布完成。[接口文档](../../../30-design/identity/150-event-sync-api.md) §2.2–§2.6 和配套 OpenAPI 描述已实现的退出/变化恢复与 Console SSE 子集，完整跨产品目标仍为候选。下文 `/auth`、共享 token cookie 与 source 段落是历史接口资料，不能替代当前 OIDC `/oidc/*`、中央 sid 与 RP 本地会话接入。
+
+### changes-v1 事实与恢复（2026-11-24，本地未发布）
+
+同一 `IdentityRecoveryRouter/Repository` 新增 `POST /oidc/identity/changes/snapshot` 与 `/changes/events`，复用严格 Basic 认证、请求校验、MVCC 快照、游标 HMAC 与缺口检测，使用独立 changes-v1 profile/水位。仅显式登记并启用的 customer platform BFF 可读，product/workforce 不在此试点范围。logout-v1 的原请求/响应保持兼容。
+
+DDL96 / `2026-12-18-identity-changes.sql` 在中央上下文及十类授权事实表的原事务内记录主体版本、outbox 和每客户端事件；无订阅者也保留 outbox。首次绑定共享主体/会话锁，防止绑定与事实变更之间漏消息。快照新增 authorization_version；版本与事件只能使缓存失效，不能授予权限。具体接口和范围见 [150 §2.4](../../../30-design/identity/150-event-sync-api.md#24-changes-v1客户上下文与授权变化恢复本地实现默认不登记)。
+
+变化投递、Console 缓存失效和上下文重建已由下节接通；外部产品仍待迁移。恢复端点不用于周期轮询。部署、特权触发函数、锁成本和回退限制见运行手册 §8–§9。
+
+## changes-v1 可靠发送与扩展事实（本地未发布）
+
+`IdentityDeliveryRepository` 与 `IdentityDeliveryJob` 实现事务投递任务、SKIP LOCKED 租约、稳定逻辑载荷、每次重签、重试/隔离及 401/403 暂停接收方。`IDENTITY_CHANGE_DELIVERY_ENABLED` 默认 false，启用要求 RS256；不复用标准 logout URL/form。接收登记另存 `identity_change_receivers`，地址不可变。模块显式注入，auth pool 最少 3 条连接以容纳两个 LISTEN 与事务。
+
+DDL96 新增投递/inbox/版本和扩展事实：产品/套餐配置、手工权益覆盖及订阅/覆盖的时间边界。发送 job 同时以 30 秒补扫持久到期任务，只发事件、不改商业状态。恢复接口保持独立 profile，`deliveryEvent` 仅由内部已领取任务调用。文件/契约/登记/回退详见 [150 §2.5](../../../30-design/identity/150-event-sync-api.md#25-changes-v1-签名投递与-console-应用本地实现默认关闭) 与运行手册 §9。
+
+### 运维预检与独立进程验收（N5）
+
+仓库工具 `scripts/identity/inspect-sync.mjs` 以只读事务检查登记、触发器和任务状态，输出脱敏 JSON / Prometheus 指标；不增加 auth 路由，也不按用户查询身份。告警模板、退出码和部署前提见[运行手册 §11](../../../60-operations/50-run-identity-events.md#11-n5-部署预检监控与独立进程验收)。`scripts/tests/identity-sync-acceptance.mjs` 使用实际 auth/Console 源码和隔离 PG/Redis，在独立 OS 进程验证签名投递、真实租约到期重试、重启恢复及标准退出；本地证据见 110 §13，未安装目标监控或部署。
+
 ## 包信息
 
 | 项       | 值                                            |
@@ -397,3 +425,9 @@ SMTP_FROM="Vxture Studio <no-reply@<mail-host>>"
 admin Turnstile secret belongs to `/srv/vxture/runtime/.env.admin-bff`, because
 `admin-bff` performs admin Turnstile verification before delegating token
 issuance to `auth-bff`.
+
+## N6 运营域与 Accounts 事件（2026-11-24）
+
+WORKFORCE_IDENTITY_SYNC_ENABLED 启用后，运营登录、授权码/刷新绑定、状态/令牌验证及退出均使用 realm 隔离的持久会话。安全事实触发器同事务撤销并生成退出投递；强制退出覆盖 Redis 缺索引，在线列表同时检查持久 owner。运营授权版本独立于客户版本；无租户上下文事件。
+
+AccountsEventsRouter 使用中央 Cookie 的 GET /oidc/session-events?realm=customer|workforce。CentralEventsHub 共享 LISTEN，通知仅触发客户端完整视图重读，25 秒心跳不读取身份。默认关闭，见 [接口](../../../30-design/identity/150-event-sync-api.md#28-n6-平台全入口与运营域v07本地实现默认关闭)与[运行手册 §12](../../../60-operations/50-run-identity-events.md#12-n6-平台全入口部署与回退)。

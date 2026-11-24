@@ -1,13 +1,10 @@
 /**
- * oidc-rp.module.ts - opera-bff OIDC Relying Party wiring (product_250 M-4)
+ * Compose the opera confidential RP and optional durable identity synchronization.
  * @package @vxture/bff-opera
- * @description
- *   Wires @vxture/core-oidc-rp for the Capability Console shell as a
- *   confidential RP in the WORKFORCE realm (client_id=opera). Same shape
- *   as admin-bff's RP wiring; base URL comes from OPERA_BASE_URL, which in
- *   production carries the real (repo-external) hostname. RP routes live under
- *   /auth/*; /auth/check additionally serves the nginx auth_request gate that
- *   enforces the "no content unauthenticated" hardening at the vhost edge.
+ * @layer Application
+ * @category module
+ * @author AI-Generated
+ * @date 2026-11-24
  */
 import { Module } from "@nestjs/common";
 import { VxConfigModule, VxConfigService } from "@vxture/core-config";
@@ -15,58 +12,101 @@ import {
   HttpOidcRpClient,
   RpAuthService,
   RpSessionStore,
+  HttpIdentityRecoveryClient,
+  HttpIdentityChangesClient,
+  IdentityEventVerifier,
+  type IdentityEnvironment,
   type OidcRpConfig,
 } from "@vxture/core-oidc-rp";
 import Redis from "ioredis";
-import { OidcAuthRouter } from "../routers/oidc-auth.router";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
+import { Pool, type PoolConfig } from "pg";
+import { SessionRecoveryAuthority } from "./session-recovery.authority";
+import { SessionEventsHub } from "./session-events.hub";
+import { IdentityChangesAuthority } from "./identity-changes.authority";
+import { IdentityEventsRouter } from "../routers/identity-events.router";
+import { SessionEventsRouter } from "../routers/session-events.router";
+import { OidcAuthRouter } from "../routers/oidc-auth.router";
 import {
   RP_AUTH_SERVICE,
   RP_OIDC_CLIENT,
   RP_REDIS,
   RP_RUNTIME,
   RP_SESSION_STORE,
+  RP_RECOVERY,
+  RP_SESSION_EVENTS,
+  RP_CHANGES,
+  RP_EVENT_VERIFIER,
   type RpRuntime,
 } from "./oidc-rp.tokens";
 
 const CLIENT_ID = "opera";
 
+/** @returns The same bounded database configuration for recovery and LISTEN. */
+function recoveryPostgres(c: VxConfigService): PoolConfig {
+  const database = c.database;
+  return {
+    ...(database.DATABASE_URL
+      ? { connectionString: database.DATABASE_URL }
+      : {
+          host: database.DB_HOST,
+          port: database.DB_PORT,
+          database: database.DB_NAME,
+          user: database.DB_USER,
+          password: database.DB_PASSWORD,
+          ssl:
+            database.DB_SSL === "require"
+              ? { rejectUnauthorized: false }
+              : undefined,
+        }),
+    max: database.DB_POOL_MAX,
+    connectionTimeoutMillis: 5000,
+    statement_timeout: 10000,
+  };
+}
+
 @Module({
   imports: [
-    VxConfigModule.register({ domains: ["auth", "redis", "platform"] }),
+    VxConfigModule.register({
+      domains: ["auth", "redis", "platform", "database"],
+    }),
   ],
-  controllers: [OidcAuthRouter],
+  controllers: [OidcAuthRouter, SessionEventsRouter, IdentityEventsRouter],
   providers: [
+    OperatorExchangeService,
     {
       provide: RP_RUNTIME,
       inject: [VxConfigService],
       useFactory: (c: VxConfigService): RpRuntime => {
-        const consoleBase = c.platform.OPERA_BASE_URL;
+        const websiteBase = c.platform.OPERA_BASE_URL;
+        const sessionPollingRetirement =
+          process.env.RP_SESSION_POLLING_RETIREMENT_ENABLED === "true";
+        if (
+          sessionPollingRetirement &&
+          [
+            "true",
+            process.env.RP_IDENTITY_RECOVERY_ENABLED,
+            process.env.RP_SESSION_EVENTS_ENABLED,
+            process.env.RP_IDENTITY_CHANGES_ENABLED,
+          ].some((value) => value !== "true")
+        )
+          throw new Error(
+            "Polling retirement requires the RP, recovery, changes and session events",
+          );
         const cfg: OidcRpConfig = {
           issuer: c.auth.OIDC_ISSUER,
           // Back-channel (token + JWKS) over the internal IdP URL so it never
-          // hairpins out to the public issuer (times out from the origin).
+          // hairpins out to the public issuer (Cloudflare). iss is still verified
+          // against the public issuer.
           backchannelIssuer:
             process.env.OIDC_BACKCHANNEL_ISSUER ?? process.env.AUTH_BFF_URL,
           clientId: process.env.OIDC_CLIENT_ID ?? CLIENT_ID,
-          // 每个 BFF 的 client_secret 在 DB 里是各自独立哈希的（appoidc.oidc_clients，
-          // opera ≠ admin ≠ console ≠ website），但四个 *-bff 的 oidc-rp.module.ts 都在
-          // 读同一个通用 OIDC_CLIENT_SECRET——本地 .env.local 只能塞一个值，实测装的是
-          // 谁的都不对，四家谁也登不进（2026-08-12 排查：bcrypt.compare 对 admin/opera
-          // 两个哈希都不过）。先按本 BFF 自己的口径修：OPERA 专属变量优先，通用变量兜底
-          // 保留向后兼容；website/console/admin 三家同款问题不在这次范围内，留给各自的
-          // owner 处理，不代改。
-          clientSecret:
-            process.env.OIDC_CLIENT_SECRET_OPERA ??
-            process.env.OIDC_CLIENT_SECRET ??
-            "",
+          clientSecret: process.env.OIDC_CLIENT_SECRET ?? "",
           redirectUri:
-            process.env.OIDC_REDIRECT_URI ?? `${consoleBase}/auth/callback`,
+            process.env.OIDC_REDIRECT_URI ?? `${websiteBase}/auth/callback`,
           scopes: (process.env.OIDC_SCOPES ?? "openid profile admin")
             .split(/\s+/)
             .filter(Boolean),
-          // Operator surface: short RP session (default 12h), not the 30d
-          // customer default — small audience, high privilege.
           // 会话由两个时钟界定：门户的闲置钟（identity-sdk/idle.ts）与 IdP 的总时效
           // （24h）。RP 会话没有独立于这两者之外的第三个寿命——原先那些 30 天 / 12 小时
           // 的值和它们所代表的登录态都对不上（见 workplans §二十三）。
@@ -74,8 +114,18 @@ const CLIENT_ID = "opera";
         };
         return {
           config: cfg,
-          allowedReturnOrigins: [consoleBase],
-          defaultReturnTo: `${consoleBase}/`,
+          sessionPollingRetirement,
+          enabled: true,
+          allowedReturnOrigins: [websiteBase],
+          defaultReturnTo: `${websiteBase}/`,
+          // Unified post-logout page on the accounts surface. In prod the issuer
+          // IS the accounts origin (accounts.vxture.com), so ${issuer}/logout is
+          // correct; locally accounts runs on a separate port, set explicitly.
+          postLogoutRedirectUri:
+            process.env.OIDC_POST_LOGOUT_REDIRECT_URI ??
+            `${c.auth.OIDC_ISSUER.replace(/\/$/, "")}/logout`,
+          // __Host- cookies require Secure; honored in prod (https). Local http
+          // e2e is driven via curl, which stores the cookie regardless.
           cookieSecure: process.env.RP_COOKIE_INSECURE !== "true",
           keyPrefix: c.redis.REDIS_KEY_PREFIX ?? "vx:",
         };
@@ -102,10 +152,138 @@ const CLIENT_ID = "opera";
       useFactory: (rt: RpRuntime) => new HttpOidcRpClient(rt.config),
     },
     {
+      provide: RP_RECOVERY,
+      inject: [VxConfigService, RP_RUNTIME, RP_REDIS],
+      useFactory: (c: VxConfigService, rt: RpRuntime, redis: Redis) => {
+        if (process.env.RP_IDENTITY_RECOVERY_ENABLED !== "true") return null;
+        const environment = process.env.RP_IDENTITY_ENVIRONMENT;
+        if (
+          !rt.enabled ||
+          !["prod", "beta", "dev"].includes(environment ?? "") ||
+          !rt.config.clientSecret
+        )
+          throw new Error(
+            "Identity recovery requires an enabled confidential RP and explicit environment",
+          );
+        const pool = new Pool(recoveryPostgres(c));
+        const scope = {
+          realm: "workforce" as const,
+          issuer: rt.config.issuer,
+          clientId: rt.config.clientId,
+          environment: environment as IdentityEnvironment,
+        };
+        const authority = new SessionRecoveryAuthority(
+          pool,
+          new HttpIdentityRecoveryClient(
+            rt.config,
+            scope.environment,
+            "logout-v1",
+            "workforce",
+          ),
+          scope,
+        );
+        redis.on("ready", () => authority.reset());
+        redis.on("close", () => authority.reset());
+        return authority;
+      },
+    },
+    {
+      provide: RP_CHANGES,
+      inject: [VxConfigService, RP_RUNTIME, RP_REDIS, RP_RECOVERY],
+      useFactory: (
+        c: VxConfigService,
+        rt: RpRuntime,
+        redis: Redis,
+        logout: SessionRecoveryAuthority | null,
+      ) => {
+        if (process.env.RP_IDENTITY_CHANGES_ENABLED !== "true") return null;
+        if (!logout || process.env.RP_SESSION_EVENTS_ENABLED !== "true")
+          throw new Error(
+            "Identity changes require recovery and session events",
+          );
+        const environment = process.env
+          .RP_IDENTITY_ENVIRONMENT as IdentityEnvironment;
+        const authority = new IdentityChangesAuthority(
+          new Pool(recoveryPostgres(c)),
+          new HttpIdentityChangesClient(rt.config, environment, "workforce"),
+          {
+            realm: "workforce",
+            issuer: rt.config.issuer,
+            clientId: rt.config.clientId,
+            environment,
+          },
+          logout,
+        );
+        redis.on("ready", () => authority.reset());
+        redis.on("close", () => authority.reset());
+        return authority;
+      },
+    },
+    {
+      provide: RP_EVENT_VERIFIER,
+      inject: [RP_RUNTIME, RP_CHANGES],
+      useFactory: (rt: RpRuntime, changes: IdentityChangesAuthority | null) =>
+        changes
+          ? new IdentityEventVerifier(
+              rt.config,
+              process.env.RP_IDENTITY_ENVIRONMENT as IdentityEnvironment,
+              "workforce",
+            )
+          : null,
+    },
+    {
+      provide: RP_SESSION_EVENTS,
+      inject: [VxConfigService, RP_RUNTIME, RP_REDIS, RP_RECOVERY, RP_CHANGES],
+      useFactory: (
+        c: VxConfigService,
+        rt: RpRuntime,
+        redis: Redis,
+        authority: SessionRecoveryAuthority | null,
+        changes: IdentityChangesAuthority | null,
+      ) => {
+        if (process.env.RP_SESSION_EVENTS_ENABLED !== "true") return null;
+        if (!authority)
+          throw new Error("Session events require durable identity recovery");
+        const hub = new SessionEventsHub(
+          {
+            ...recoveryPostgres(c),
+            application_name: "opera-session-events",
+          },
+          {
+            realm: "workforce",
+            issuer: rt.config.issuer,
+            clientId: rt.config.clientId,
+            environment: process.env.RP_IDENTITY_ENVIRONMENT!,
+          },
+          () => redis.status === "ready",
+          undefined,
+          () => {
+            authority.reset();
+            changes?.reset();
+          },
+          Boolean(changes),
+        );
+        redis.on("close", () => hub.invalidate());
+        redis.on("ready", () => hub.invalidate());
+        return hub;
+      },
+    },
+    {
       provide: RP_SESSION_STORE,
-      inject: [RP_REDIS, VxConfigService],
-      useFactory: (redis: Redis, c: VxConfigService) =>
-        new RpSessionStore(redis, CLIENT_ID, c.redis.REDIS_KEY_PREFIX ?? "vx:"),
+      inject: [RP_REDIS, VxConfigService, RP_RUNTIME, RP_RECOVERY],
+      useFactory: (
+        redis: Redis,
+        c: VxConfigService,
+        rt: RpRuntime,
+        authority: SessionRecoveryAuthority | null,
+      ) =>
+        new RpSessionStore(
+          redis,
+          rt.config.clientId,
+          c.redis.REDIS_KEY_PREFIX ?? "vx:",
+          rt.config.sessionTtlSec,
+          authority ?? undefined,
+        ),
     },
     {
       provide: RP_AUTH_SERVICE,
@@ -116,20 +294,17 @@ const CLIENT_ID = "opera";
         rt: RpRuntime,
       ) => new RpAuthService(store, client, rt.config.sessionTtlSec),
     },
-    OperatorExchangeService,
   ],
-  // OperatorExchangeService 额外导出：AtlasRouter（opera 自己的 Atlas 技术管理面，
-  // 与 admin-bff 各自独立、零交叉引用）复用同一套 operator-OBO 换票逻辑，不是从
-  // admin-bff 抄一份或反过来依赖它。
-  // RP_REDIS 导出（2026-08-31）：接入信号 router 读 platform-api 写下的 C2 键，
-  // 同一个 Redis、同一条连接——不为一次 GET 再开第二条。
+  // RP_REDIS 也导出:根模块里的 TenantSwitchRouter 要把待授权请求暂存到与
+  // OidcAuthRouter 同一把 key 下(/auth/callback 才找得到 PKCE verifier)。
   exports: [
+    OperatorExchangeService,
+    RP_CHANGES,
     RP_AUTH_SERVICE,
     RP_SESSION_STORE,
     RP_OIDC_CLIENT,
     RP_RUNTIME,
     RP_REDIS,
-    OperatorExchangeService,
   ],
 })
 export class OidcRpModule {}

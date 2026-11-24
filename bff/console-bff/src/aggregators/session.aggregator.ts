@@ -6,6 +6,7 @@ import {
   Injectable,
   NotFoundException,
   Optional,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { toE164 } from "@vxture/core-utils/phone";
 import { createHash } from "node:crypto";
@@ -17,6 +18,8 @@ import {
   isValidIndustry,
 } from "@vxture/core-utils";
 import { verificationLevelOf } from "../lib/verification-level";
+import { RP_CHANGES } from "../oidc/oidc-rp.tokens";
+import type { IdentityChangesAuthority } from "../oidc/identity-changes.authority";
 import {
   COMMERCE_PG_POOL,
   ProductSeatService,
@@ -87,6 +90,9 @@ export class SessionAggregator {
     @Optional()
     @Inject(AccountInsightsClient)
     private readonly insights?: AccountInsightsClient,
+    @Optional()
+    @Inject(RP_CHANGES)
+    private readonly changes?: IdentityChangesAuthority | null,
   ) {}
 
   /** Default-workspace 名称 + 可视码 per tenant——UUID 禁展示（owner 2026-08-20），
@@ -522,8 +528,9 @@ export class SessionAggregator {
   /** Short-lived capability cache isolated by tenant, user, and workspace. */
   private readonly capsCache = new Map<
     string,
-    { at: number; caps: Capability[] }
+    { at: number; caps: Capability[]; version: string }
   >();
+  private capsGeneration = 0;
 
   /**
    * 按成员实际治理权限派生 capability(P0 分权)。降级原则:回查失败给
@@ -535,21 +542,46 @@ export class SessionAggregator {
     workspaceId?: string,
   ): Promise<Capability[]> {
     const key = `${tenantId}:${userId}:${workspaceId ?? "org"}`;
-    const hit = this.capsCache.get(key);
-    if (hit && Date.now() - hit.at < CAPS_CACHE_TTL_MS) return [...hit.caps];
-    let caps: Capability[];
-    try {
-      const perms = await this.gov.getEffectivePermissions(userId, {
-        orgId: tenantId,
-        ...(workspaceId ? { workspaceId } : {}),
-      });
-      // 只认目录里登记过的码:库里若混进未知码(手工 SQL / 旧数据),不让它流到前端。
-      caps = [...new Set(perms.filter(isGovernancePermissionCode))];
-    } catch {
-      caps = [...FALLBACK_CAPABILITIES];
+    const stamp = async () => {
+      try {
+        return `${this.capsGeneration}:${(await this.changes?.authorizationVersion(userId)) ?? "legacy"}`;
+      } catch {
+        throw new ServiceUnavailableException("Governance version unavailable");
+      }
+    };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const version = await stamp();
+      const hit = this.capsCache.get(key);
+      if (
+        hit &&
+        hit.version === version &&
+        Date.now() - hit.at < CAPS_CACHE_TTL_MS
+      )
+        return [...hit.caps];
+      let caps: Capability[];
+      try {
+        const perms = await this.gov.getEffectivePermissions(userId, {
+          orgId: tenantId,
+          ...(workspaceId ? { workspaceId } : {}),
+        });
+        // 只认目录里登记过的码:库里若混进未知码(手工 SQL / 旧数据),不让它流到前端。
+        caps = [...new Set(perms.filter(isGovernancePermissionCode))];
+      } catch {
+        if (this.changes)
+          throw new ServiceUnavailableException(
+            "Governance authority unavailable",
+          );
+        caps = [...FALLBACK_CAPABILITIES];
+      }
+      // An old request must not refill the cache after a committed invalidation.
+      if (version !== (await stamp())) continue;
+      if (this.capsCache.size >= 10000) this.capsCache.clear();
+      this.capsCache.set(key, { at: Date.now(), caps, version });
+      return [...caps];
     }
-    this.capsCache.set(key, { at: Date.now(), caps });
-    return [...caps];
+    throw new ServiceUnavailableException(
+      "Governance changed during reconstruction",
+    );
   }
 
   /**
@@ -558,6 +590,7 @@ export class SessionAggregator {
    * 这在「刚被降权」这个场景里格外像 bug。
    */
   private invalidateCapabilities(userId: string, tenantId: string): void {
+    this.capsGeneration++;
     const prefix = `${tenantId}:${userId}:`;
     for (const key of this.capsCache.keys()) {
       if (key.startsWith(prefix)) this.capsCache.delete(key);

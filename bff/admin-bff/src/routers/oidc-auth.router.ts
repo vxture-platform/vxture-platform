@@ -10,6 +10,7 @@
  *   (aud=admin, sub=opr_, userType=operator). See docs/design/identity-platform-operator.md §3/§4.
  */
 import {
+  ServiceUnavailableException,
   BadRequestException,
   Body,
   Controller,
@@ -26,6 +27,7 @@ import {
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import {
+  rpAuthFailure,
   generatePkce,
   randomToken,
   safeReturnTo,
@@ -243,9 +245,13 @@ export class OidcAuthRouter {
 
   /** Current login state (verified claims) for the SPA bootstrap. */
   @Get("session")
+  @Header("Cache-Control", "no-store")
   async session(@Req() req: Request): Promise<Record<string, unknown>> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
     const out = await this.auth.resolve(rpsid);
+    if (out.status === "unavailable") {
+      throw new ServiceUnavailableException(rpAuthFailure(out));
+    }
     if (out.status !== "ok") {
       throw new UnauthorizedException("No active session");
     }

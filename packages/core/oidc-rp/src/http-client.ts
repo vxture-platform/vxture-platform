@@ -20,6 +20,7 @@ import type {
   OidcRpConfig,
   OidcTokenSet,
 } from "./types";
+import { OidcTokenRequestError } from "./rp-auth.failure";
 
 type FetchImpl = typeof fetch;
 
@@ -73,7 +74,10 @@ export class HttpOidcRpClient implements OidcRpClient {
 
   private async refreshJwks(): Promise<void> {
     const jwks_uri = `${this.backchannelBase}/oidc/jwks`;
-    const res = await this.fetchImpl(jwks_uri);
+    const res = await this.fetchImpl(jwks_uri, {
+      signal: AbortSignal.timeout(10000),
+      redirect: "error",
+    });
     if (!res.ok) throw new Error(`OIDC JWKS fetch failed: ${res.status}`);
     const { keys } = (await res.json()) as { keys: Jwk[] };
     const next = new Map<string, KeyObject>();
@@ -155,11 +159,31 @@ export class HttpOidcRpClient implements OidcRpClient {
         authorization: `Basic ${basic}`,
       },
       body: body.toString(),
+      signal: AbortSignal.timeout(10000),
+      redirect: "error",
     });
     if (!res.ok) {
-      throw new Error(`OIDC token request failed: ${res.status}`);
+      const failure: unknown = await res.json().catch(() => null);
+      throw new OidcTokenRequestError(
+        res.status === 400 &&
+          typeof failure === "object" &&
+          failure !== null &&
+          "error" in failure &&
+          failure.error === "invalid_grant",
+      );
     }
     const t = (await res.json()) as TokenResponse;
+    if (
+      typeof t.id_token !== "string" ||
+      !t.id_token ||
+      typeof t.access_token !== "string" ||
+      !t.access_token ||
+      typeof t.refresh_token !== "string" ||
+      !t.refresh_token ||
+      !Number.isFinite(t.expires_in) ||
+      t.expires_in <= 0
+    )
+      throw new OidcTokenRequestError(false);
     return {
       idToken: t.id_token,
       accessToken: t.access_token,
@@ -181,6 +205,13 @@ export class HttpOidcRpClient implements OidcRpClient {
     if (expectedNonce !== undefined && claims.nonce !== expectedNonce) {
       throw new Error("OIDC id_token nonce mismatch");
     }
+    if (
+      typeof claims.sub !== "string" ||
+      !claims.sub ||
+      typeof claims.sid !== "string" ||
+      !claims.sid
+    )
+      throw new Error("OIDC id_token identity missing");
     return {
       sub: String(claims.sub),
       sid: String(claims.sid ?? ""),

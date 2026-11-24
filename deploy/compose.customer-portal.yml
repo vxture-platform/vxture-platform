@@ -15,15 +15,15 @@ services:
       dockerfile: deploy/docker/Dockerfile.nextjs
       args:
         PORTAL_PATH: portals/customer-portal
-        PACKAGE_FILTER: '@vxture/customer-portal'
+        PACKAGE_FILTER: "@vxture/customer-portal"
       secrets: [node_auth_token]
     restart: unless-stopped
     mem_limit: 384m
     cpus: 0.75
     pids_limit: 160
     environment:
-      CUSTOMER_PORTAL_BFF_URL: http://bff:3000
-      CUSTOMER_PORTAL_BFF_TOKEN: ${CUSTOMER_PORTAL_BFF_TOKEN:?Set a dedicated proxy token}
+      TENANT_BFF_URL: http://bff:3000
+      TENANT_BFF_TOKEN: ${TENANT_BFF_TOKEN:?Set a dedicated proxy token}
     networks:
       private:
       edge:
@@ -36,24 +36,30 @@ services:
       retries: 3
 
   bff:
-    image: ${CUSTOMER_PORTAL_BFF_IMAGE:?Set the customer portal BFF image}
+    image: ${TENANT_BFF_IMAGE:?Set the tenant BFF image}
     build:
       context: ..
       dockerfile: deploy/docker/Dockerfile.nestjs
       args:
-        SERVICE_PATH: bff/customer-portal
-        PACKAGE_FILTER: '@vxture/bff-customer-portal'
+        SERVICE_PATH: bff/tenant-bff
+        PACKAGE_FILTER: "@vxture/bff-tenant"
       secrets: [node_auth_token]
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.75
     pids_limit: 160
     environment:
-      CUSTOMER_PORTAL_BFF_PORT: '3000'
-      CUSTOMER_PORTAL_BFF_TOKEN: ${CUSTOMER_PORTAL_BFF_TOKEN:?Set a dedicated proxy token}
+      TENANT_BFF_PORT: "3000"
+      TENANT_BFF_TOKEN: ${TENANT_BFF_TOKEN:?Set a dedicated proxy token}
       CUSTOMER_PORTAL_DATABASE_URL: ${CUSTOMER_PORTAL_DATABASE_URL:?Set the read-only portal database URL}
       CUSTOMER_PORTAL_REDIS_URL: ${CUSTOMER_PORTAL_REDIS_URL:?Set the portal Redis URL}
       OIDC_ISSUER: ${OIDC_ISSUER:?Set the customer IdP HTTPS origin}
+      RP_IDENTITY_RECOVERY_ENABLED: ${RP_IDENTITY_RECOVERY_ENABLED:-false}
+      RP_IDENTITY_CHANGES_ENABLED: ${RP_IDENTITY_CHANGES_ENABLED:-false}
+      RP_SESSION_EVENTS_ENABLED: ${RP_SESSION_EVENTS_ENABLED:-false}
+      RP_SESSION_POLLING_RETIREMENT_ENABLED: ${RP_SESSION_POLLING_RETIREMENT_ENABLED:-false}
+      RP_IDENTITY_ENVIRONMENT: ${RP_IDENTITY_ENVIRONMENT:-prod}
+      RP_IDENTITY_DATABASE_URL: ${RP_IDENTITY_DATABASE_URL:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?Set the independent customer portal client ID}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set the customer portal client secret}
       OIDC_BACKCHANNEL_ISSUER: ${OIDC_BACKCHANNEL_ISSUER:-}

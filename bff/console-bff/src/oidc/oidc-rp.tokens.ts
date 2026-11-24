@@ -9,6 +9,10 @@ export const RP_REDIS = Symbol("RP_REDIS");
 export const RP_OIDC_CLIENT = Symbol("RP_OIDC_CLIENT");
 export const RP_SESSION_STORE = Symbol("RP_SESSION_STORE");
 export const RP_AUTH_SERVICE = Symbol("RP_AUTH_SERVICE");
+export const RP_SESSION_EVENTS = Symbol("RP_SESSION_EVENTS");
+export const RP_RECOVERY = Symbol("RP_RECOVERY");
+export const RP_CHANGES = Symbol("RP_CHANGES");
+export const RP_EVENT_VERIFIER = Symbol("RP_EVENT_VERIFIER");
 
 /** Runtime knobs derived from config/env for the RP routes + (future) middleware. */
 export interface RpRuntime {
@@ -24,4 +28,6 @@ export interface RpRuntime {
   cookieSecure: boolean;
   /** Redis key prefix (matches the session store) */
   keyPrefix: string;
+  /** Explicit rollout approval after complete fact/delivery/proxy acceptance. */
+  sessionPollingRetirement?: boolean;
 }

@@ -61,6 +61,23 @@ server {
     }
 
     # ── RP 登录/回调/登出 —— 唯一匿名可达面 ──
+    # Session stream heartbeats do not query identity.
+    location = /auth/events {
+        set $operabff vx-platform-opera-bff:3041;
+        proxy_pass         http://$operabff;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_read_timeout 75s;
+        proxy_send_timeout 75s;
+    }
+
     location /auth/ {
         set $operabff vx-platform-opera-bff:3041;
         proxy_pass         http://$operabff;

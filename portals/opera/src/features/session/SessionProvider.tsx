@@ -14,6 +14,7 @@ import {
   onSignOutBroadcast,
   signOutBroadcastKey,
   startIdleWatcher,
+  startSessionSync,
 } from "@vxture/core-identity-sdk";
 import {
   createContext,
@@ -103,99 +104,56 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>("loading");
   const [capabilities, setCapabilities] = useState<readonly string[]>([]);
 
-  // Revalidate identity and capabilities together after foreground transitions.
+  // Apply the full identity and permission view only after both reads succeed.
   useEffect(() => {
-    let active = true;
-    let inFlight = false;
-    let lastSyncAt = 0;
-    let currentSubject: string | null = null;
-    const controller = new AbortController();
-    const sync = async () => {
-      if (
-        !active ||
-        inFlight ||
-        document.visibilityState !== "visible" ||
-        Date.now() - lastSyncAt < 1500
-      )
-        return;
-      inFlight = true;
-      lastSyncAt = Date.now();
+    const sync = startSessionSync(async (signal) => {
       const options = {
         credentials: "include" as const,
         cache: "no-store" as const,
-        signal: AbortSignal.any([
-          controller.signal,
-          AbortSignal.timeout(15_000),
-        ]),
+        signal,
       };
-      try {
-        const response = await fetch("/auth/session", options);
-        if (!active) return;
-        if (response.status === 401 || response.status === 403) {
+      const anonymous = () => {
+        if (!signal.aborted) {
           setOperator(null);
           setCapabilities([]);
           setStatus("anonymous");
           window.location.replace(buildLoginUrl(window.location.href));
-          return;
         }
-        if (!response.ok) return;
-        const body = (await response.json()) as {
-          claims?: Record<string, unknown>;
-        };
-        if (!active) return;
-        const identity = toIdentity(body.claims ?? {});
-        // Keep verified grants during same-account background reconciliation.
-        // Identity changes must clear the previous account before permission loading.
-        if (identity.sub !== currentSubject) {
-          currentSubject = identity.sub;
-          setCapabilities([]);
-          setStatus("ready");
-        }
-        setOperator(identity);
-        const permissions = await fetch("/api/session", options);
-        if (!active) return;
-        if (permissions.status === 401) {
-          setOperator(null);
-          setCapabilities([]);
-          setStatus("anonymous");
-          window.location.replace(buildLoginUrl(window.location.href));
-          return;
-        }
-        if (permissions.status === 403) {
-          setCapabilities([]);
-          setStatus("forbidden");
-          return;
-        }
-        if (!permissions.ok) return;
-        const access = (await permissions.json()) as {
-          capabilities?: string[];
-          planeEntitled?: boolean;
-        };
-        if (!active) return;
-        setCapabilities(access.capabilities ?? []);
-        setStatus(access.planeEntitled === false ? "forbidden" : "ready");
-      } catch {
-        // A network failure is not proof that the central session ended.
-      } finally {
-        inFlight = false;
-      }
-    };
-    const reconcile = () => {
-      void sync();
-    };
-    reconcile();
-    const interval = window.setInterval(reconcile, 300_000);
-    window.addEventListener("focus", reconcile);
-    window.addEventListener("pageshow", reconcile);
-    document.addEventListener("visibilitychange", reconcile);
-    return () => {
-      active = false;
-      controller.abort();
-      window.clearInterval(interval);
-      window.removeEventListener("focus", reconcile);
-      window.removeEventListener("pageshow", reconcile);
-      document.removeEventListener("visibilitychange", reconcile);
-    };
+        return "anonymous" as const;
+      };
+      const response = await fetch("/auth/session", options);
+      if (signal.aborted) return "unavailable";
+      if (response.status === 401) return anonymous();
+      if (!response.ok) return "unavailable";
+      const body = (await response.json()) as {
+        claims?: Record<string, unknown>;
+      };
+      const identity = toIdentity(body.claims ?? {});
+      const permissions = await fetch("/api/session", options);
+      if (signal.aborted) return "unavailable";
+      if (permissions.status === 401) return anonymous();
+      if (!permissions.ok) return "unavailable";
+      const access = (await permissions.json()) as {
+        operator?: { id: string; displayName: string | null };
+        capabilities?: string[];
+        planeEntitled?: boolean;
+      };
+      if (
+        signal.aborted ||
+        !access.operator ||
+        identity.sub !== `opr_${access.operator.id}` ||
+        !Array.isArray(access.capabilities)
+      )
+        return "unavailable";
+      setOperator({
+        ...identity,
+        displayName: access.operator.displayName || identity.role || "运营者",
+      });
+      setCapabilities(access.capabilities);
+      setStatus(access.planeEntitled === false ? "forbidden" : "ready");
+      return "active";
+    });
+    return sync.stop;
   }, []);
 
   const can = useCallback(

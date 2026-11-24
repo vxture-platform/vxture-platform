@@ -196,14 +196,12 @@ export function OidcLoginForm({
     };
 
     void check();
-    const interval = window.setInterval(handleFocus, 300_000);
     window.addEventListener("focus", handleFocus);
     window.addEventListener("pageshow", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("pageshow", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);

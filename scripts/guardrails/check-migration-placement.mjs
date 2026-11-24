@@ -93,7 +93,23 @@ try {
   process.exit(1);
 }
 
-const mount = /MIG_DIR="\$COMPOSE_DIR\/([^"]+)"/.exec(runnerSrc);
+let sourcePath = RUNNER;
+let mount = /MIG_DIR="\$COMPOSE_DIR\/([^"]+)"/.exec(runnerSrc);
+// The runner now delegates inventory to its sourced planner. Follow that exact
+// call and loop; an unrecognized planner must still fail closed.
+if (!mount && runnerSrc.includes('migration_build_plan "$COMPOSE_DIR"')) {
+  const helper = /source "\$SCRIPT_DIR\/(lib\/[A-Za-z0-9._-]+\.sh)"/.exec(
+    runnerSrc,
+  );
+  if (helper) {
+    sourcePath = `deploy/scripts/${helper[1]}`;
+    const planner = readFileSync(join(REPO_ROOT, sourcePath), "utf8");
+    if (/local deploy="\$1"/.test(planner))
+      mount = /for file in "\$deploy"\/([A-Za-z0-9_/-]+)\/\*\.sql; do/.exec(
+        planner,
+      );
+  }
+}
 if (!mount) {
   console.error(
     `✗ 在 ${RUNNER} 里解析不到 MIG_DIR —— runner 改了挂载点？\n` +
@@ -105,7 +121,9 @@ const liveDir = `deploy/${mount[1]}`;
 const liveCount = countSqlFiles(join(REPO_ROOT, liveDir));
 
 console.log("══ 迁移放置(check-migration-placement)══");
-console.log(`  · 活目录（从 ${RUNNER} 解析）：${liveDir}，${liveCount} 份 .sql`);
+console.log(
+  `  · 活目录（从 ${sourcePath} 解析）：${liveDir}，${liveCount} 份 .sql`,
+);
 
 // 一份都没有 = 解析到了错的地方，不是「没有迁移」。
 if (liveCount === 0) {

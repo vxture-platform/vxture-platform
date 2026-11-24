@@ -36,3 +36,5 @@
 - 描述**层结构 / 依赖规则**？→ `architecture/`
 - 描述**某能力端到端跨多个包如何工作**？→ `design/`（本目录）
 - 描述**某个具体包的实现约束**？→ `packages/`
+
+新增身份事件协议：[150-event-sync-api.md](./identity/150-event-sync-api.md)（v0.5 本地未发布；退出恢复、变化签名投递/持久接收、Console 缓存/上下文及多类型 SSE 已实现，含四份 OpenAPI；外部产品迁移与实际环境验收待完成）。最新状态见[持续进展页](../70-workplan/120-identity-sync-progress.md)，历史见[平台中心批次](../70-workplan/110-identity-center-batches.md)。

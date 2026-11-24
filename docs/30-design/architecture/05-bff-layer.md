@@ -1,7 +1,7 @@
 # Vxture BFF Layer Architecture
 
-**Version**: 1.4.0
-**Last Updated**: 2026-05-12
+**Version**: 1.5.0
+**Last Updated**: 2026-11-25
 **TypeScript**: 5.9.3
 
 ## Overview
@@ -28,16 +28,37 @@ The BFF contains **no business logic**. Business logic belongs in `services/` or
 
 ```
 bff/
-├── auth-bff/          # @vxture/bff-auth      → 平台唯一 JWT 签发者（所有 BFF 委托此服务签发 token）
-├── gateway-bff/       # @vxture/bff-gateway   → 统一入口层（可选，路由分发 / 限流 / 灰度）
-├── website-bff/       # @vxture/bff-website   → serves portals/website
-├── admin-bff/         # @vxture/bff-admin     → serves portals/admin
-├── console-bff/       # @vxture/bff-console   → serves portals/console
-├── varda-bff/            # @vxture/bff-varda      → serves embedded Varda surfaces
-└── agent-template-bff/  # @vxture/bff-agent01   → 新 Agent BFF 模板（从此分叉）
+├── auth-bff/          # @vxture/bff-auth       → portals/accounts and central identity
+├── website-bff/       # @vxture/bff-website    → portals/website
+├── admin-bff/         # @vxture/bff-admin      → portals/admin
+├── console-bff/       # @vxture/bff-console    → portals/console
+├── opera-bff/         # @vxture/bff-opera      → portals/opera
+├── arche-bff/         # @vxture/bff-arche      → portals/arche
+├── workbench-bff/     # @vxture/bff-workbench  → portals/workbench
+├── tenant-bff/        # @vxture/bff-tenant     → portals/customer-portal
+├── gateway-bff/       # @vxture/bff-gateway    → shared ingress
+└── platform-api/      # @vxture/bff-platform-api → platform API
 ```
 
 命名规范：`@vxture/bff-{consumer-name}`
+
+目录使用 `{consumer-name}-bff`；`platform-api` 是平台 API 的独立入口。
+上述前八项是身份同步的八组前端/BFF，gateway 与 platform-api 不计入该八组。
+Agent/Varda 已迁出平台仓；下文 Agent 模式仅作外部架构参考，不代表本仓包清单。
+
+**Workbench 与 Tenant 的职责和工程名称：**
+
+| 消费者                                     | BFF 目录 / 包名                               | 镜像仓库                 | 运行配置                                                                    |
+| ------------------------------------------ | --------------------------------------------- | ------------------------ | --------------------------------------------------------------------------- |
+| 个人工作台 `portals/workbench`             | `bff/workbench-bff` / `@vxture/bff-workbench` | `platform_bff-workbench` | `WORKBENCH_BFF_PORT`                                                        |
+| 租户组织专属门户 `portals/customer-portal` | `bff/tenant-bff` / `@vxture/bff-tenant`       | `platform_bff-tenant`    | `TENANT_BFF_PORT`、`TENANT_BFF_TOKEN`、`TENANT_BFF_URL`、`TENANT_BFF_IMAGE` |
+
+`tenant-bff` 表达租户组织专属访问入口，按发布的 hostname 绑定组织并验证成员。
+Console 面向租户管理，Tenant 面向该组织的门户使用者，两者各有独立 BFF。
+唯一调用链为 `portals/customer-portal` → HTTP → `bff/tenant-bff` → `@vxture/service-customer-portal`。
+`customer-portal` 是前端产品、领域服务及已登记登录契约的名称；它不作为 BFF 工程名称。
+OIDC client、Cookie、Redis 命名空间、HTTP 头、数据库角色/表仍按该业务契约使用，不能随目录改名。
+新增构建、部署、排障或回退引用一律使用表中名称，不设目录、包名或环境变量兼容别名。
 
 **一对一原则**：每个 BFF 精确服务一个前端消费者。
 前端永远不知道数据来自 `agent-server/` 还是 `services/` — BFF 是统一的数据出口。

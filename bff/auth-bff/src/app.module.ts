@@ -21,6 +21,9 @@ import { CustomerLifecycleService } from "./oidc/customer-lifecycle.service";
 import { CustomerLifecycleRouter } from "./routers/customer-lifecycle.router";
 import { CustomerLifecycleJob } from "./accounts/customer-lifecycle.job";
 import { LogoutRetryJob } from "./oidc/logout-retry.job";
+import { SessionLogoutJob } from "./accounts/session-logout.job";
+import { IdentityDeliveryJob } from "./accounts/identity-delivery.job";
+import { IdentityRecoveryRouter } from "./routers/identity-recovery.router";
 import { AccountModule } from "@vxture/service-account";
 import { OrganizationModule } from "@vxture/service-organization";
 import { SubscriptionModule } from "@vxture/service-subscription";
@@ -56,6 +59,7 @@ import { CustomerSelfService } from "./oidc/customer-self.service";
 import { ConsoleInsightsRouter } from "./routers/console-insights.router";
 import { CustomerSelfRouter } from "./routers/customer-self.router";
 import { AccountsLoginRouter } from "./routers/accounts-login.router";
+import { AccountsEventsRouter } from "./routers/accounts-events.router";
 import { OidcRouter } from "./routers/oidc.router";
 import { OperatorWebauthnRouter } from "./routers/operator-webauthn.router";
 import { OperatorSelfRouter } from "./routers/operator-self.router";
@@ -96,6 +100,8 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     SubscriptionModule,
   ],
   controllers: [
+    IdentityRecoveryRouter,
+    AccountsEventsRouter,
     AccountReauthenticationRouter,
     OperatorAccountReauthenticationRouter,
     CaptchaRouter,
@@ -140,6 +146,8 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     CustomerLifecycleService,
     CustomerLifecycleJob,
     LogoutRetryJob,
+    SessionLogoutJob,
+    IdentityDeliveryJob,
     CustomerSecurityChallengeService,
     InternalAuthGuard,
     ActorBindingGuard,

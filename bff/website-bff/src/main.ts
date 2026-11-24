@@ -15,6 +15,7 @@ import { ValidationPipe } from "@nestjs/common";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./filters/all-exceptions.filter";
 import cookieParser from "cookie-parser";
+import { text } from "express";
 import { setupOpenApi } from "@vxture/core-config/openapi";
 
 async function bootstrap() {
@@ -37,6 +38,10 @@ async function bootstrap() {
   // NestJS's generic 500), and return a clean error body.
   app.useGlobalFilters(new AllExceptionsFilter());
   app.use(cookieParser());
+  app.use(
+    "/auth/identity-events",
+    text({ type: "application/jwt", limit: "64kb" }),
+  );
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   const allowedOrigins =
     process.env["ALLOWED_ORIGIN"]

@@ -17,18 +17,15 @@ import {
   buildTenantSwitchUrl,
   buildWorkspaceSwitchUrl,
   restoreSession,
-  hasActiveSession,
 } from "@/api/console-bff";
 import type { SessionSnapshot } from "@/entities/console";
+import { startSessionEvents } from "./session-events";
 
 type SessionStatus = "idle" | "loading" | "ready";
-// Background heartbeat only. focus/visibilitychange below already sync immediately
-// when the user returns to the tab, so this interval just catches session expiry
-// while the tab stays focused. Kept at 5 min (was 2 s): every 2 s each open console
-// tab fired 5 HTTP requests (probe + 4 aggregated reads) at the shared 2C/2G host.
+// Legacy deployments and disconnected streams retain bounded reconciliation.
+// A negotiated, reconciled events-v1 connection removes timer/focus reads.
 const SESSION_SYNC_INTERVAL_MS = 300_000;
 const SESSION_SYNC_THROTTLE_MS = 1500;
-const SESSION_PROBE_INTERVAL_MS = 15_000;
 const SESSION_CONTEXT_CHANNEL = "vx:console:context-changed";
 const ANONYMOUS_SESSION: SessionSnapshot = {
   isAuthenticated: false,
@@ -110,14 +107,16 @@ export function ConsoleSessionProvider({
   const [status, setStatus] = useState<SessionStatus>(
     seeded ? "ready" : "loading",
   );
+  const [eventSync, setEventSync] = useState(false);
+  const eventSyncRef = useRef(false);
   const sessionRef = useRef<SessionSnapshot>(
     initialSession ?? ANONYMOUS_SESSION,
   );
   const seededRef = useRef(seeded);
   const lastSyncAtRef = useRef(0);
   const syncInFlightRef = useRef(false);
-  const sessionEpochRef = useRef(0);
   const refreshVersionRef = useRef(0);
+  const sessionConfirmedRef = useRef(false);
   const contextChannelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
@@ -164,7 +163,6 @@ export function ConsoleSessionProvider({
 
   const refreshSession = useCallback(
     async (options: RefreshSessionOptions = {}) => {
-      const epoch = sessionEpochRef.current;
       const version = ++refreshVersionRef.current;
       if (!options.silent) {
         setStatus("loading");
@@ -172,27 +170,18 @@ export function ConsoleSessionProvider({
 
       try {
         const snapshot = await restoreSession();
-        if (
-          epoch !== sessionEpochRef.current ||
-          version !== refreshVersionRef.current
-        )
-          return sessionRef.current;
+        if (version !== refreshVersionRef.current) return sessionRef.current;
+        sessionConfirmedRef.current = true;
         commitSession(snapshot);
         setStatus("ready");
 
         return snapshot;
-      } catch (error) {
-        if (
-          epoch !== sessionEpochRef.current ||
-          version !== refreshVersionRef.current
-        )
-          return sessionRef.current;
-        if (!options.silent) {
-          commitSession(ANONYMOUS_SESSION);
-        }
-
+      } catch {
+        if (version !== refreshVersionRef.current) return sessionRef.current;
+        // An outage is not evidence of logout, including during bootstrap.
+        sessionConfirmedRef.current = false;
         setStatus("ready");
-        return options.silent ? sessionRef.current : ANONYMOUS_SESSION;
+        return sessionRef.current;
       }
     },
     [commitSession],
@@ -217,7 +206,11 @@ export function ConsoleSessionProvider({
     }
 
     refreshSession().then((snapshot) => {
-      if (!snapshot.isAuthenticated && !silentJustFailed) {
+      if (
+        sessionConfirmedRef.current &&
+        !snapshot.isAuthenticated &&
+        !silentJustFailed
+      ) {
         window.location.replace(
           buildRpLoginUrl(window.location.href, { prompt: "none" }),
         );
@@ -226,7 +219,7 @@ export function ConsoleSessionProvider({
   }, [refreshSession]);
 
   useEffect(() => {
-    if (status !== "ready") {
+    if (status !== "ready" || eventSync || !session.isAuthenticated) {
       return;
     }
 
@@ -234,6 +227,7 @@ export function ConsoleSessionProvider({
       const now = Date.now();
       if (
         document.visibilityState !== "visible" ||
+        eventSyncRef.current ||
         syncInFlightRef.current ||
         now - lastSyncAtRef.current < SESSION_SYNC_THROTTLE_MS
       ) {
@@ -259,51 +253,33 @@ export function ConsoleSessionProvider({
       SESSION_SYNC_INTERVAL_MS,
     );
     window.addEventListener("focus", syncIfStale);
-    window.addEventListener("pageshow", syncIfStale);
     window.addEventListener("online", syncIfStale);
+    window.addEventListener("pageshow", syncIfStale);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener("focus", syncIfStale);
-      window.removeEventListener("pageshow", syncIfStale);
       window.removeEventListener("online", syncIfStale);
+      window.removeEventListener("pageshow", syncIfStale);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [refreshSession, status]);
+  }, [refreshSession, status, eventSync, session.isAuthenticated]);
 
   useEffect(() => {
-    let active = true;
-    let pending = false;
-    const probe = async () => {
-      if (
-        !sessionRef.current.isAuthenticated ||
-        document.visibilityState !== "visible" ||
-        pending ||
-        syncInFlightRef.current
-      )
-        return;
-      pending = true;
-      try {
-        if ((await hasActiveSession()) === false && active) {
-          // Fence older projection reads before removing the authenticated shell.
-          sessionEpochRef.current += 1;
-          commitSession(ANONYMOUS_SESSION);
-          setStatus("ready");
-        }
-      } finally {
-        pending = false;
-      }
-    };
-    const timer = window.setInterval(
-      () => void probe(),
-      SESSION_PROBE_INTERVAL_MS,
+    if (!session.isAuthenticated) return;
+    return startSessionEvents(
+      async () => {
+        const snapshot = await refreshSession({ silent: true });
+        if (!sessionConfirmedRef.current) return "unavailable";
+        return snapshot.isAuthenticated ? "active" : "anonymous";
+      },
+      (active) => {
+        eventSyncRef.current = active;
+        setEventSync(active);
+      },
     );
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [commitSession]);
+  }, [refreshSession, session.isAuthenticated]);
 
   const signOut = useCallback(() => {
     // Top-level navigation (not fetch) so the browser sends vx_sid to the IdP

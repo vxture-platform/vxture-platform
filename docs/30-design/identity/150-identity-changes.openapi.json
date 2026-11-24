@@ -1,0 +1,877 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Platform changes-v1 recovery pilot",
+    "version": "0.7.0-local",
+    "description": "Local implementation, not deployed. Explicitly registered confidential platform BFFs only. Context/access invalidations do not grant access or replace logout-v1. No periodic polling, webhook delivery or browser context application is implemented by these endpoints. Snapshot state and watermark share one MVCC snapshot. Changes and logout cursors cannot be interchanged. Workforce requires WORKFORCE_IDENTITY_SYNC_ENABLED. Realms never share subjects, cursors, receipts or versions."
+  },
+  "x-source-metadata": {
+    "package": "@vxture/repo",
+    "layer": "Application",
+    "category": "api-contract",
+    "author": "AI-Generated",
+    "date": "2026-11-24"
+  },
+  "security": [
+    {
+      "clientSecretBasic": []
+    }
+  ],
+  "paths": {
+    "/oidc/identity/changes/snapshot": {
+      "post": {
+        "summary": "Read bound session context/access versions and a committed changes watermark",
+        "operationId": "identityChangesSnapshot",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful scoped recovery",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON request shape",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid confidential client authentication",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              },
+              "WWW-Authenticate": {
+                "schema": {
+                  "const": "Basic realm=\"accounts\""
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Capability disabled, registration mismatch or cursor scope mismatch",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authority unavailable; never interpret this as inactive",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oidc/identity/changes/events": {
+      "post": {
+        "summary": "Recover context/access invalidations for an explicitly registered platform BFF",
+        "operationId": "identityChangesEvents",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful scoped recovery",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON request shape",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid confidential client authentication",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              },
+              "WWW-Authenticate": {
+                "schema": {
+                  "const": "Basic realm=\"accounts\""
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Capability disabled, registration mismatch or cursor scope mismatch",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Cursor expired or committed events missing; request a new snapshot",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authority unavailable; never interpret this as inactive",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "clientSecretBasic": {
+        "type": "http",
+        "scheme": "basic"
+      }
+    },
+    "schemas": {
+      "Sid": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+      },
+      "Cursor": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "Binding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["issuer", "audience", "realm", "environment", "profile"],
+        "properties": {
+          "issuer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "audience": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "realm": {
+            "enum": ["customer", "workforce"]
+          },
+          "environment": {
+            "enum": ["prod", "beta", "dev"]
+          },
+          "profile": {
+            "const": "changes-v1"
+          }
+        }
+      },
+      "SnapshotRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sids"],
+        "properties": {
+          "sids": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Sid"
+            }
+          }
+        }
+      },
+      "EventsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cursor"],
+        "properties": {
+          "cursor": {
+            "$ref": "#/components/schemas/Cursor"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 100
+          }
+        }
+      },
+      "ActiveSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sid",
+          "state",
+          "sub",
+          "session_version",
+          "context_version",
+          "absolute_expires_at",
+          "context",
+          "authorization_version"
+        ],
+        "properties": {
+          "sid": {
+            "$ref": "#/components/schemas/Sid"
+          },
+          "state": {
+            "const": "active"
+          },
+          "sub": {
+            "type": "string",
+            "pattern": "^(usr|opr)_.+$",
+            "maxLength": 128
+          },
+          "session_version": {
+            "const": "1"
+          },
+          "context_version": {
+            "type": "string",
+            "pattern": "^[0-9]{1,19}$"
+          },
+          "absolute_expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "context": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["org_id", "workspace_id"],
+                "properties": {
+                  "org_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "workspace_id": {
+                    "type": ["string", "null"],
+                    "format": "uuid"
+                  }
+                }
+              }
+            ]
+          },
+          "authorization_version": {
+            "type": "string",
+            "pattern": "^[0-9]{1,19}$",
+            "description": "Customer subject version; 0 is the baseline. A version never grants permissions. Recheck the authoritative policy after invalidation."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "sub": {
+                  "pattern": "^opr_",
+                  "type": "string"
+                }
+              },
+              "required": ["sub"],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "context": {
+                  "type": "null"
+                },
+                "context_version": {
+                  "const": "0"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ]
+      },
+      "InactiveSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sid", "state"],
+        "properties": {
+          "sid": {
+            "$ref": "#/components/schemas/Sid"
+          },
+          "state": {
+            "enum": ["inactive", "not_bound"]
+          }
+        }
+      },
+      "SnapshotResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["binding", "watermark", "sessions"],
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/Binding"
+          },
+          "watermark": {
+            "$ref": "#/components/schemas/Cursor"
+          },
+          "sessions": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ActiveSession"
+                },
+                {
+                  "$ref": "#/components/schemas/InactiveSession"
+                }
+              ]
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "binding": {
+                  "properties": {
+                    "realm": {
+                      "const": "customer"
+                    }
+                  },
+                  "required": ["realm"],
+                  "type": "object"
+                }
+              },
+              "required": ["binding"],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "sessions": {
+                  "items": {
+                    "properties": {
+                      "sub": {
+                        "pattern": "^usr_.+$",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "binding": {
+                  "properties": {
+                    "realm": {
+                      "const": "workforce"
+                    }
+                  },
+                  "required": ["realm"],
+                  "type": "object"
+                }
+              },
+              "required": ["binding"],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "sessions": {
+                  "items": {
+                    "properties": {
+                      "sub": {
+                        "pattern": "^opr_.+$",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ]
+      },
+      "EventsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["binding", "events", "next_cursor", "has_more"],
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/Binding"
+          },
+          "events": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ContextEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/AccessEvent"
+                }
+              ]
+            }
+          },
+          "next_cursor": {
+            "$ref": "#/components/schemas/Cursor"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "binding": {
+                  "properties": {
+                    "realm": {
+                      "const": "customer"
+                    }
+                  },
+                  "required": ["realm"],
+                  "type": "object"
+                }
+              },
+              "required": ["binding"],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "events": {
+                  "items": {
+                    "properties": {
+                      "realm": {
+                        "const": "customer"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "binding": {
+                  "properties": {
+                    "realm": {
+                      "const": "workforce"
+                    }
+                  },
+                  "required": ["realm"],
+                  "type": "object"
+                }
+              },
+              "required": ["binding"],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "events": {
+                  "items": {
+                    "properties": {
+                      "realm": {
+                        "const": "workforce"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "retryable"],
+        "properties": {
+          "code": {
+            "enum": [
+              "INVALID_REQUEST",
+              "INVALID_CLIENT",
+              "CAPABILITY_NOT_ENABLED",
+              "SCOPE_MISMATCH",
+              "CURSOR_EXPIRED",
+              "IDENTITY_UNAVAILABLE"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ContextEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "type",
+          "event_id",
+          "occurred_at",
+          "issuer",
+          "audience",
+          "realm",
+          "environment",
+          "cursor",
+          "subject",
+          "version"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "type": {
+            "const": "session.context_changed"
+          },
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "issuer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "audience": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "realm": {
+            "const": "customer"
+          },
+          "environment": {
+            "enum": ["prod", "beta", "dev"]
+          },
+          "cursor": {
+            "$ref": "#/components/schemas/Cursor"
+          },
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sid", "sub"],
+            "properties": {
+              "sid": {
+                "$ref": "#/components/schemas/Sid"
+              },
+              "sub": {
+                "type": "string",
+                "pattern": "^usr_.+$",
+                "maxLength": 128
+              }
+            }
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        }
+      },
+      "AccessEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "type",
+          "event_id",
+          "occurred_at",
+          "issuer",
+          "audience",
+          "realm",
+          "environment",
+          "cursor",
+          "subject",
+          "version",
+          "scope"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "type": {
+            "const": "identity.access_changed"
+          },
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "issuer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "audience": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "realm": {
+            "enum": ["customer", "workforce"]
+          },
+          "environment": {
+            "enum": ["prod", "beta", "dev"]
+          },
+          "cursor": {
+            "$ref": "#/components/schemas/Cursor"
+          },
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sub"],
+            "properties": {
+              "sub": {
+                "type": "string",
+                "pattern": "^(usr|opr)_.+$",
+                "maxLength": 128
+              }
+            }
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "scope": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["org_id", "workspace_id", "product_id"],
+            "properties": {
+              "org_id": {
+                "type": ["string", "null"],
+                "format": "uuid"
+              },
+              "workspace_id": {
+                "type": ["string", "null"],
+                "format": "uuid"
+              },
+              "product_id": {
+                "type": ["string", "null"],
+                "format": "uuid"
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "realm": {
+                  "const": "customer"
+                }
+              },
+              "required": ["realm"],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "subject": {
+                  "properties": {
+                    "sub": {
+                      "pattern": "^usr_.+$",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "realm": {
+                  "const": "workforce"
+                }
+              },
+              "required": ["realm"],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "subject": {
+                  "properties": {
+                    "sub": {
+                      "pattern": "^opr_.+$",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "scope": {
+                  "properties": {
+                    "org_id": {
+                      "type": "null"
+                    },
+                    "workspace_id": {
+                      "type": "null"
+                    },
+                    "product_id": {
+                      "type": "null"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

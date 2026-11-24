@@ -16,9 +16,9 @@ export RUNTIME_DIR="$T/runtime"
 export CUSTOMER_PORTAL_ENV_FILE="$T/runtime/portal.env"
 export PATH="$T/bin:$PATH"
 f="registry.test/portal_frontend@sha256:$(printf 'a%.0s' {1..64})"
-b="registry.test/portal_bff@sha256:$(printf 'b%.0s' {1..64})"
+b="registry.test/platform_bff-tenant@sha256:$(printf 'b%.0s' {1..64})"
 old_f="registry.test/portal_frontend@sha256:$(printf 'c%.0s' {1..64})"
-old_b="registry.test/portal_bff@sha256:$(printf 'd%.0s' {1..64})"
+old_b="registry.test/platform_bff-tenant@sha256:$(printf 'd%.0s' {1..64})"
 
 # ===========================================================================
 # Docker boundary and isolated fixtures
@@ -44,7 +44,7 @@ shift 2
 shift 2
 case "$1" in
   config)
-    [ -z "${CUSTOMER_PORTAL_BFF_TOKEN+x}" ] && [ -z "${OIDC_CLIENT_SECRET+x}" ] || exit 92
+    [ -z "${TENANT_BFF_TOKEN+x}" ] && [ -z "${OIDC_CLIENT_SECRET+x}" ] || exit 92
     [ ! -f "$FIXTURE/bad-config" ]
     ;;
   ps)
@@ -54,11 +54,11 @@ case "$1" in
   pull) [ ! -f "$FIXTURE/fail-pull" ] ;;
   up)
     [[ "$*" = 'up -d --no-build --pull never --wait --wait-timeout 90 frontend bff' ]] || exit 94
-    printf '%s\n' "$CUSTOMER_PORTAL_FRONTEND_IMAGE" "$CUSTOMER_PORTAL_BFF_IMAGE" >> "$FIXTURE/attempts"
+    printf '%s\n' "$CUSTOMER_PORTAL_FRONTEND_IMAGE" "$TENANT_BFF_IMAGE" >> "$FIXTURE/attempts"
     if [ -f "$FIXTURE/fail-up" ]; then rm "$FIXTURE/fail-up"; exit 1; fi
     [ ! -f "$FIXTURE/fail-all" ] || exit 1
     printf '%s\n' "$CUSTOMER_PORTAL_FRONTEND_IMAGE" > "$FIXTURE/frontend"
-    printf '%s\n' "$CUSTOMER_PORTAL_BFF_IMAGE" > "$FIXTURE/bff"
+    printf '%s\n' "$TENANT_BFF_IMAGE" > "$FIXTURE/bff"
     ;;
   *) exit 93 ;;
 esac
@@ -68,7 +68,7 @@ reset_case() {
   rm -f "$T/"{calls,attempts,frontend,bff,fail-pull,fail-up,fail-all,no-network,no-image,bad-config}
   rm -rf "$RUNTIME_DIR/customer-portal-releases"
   cat > "$CUSTOMER_PORTAL_ENV_FILE" <<'ENV'
-CUSTOMER_PORTAL_BFF_TOKEN=fixture-token-never-print
+TENANT_BFF_TOKEN=fixture-token-never-print
 CUSTOMER_PORTAL_DATABASE_URL=postgresql://fixture-only
 CUSTOMER_PORTAL_REDIS_URL=redis://fixture-only
 OIDC_ISSUER=https://accounts.example.test
@@ -98,6 +98,12 @@ run_ok check "$f" "$b"
 no_mutation
 [ ! -d "$RUNTIME_DIR/customer-portal-releases" ]
 echo 'ok - check is read-only and accepts only dedicated compose scope'
+reset_case
+cp "$CUSTOMER_PORTAL_ENV_FILE" "$RUNTIME_DIR/.env.tenant-bff"
+CUSTOMER_PORTAL_ENV_FILE= run_ok check "$f" "$b"
+grep -q -- "--env-file $RUNTIME_DIR/.env.tenant-bff" "$T/calls"
+no_mutation
+echo 'ok - the default runtime file resolves to the tenant BFF configuration'
 for bad in registry.test/front:latest 'registry.test/front@sha256:abc' "Registry.test/front@sha256:$(printf 'a%.0s' {1..64})"; do
   reset_case; run_bad deploy "$bad" "$b"; no_mutation
 done
@@ -119,8 +125,20 @@ reset_case; running_pair; touch "$T/no-image"
 run_bad deploy "$f" "$b"; no_mutation
 echo 'ok - unpinned running images or missing recovery images prevent an upgrade'
 reset_case
-CUSTOMER_PORTAL_BFF_TOKEN=caller-value OIDC_CLIENT_SECRET=caller-value run_ok check "$f" "$b"
+TENANT_BFF_TOKEN=caller-value OIDC_CLIENT_SECRET=caller-value run_ok check "$f" "$b"
 echo 'ok - caller runtime variables do not override the dedicated env file'
+wrong_b="registry.test/unrelated_bff@sha256:$(printf 'e%.0s' {1..64})"
+for action in check deploy; do
+  reset_case; run_bad "$action" "$f" "$wrong_b"; no_mutation
+done
+reset_case; running_pair
+printf '%s\n' "$wrong_b" > "$T/bff"
+run_bad deploy "$f" "$b"; no_mutation
+reset_case
+mkdir -p "$RUNTIME_DIR/customer-portal-releases"
+printf '%s\n' "$old_f" "$wrong_b" > "$RUNTIME_DIR/customer-portal-releases/previous"
+run_bad rollback; no_mutation
+echo 'ok - deploy and rollback reject BFF images from another identity before mutation'
 
 # ===========================================================================
 # Release success, recovery and explicit rollback

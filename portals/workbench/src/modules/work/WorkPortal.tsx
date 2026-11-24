@@ -8,6 +8,7 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { startSessionSync } from "@vxture/core-identity-sdk";
 import { withLocalePreference } from "@vxture/platform-browser";
 import { WorkFooter } from "./WorkFooter";
 import { useWorkLocale } from "../../lib/locale";
@@ -21,7 +22,7 @@ import {
   SegmentedControl,
   ToastProvider,
 } from "@vxture/design-system";
-import { loadWorkData, loadWorkSession } from "../../lib/api";
+import { loadWorkData } from "../../lib/api";
 import { authNavigation } from "../../lib/navigation";
 import type {
   AppView,
@@ -79,9 +80,6 @@ function WorkPortalContent({
   const [now, setNow] = useState(() => new Date(initialTime));
   const [result, setResult] = useState<LoadResult<WorkData> | null>(null);
   const [revision, setRevision] = useState(0);
-  const syncInFlight = useRef(false);
-  const sessionEpoch = useRef(0);
-  const lastSyncAt = useRef(0);
   const allowSilentSso = useRef(true);
   const silentFailure = useRef(false);
   const browserSessionChecked = useRef(false);
@@ -129,10 +127,6 @@ function WorkPortalContent({
   }, []);
   useEffect(() => {
     if (!runtime.authConfigured || !knownRoute) return;
-    const controller = new AbortController();
-    const epoch = sessionEpoch.current;
-    syncInFlight.current = true;
-    lastSyncAt.current = Date.now();
     const current = new URL(window.location.href);
     if (browserSessionProbePending.current) return;
     if (!browserSessionChecked.current) {
@@ -158,76 +152,71 @@ function WorkPortalContent({
       current.searchParams.delete("vx_sso_silent");
       window.history.replaceState(null, "", current.href);
     }
-    void loadWorkData(controller.signal, runtime.catalogConfigured)
-      .then((value) => {
-        if (controller.signal.aborted || epoch !== sessionEpoch.current) return;
-        // ruyin.work cannot read the IdP cookie on accounts.vxture.com.
-        // A bounded top-level prompt=none flow restores this RP independently.
-        if (value.status === "error" && value.code === 401) {
-          let attemptedAt = 0;
-          try {
-            attemptedAt = Number(sessionStorage.getItem("vx:work:sso-at")) || 0;
-            if (silentFailed) {
-              attemptedAt = Date.now();
-              sessionStorage.setItem("vx:work:sso-at", String(attemptedAt));
-            }
-          } catch {
-            // The callback marker still prevents a redirect loop without storage.
+    const sync = startSessionSync(async (signal, event) => {
+      const value = await loadWorkData(signal, runtime.catalogConfigured);
+      if (signal.aborted) return "unavailable";
+      // ruyin.work cannot read the IdP cookie on accounts.vxture.com.
+      // A bounded top-level prompt=none flow restores this RP independently.
+      if (value.status === "error" && value.code === 401) {
+        let attemptedAt = 0;
+        try {
+          attemptedAt = Number(sessionStorage.getItem("vx:work:sso-at")) || 0;
+          if (silentFailed) {
+            attemptedAt = Date.now();
+            sessionStorage.setItem("vx:work:sso-at", String(attemptedAt));
           }
-          if (
-            allowSilentSso.current &&
-            !silentFailure.current &&
-            Date.now() - attemptedAt >= 1500
-          ) {
-            allowSilentSso.current = false;
-            try {
-              sessionStorage.setItem("vx:work:sso-at", String(Date.now()));
-            } catch {
-              // Storage is optional; authorization remains server-bound.
-            }
-            window.location.replace(
-              authNavigation("login", window.location.href, {
-                prompt: "none",
-                ui_locales: document.documentElement.lang,
-              }),
-            );
-            return;
-          }
+        } catch {
+          // The callback marker still prevents a redirect loop without storage.
         }
-        allowSilentSso.current = false;
-        // Keep the authenticated shell during a transient data outage.
-        setResult((previous) =>
-          value.status === "error" &&
-          value.code !== 401 &&
-          previous?.status === "ready"
-            ? {
-                ...previous,
-                data: { ...previous.data, availabilityIssue: value.message },
-              }
-            : value,
-        );
-      })
-      .catch(() => {
-        if (!controller.signal.aborted)
-          setResult((previous) =>
-            previous?.status === "ready"
-              ? {
-                  ...previous,
-                  data: {
-                    ...previous.data,
-                    availabilityIssue: "连接失败，请稍后重试",
-                  },
-                }
-              : { status: "error", code: 0, message: "连接失败，请稍后重试" },
+        if (
+          !event &&
+          allowSilentSso.current &&
+          !silentFailure.current &&
+          Date.now() - attemptedAt >= 1500
+        ) {
+          allowSilentSso.current = false;
+          try {
+            sessionStorage.setItem("vx:work:sso-at", String(Date.now()));
+          } catch {
+            // Storage is optional; authorization remains server-bound.
+          }
+          window.location.replace(
+            authNavigation("login", window.location.href, {
+              prompt: "none",
+              ui_locales: document.documentElement.lang,
+            }),
           );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) syncInFlight.current = false;
-      });
-    return () => {
-      controller.abort();
-      syncInFlight.current = false;
-    };
+          return "anonymous";
+        }
+      }
+      allowSilentSso.current = false;
+      const denied = value.status === "error" && value.code === 403;
+      if (denied || (value.status === "error" && value.code === 401)) {
+        setOverview(null);
+        setDetailsOpen(false);
+        setNotificationsOpen(false);
+      }
+      // Keep the authenticated shell during a transient data outage.
+      setResult((previous) =>
+        value.status === "error" &&
+        value.code !== 401 &&
+        !denied &&
+        previous?.status === "ready"
+          ? {
+              ...previous,
+              data: { ...previous.data, availabilityIssue: value.message },
+            }
+          : value,
+      );
+      // Access denial is a complete view; keep events for later reauthorization.
+      if (denied) return "active";
+      return value.status === "ready" && !value.data.availabilityIssue
+        ? "active"
+        : value.status === "error" && value.code === 401
+          ? "anonymous"
+          : "unavailable";
+    });
+    return sync.stop;
   }, [
     runtime.authConfigured,
     runtime.catalogConfigured,
@@ -235,67 +224,6 @@ function WorkPortalContent({
     knownRoute,
     pathname,
   ]);
-  useEffect(() => {
-    if (!runtime.authConfigured || !knownRoute) return;
-    const sync = (): void => {
-      if (
-        document.visibilityState !== "visible" ||
-        syncInFlight.current ||
-        Date.now() - lastSyncAt.current < 1500
-      )
-        return;
-      // Foreground checks must not restart a failed top-level SSO bootstrap.
-      setRevision((value) => value + 1);
-    };
-    const foreground = (): void => sync();
-    const interval = window.setInterval(sync, 300_000);
-    window.addEventListener("focus", foreground);
-    window.addEventListener("pageshow", foreground);
-    document.addEventListener("visibilitychange", foreground);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", foreground);
-      window.removeEventListener("pageshow", foreground);
-      document.removeEventListener("visibilitychange", foreground);
-    };
-  }, [runtime.authConfigured, knownRoute]);
-  const authenticated = result?.status === "ready";
-  useEffect(() => {
-    if (!authenticated || !knownRoute) return;
-    const controller = new AbortController();
-    let pending = false;
-    const timer = window.setInterval(() => {
-      if (
-        document.visibilityState !== "visible" ||
-        pending ||
-        syncInFlight.current
-      )
-        return;
-      pending = true;
-      void loadWorkSession(controller.signal)
-        .then((value) => {
-          if (controller.signal.aborted) return;
-          if (value.status === "error" && value.code === 401) {
-            sessionEpoch.current += 1;
-            allowSilentSso.current = false;
-            setResult(value);
-            setDetailsOpen(false);
-            setNotificationsOpen(false);
-            setOverviewCode(null);
-          }
-        })
-        .catch(() => {
-          // A transport failure is not evidence of central logout.
-        })
-        .finally(() => {
-          pending = false;
-        });
-    }, 15_000);
-    return () => {
-      controller.abort();
-      window.clearInterval(timer);
-    };
-  }, [authenticated, knownRoute]);
   useEffect(() => {
     setDetailsOpen(false);
     setNotificationsOpen(false);

@@ -13,9 +13,11 @@ migration_error() { printf 'migration refused: %s\n' "$*" >&2; return 1; }
 migration_sha() { sha256sum "$1" | cut -d ' ' -f 1; }
 
 # Build an ordered inventory and hash code, SQL, DDL and timeout policy.
-# Arguments: deploy directory, optional unique filename prefix.
+# Arguments: deploy directory, optional unique upper filename prefix.
+# MIGRATE_FROM selects an inclusive lower bound for additive upgrades.
 migration_build_plan() {
-  local deploy="$1" until="${2:-}" file name hit='' matches=0 selected=1
+  local deploy="$1" until="${2:-}" from="${MIGRATE_FROM:-}" file name hit='' matches=0 selected=1
+  local first='' first_matches=0
   local -a inventory=() sources=() digests=()
   local hashes line index=0
   export LC_ALL=C
@@ -24,6 +26,7 @@ migration_build_plan() {
   [[ "$MIGRATION_TIMEOUT" =~ ^[1-9][0-9]{0,3}$ ]] && (( MIGRATION_TIMEOUT <= 3600 )) || { migration_error 'invalid statement timeout'; return 1; }
   [[ "$MIGRATION_RUN_TIMEOUT" =~ ^[1-9][0-9]{0,4}$ ]] && (( MIGRATION_RUN_TIMEOUT <= 86400 )) || { migration_error 'invalid run timeout'; return 1; }
   [[ "$until" != *[!A-Za-z0-9._-]* ]] || { migration_error 'invalid cutoff'; return 1; }
+  [[ "$from" != *[!A-Za-z0-9._-]* ]] || { migration_error 'invalid lower bound'; return 1; }
   MIGRATION_ALL=() MIGRATION_SELECTED=() MIGRATION_SKIPPED=()
   for file in "$deploy"/database/migrations/*.sql; do
     [[ -e "$file" || -L "$file" ]] || continue
@@ -31,10 +34,15 @@ migration_build_plan() {
     [[ -f "$file" && ! -L "$file" && "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*\.sql$ ]] || { migration_error 'unsafe migration filename or symlink'; return 1; }
     MIGRATION_ALL+=("$name")
     if [[ -n "$until" && "$name" == "$until"* ]]; then hit="$name"; matches=$((matches+1)); fi
+    if [[ -n "$from" && "$name" == "$from"* ]]; then first="$name"; first_matches=$((first_matches+1)); fi
   done
   (( ${#MIGRATION_ALL[@]} > 0 )) || { migration_error 'empty migration inventory'; return 1; }
   if [[ -n "$until" && "$matches" != 1 ]]; then migration_error 'cutoff must identify exactly one migration'; return 1; fi
+  if [[ -n "$from" && "$first_matches" != 1 ]]; then migration_error 'lower bound must identify exactly one migration'; return 1; fi
+  if [[ -n "$first" && -n "$hit" && "$first" > "$hit" ]]; then migration_error 'lower bound follows cutoff'; return 1; fi
+  [[ -z "$first" ]] || selected=0
   for name in "${MIGRATION_ALL[@]}"; do
+    [[ "$name" != "$first" ]] || selected=1
     if (( selected )); then MIGRATION_SELECTED+=("$name"); else MIGRATION_SKIPPED+=("$name"); fi
     [[ "$name" != "$hit" ]] || selected=0
   done

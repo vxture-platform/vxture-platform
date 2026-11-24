@@ -7,20 +7,31 @@
  * verification is retired.
  */
 
-import { Inject, Injectable, type NestMiddleware } from "@nestjs/common";
 import {
+  Inject,
+  Injectable,
+  Optional,
+  type NestMiddleware,
+} from "@nestjs/common";
+import {
+  rpAuthFailure,
   mapAccessClaims,
   rpSessionCookieName,
   type RpAuthService,
+  type RpSessionStore,
 } from "@vxture/core-oidc-rp";
 import type { NextFunction, Request, Response } from "express";
 import { WebsiteAuthService } from "../auth/auth.service";
 import {
+  RP_CHANGES,
+  RP_SESSION_STORE,
   RP_AUTH_SERVICE,
   RP_RUNTIME,
   type RpRuntime,
 } from "../oidc/oidc-rp.tokens";
 import type { RequestContext } from "../types/auth.types";
+
+import type { IdentityChangesAuthority } from "../oidc/identity-changes.authority";
 
 @Injectable()
 export class AuthMiddleware implements NestMiddleware {
@@ -29,6 +40,12 @@ export class AuthMiddleware implements NestMiddleware {
     private readonly websiteAuthService: WebsiteAuthService,
     @Inject(RP_AUTH_SERVICE) private readonly rpAuth: RpAuthService,
     @Inject(RP_RUNTIME) private readonly rpRuntime: RpRuntime,
+    @Optional()
+    @Inject(RP_CHANGES)
+    private readonly changes?: IdentityChangesAuthority | null,
+    @Optional()
+    @Inject(RP_SESSION_STORE)
+    private readonly store?: RpSessionStore,
   ) {}
 
   async use(req: Request, _res: Response, next: NextFunction) {
@@ -42,8 +59,40 @@ export class AuthMiddleware implements NestMiddleware {
     ] as string | undefined;
     if (rpsid) {
       const outcome = await this.rpAuth.resolve(rpsid);
+      if (outcome.status === "unavailable") {
+        _res.status(503).setHeader("Cache-Control", "no-store");
+        _res.json(rpAuthFailure(outcome));
+        return;
+      }
       if (outcome.status === "ok") {
-        const claims = mapAccessClaims(outcome.claims);
+        let verified = outcome.claims;
+        if (this.changes) {
+          try {
+            const session = await this.store?.get(rpsid);
+            const view =
+              session && session.sub === verified.sub
+                ? await this.changes.view(session)
+                : null;
+            if (!view || !(await this.store?.get(rpsid))) {
+              next();
+              return;
+            }
+            verified = {
+              ...verified,
+              active_org: view.context?.org_id ?? null,
+              active_workspace: view.context?.workspace_id ?? null,
+              roles: [],
+            };
+          } catch {
+            _res.status(503).setHeader("Cache-Control", "no-store");
+            _res.json({
+              code: "IDENTITY_UNAVAILABLE",
+              message: "Identity recovery unavailable",
+            });
+            return;
+          }
+        }
+        const claims = mapAccessClaims(verified);
         const user = await this.websiteAuthService.getCurrentUser(
           claims.userId,
         );

@@ -152,7 +152,7 @@ export const IMAGES = [
     image: ghcrImage("platform_bff-workbench"),
     dockerfile: "deploy/docker/Dockerfile.nestjs",
     "build-args":
-      "SERVICE_PATH=bff/workbench\nPACKAGE_FILTER=@vxture/bff-workbench",
+      "SERVICE_PATH=bff/workbench-bff\nPACKAGE_FILTER=@vxture/bff-workbench",
   },
   // varda 两镜像已随 vxture-varda 独立仓迁出(2026-08-18):构建与部署归其自持。
   // model-platform 服务已退役（2026-07-28）：实现整体迁至外部 vxture-atlas 仓。

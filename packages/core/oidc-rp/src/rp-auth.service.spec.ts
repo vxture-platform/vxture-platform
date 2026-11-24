@@ -1,385 +1,183 @@
-import { describe, it, expect } from "vitest";
-import { RpAuthService } from "./rp-auth.service";
-import { RpSessionStore, type RpRedis } from "./rp-session.store";
-import type { OidcRpClient, OidcTokenSet, RpSession } from "./types";
+/**
+ * RP authorization outcomes independent of the Redis implementation.
+ * @package @vxture/core-oidc-rp
+ * @layer Infrastructure
+ * @category test
+ * @author AI-Generated
+ * @date 2026-11-24
+ */
+import { describe, it, expect, vi } from "vitest";
+import { RpAuthService, type RpAuthStore } from "./rp-auth.service";
+import { OidcTokenRequestError, rpAuthFailure } from "./rp-auth.failure";
+import type { OidcRpClient, RpSession } from "./types";
 
-function fakeRedis(): RpRedis {
-  const kv = new Map<string, string>();
-  const sets = new Map<string, Set<string>>();
-  return {
-    async eval(_script: string, _count: number, ...args: (string | number)[]) {
-      if (_script.includes("destroy-unchanged-session")) {
-        const [key, index, raw, id] = args.map(String);
-        if (kv.get(key!) !== raw) return 0;
-        kv.delete(key!);
-        sets.get(index!)?.delete(id!);
-        return 1;
-      }
-      const [key, index, raw, , id, expected] = args.map(String);
-      const existing = kv.get(key!);
-      if (!existing) return 0;
-      const current = JSON.parse(existing) as RpSession;
-      const next = JSON.parse(raw!) as RpSession;
-      if (
-        current.sid !== next.sid ||
-        current.sub !== next.sub ||
-        (expected && current.refreshToken !== expected)
-      )
-        return 0;
-      kv.set(key!, raw!);
-      const set = sets.get(index!) ?? new Set<string>();
-      set.add(id!);
-      sets.set(index!, set);
-      return 1;
-    },
-    async get(k) {
-      return kv.get(k) ?? null;
-    },
-    async setex(k, _t, v) {
-      kv.set(k, v);
-    },
-    async del(...keys) {
-      keys.forEach((k) => {
-        kv.delete(k);
-        sets.delete(k);
-      });
-    },
-    async sadd(k, ...m) {
-      const s = sets.get(k) ?? new Set();
-      m.forEach((x) => s.add(x));
-      sets.set(k, s);
-    },
-    async srem(k, ...m) {
-      m.forEach((x) => sets.get(k)?.delete(x));
-    },
-    async smembers(k) {
-      return [...(sets.get(k) ?? [])];
-    },
-    async expire() {},
-  };
-}
-
+// ============================================================================
+// Orchestration fixture; storage atomicity is tested against real Redis.
+// ============================================================================
 const now = () => Math.floor(Date.now() / 1000);
-
-/** OidcRpClient stub: only refresh + verifyAccessToken are exercised here. */
-function fakeClient(opts: {
-  refresh?: () => Promise<OidcTokenSet>;
-  verify?: (t: string) => Promise<Record<string, unknown>>;
-}): OidcRpClient {
-  return {
-    buildAuthorizeUrl: () => "",
-    exchangeCode: async () => ({}) as OidcTokenSet,
-    refresh: opts.refresh ?? (async () => ({}) as OidcTokenSet),
-    verifyIdToken: async () => ({}) as never,
-    verifyAccessToken:
-      opts.verify ??
-      (async () => ({ sub: "usr_1", active_org: "org_1", roles: [] })),
-    verifyLogoutToken: async () => ({ sid: "sidA" }),
-    buildEndSessionUrl: () => "",
-  };
-}
-
-function session(overrides: Partial<RpSession> = {}): RpSession {
-  return {
-    sid: "sidA",
-    sub: "usr_1",
+function fixture(expires = now() + 3600) {
+  const session: RpSession = {
+    sid: "central",
+    sub: "usr_test",
     idToken: "id",
-    accessToken: "acc",
-    refreshToken: "ref",
-    accessExpiresAt: now() + 3600,
-    activeOrg: "org_1",
-    ...overrides,
+    accessToken: "access",
+    refreshToken: "refresh",
+    accessExpiresAt: expires,
+  };
+  let current: RpSession | null = session;
+  const store = {
+    get: vi.fn(async () => current),
+    update: vi.fn(async (_id: string, updated: RpSession) => {
+      current = updated;
+      return true;
+    }),
+    lockRefresh: vi.fn(async () => true),
+    unlockRefresh: vi.fn(async () => {}),
+  } satisfies RpAuthStore;
+  const client = {
+    buildAuthorizeUrl: () => "",
+    buildEndSessionUrl: () => "",
+    exchangeCode: vi.fn(async () => session),
+    refresh: vi.fn(async () => ({
+      ...session,
+      accessToken: "rotated",
+      accessExpiresAt: now() + 3600,
+    })),
+    verifyAccessToken: vi.fn(async () => ({
+      sub: "usr_test",
+      sid: "central",
+      active_org: "org",
+    })),
+    verifyIdToken: vi.fn(async () => ({
+      sub: "usr_test",
+      sid: "central",
+      iss: "issuer",
+      aud: "console",
+      exp: now() + 3600,
+    })),
+    verifyLogoutToken: vi.fn(async () => ({ sid: "central" })),
+  } satisfies OidcRpClient;
+  return {
+    store,
+    client,
+    session,
+    revoke: () => {
+      current = null;
+    },
+    auth: new RpAuthService(store, client, 3600),
   };
 }
 
-describe("RpAuthService.resolve", () => {
-  it("returns expired when rpsid is missing or no session", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    const svc = new RpAuthService(store, fakeClient({}), 3600);
-    expect((await svc.resolve(undefined)).status).toBe("expired");
-    expect((await svc.resolve("nope")).status).toBe("expired");
+// ============================================================================
+// Outcome and identity guarantees
+// ============================================================================
+describe("RP authentication", () => {
+  it("returns expired only for missing local identity", async () => {
+    const f = fixture();
+    expect(await f.auth.resolve(undefined)).toEqual({ status: "expired" });
+    f.revoke();
+    expect(await f.auth.resolve("a")).toEqual({ status: "expired" });
   });
-
-  it("verifies a fresh session without refreshing", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    await store.create("rps1", session(), 3600);
-    let refreshCalled = false;
-    const svc = new RpAuthService(
-      store,
-      fakeClient({
-        refresh: async () => {
-          refreshCalled = true;
-          return {} as OidcTokenSet;
-        },
-      }),
-      3600,
-    );
-    const out = await svc.resolve("rps1");
-    expect(out.status).toBe("ok");
-    if (out.status === "ok") {
-      expect(out.refreshed).toBe(false);
-      expect(out.claims.sub).toBe("usr_1");
-    }
-    expect(refreshCalled).toBe(false);
-  });
-
-  it("refreshes when the access token is near expiry and persists the rotation", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    await store.create("rps1", session({ accessExpiresAt: now() + 10 }), 3600); // within skew
-    const svc = new RpAuthService(
-      store,
-      fakeClient({
-        refresh: async () => ({
-          idToken: "id2",
-          accessToken: "acc2",
-          refreshToken: "ref2",
-          accessExpiresAt: now() + 3600,
-        }),
-      }),
-      3600,
-    );
-    const out = await svc.resolve("rps1");
-    expect(out.status).toBe("ok");
-    if (out.status === "ok") expect(out.refreshed).toBe(true);
-    // rotation persisted server-side
-    expect((await store.get("rps1"))?.accessToken).toBe("acc2");
-  });
-
-  it("returns expired and drops the session when refresh fails (reuse/revoked)", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    await store.create("rps1", session({ accessExpiresAt: now() + 5 }), 3600);
-    const svc = new RpAuthService(
-      store,
-      fakeClient({
-        refresh: async () => {
-          throw new Error("invalid_grant");
-        },
-      }),
-      3600,
-    );
-    expect((await svc.resolve("rps1")).status).toBe("expired");
-    expect(await store.get("rps1")).toBeNull(); // dropped
-  });
-
-  it("returns expired when access-token verification fails", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    await store.create("rps1", session(), 3600);
-    const svc = new RpAuthService(
-      store,
-      fakeClient({
-        verify: async () => {
-          throw new Error("bad sig");
-        },
-      }),
-      3600,
-    );
-    expect((await svc.resolve("rps1")).status).toBe("expired");
-  });
-
-  /**
-   * 一次页面加载并发十几个请求，它们会同时落进过期前 60 秒的窗口。
-   * 没有单飞，这十几个请求就拿同一枚 refresh token 各自去换 ——
-   * IdP 那边一个赢、其余全部被判为重放，而重放的处置是吊销。
-   */
-  it("并发 resolve 只打一次 refresh（单飞）", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    await store.create("rp1", session({ accessExpiresAt: now() + 10 }), 3600);
-
-    let calls = 0;
-    const client = fakeClient({
-      refresh: async () => {
-        calls += 1;
-        await new Promise((r) => setTimeout(r, 20));
-        return {
-          idToken: "id2",
-          accessToken: "acc2",
-          refreshToken: "ref2",
-          accessExpiresAt: now() + 3600,
-        } as OidcTokenSet;
-      },
+  it("verifies a usable token without refreshing", async () => {
+    const f = fixture();
+    expect(await f.auth.resolve("a")).toMatchObject({
+      status: "ok",
+      refreshed: false,
     });
-    const svc = new RpAuthService(store, client, 3600);
-
-    const outs = await Promise.all([
-      svc.resolve("rp1"),
-      svc.resolve("rp1"),
-      svc.resolve("rp1"),
+    expect(f.client.refresh).not.toHaveBeenCalled();
+  });
+  it("shares one refresh and updates context from verified claims", async () => {
+    const f = fixture(now() - 1);
+    const outcomes = await Promise.all([
+      f.auth.resolve("a"),
+      f.auth.resolve("a"),
+      f.auth.resolve("a"),
     ]);
-
-    expect(calls).toBe(1);
-    expect(outs.every((o) => o.status === "ok")).toBe(true);
-  });
-
-  /**
-   * 跨进程并发：别的实例刚换成功并把新令牌写回存储。
-   * 刷新被拒不等于会话没了 —— 先回读一次，存储里的过期时刻向前走了就用那份。
-   */
-  it("刷新被拒但存储里已被别人刷新过：不销毁，用新的那份", async () => {
-    const redis = fakeRedis();
-    const store = new RpSessionStore(redis, "console");
-    await store.create("rp1", session({ accessExpiresAt: now() + 10 }), 3600);
-
-    const client = fakeClient({
-      refresh: async () => {
-        // 模拟另一个进程抢先换好并写回
-        await store.update(
-          "rp1",
-          session({ accessToken: "acc-other", accessExpiresAt: now() + 3600 }),
-          3600,
-        );
-        throw new Error("invalid_grant");
-      },
+    expect(f.client.refresh).toHaveBeenCalledTimes(1);
+    expect(outcomes.every((outcome) => outcome.status === "ok")).toBe(true);
+    expect(await f.store.get()).toMatchObject({
+      accessToken: "rotated",
+      activeOrg: "org",
     });
-    const svc = new RpAuthService(store, client, 3600);
-
-    const out = await svc.resolve("rp1");
-    expect(out.status).toBe("ok");
-    if (out.status === "ok") expect(out.accessToken).toBe("acc-other");
-    expect(await store.get("rp1")).not.toBeNull();
   });
-
-  it("刷新被拒且存储没有更新：才销毁会话", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    await store.create("rp1", session({ accessExpiresAt: now() + 10 }), 3600);
-
-    const client = fakeClient({
-      refresh: async () => {
-        throw new Error("invalid_grant");
-      },
-    });
-    const svc = new RpAuthService(store, client, 3600);
-
-    expect((await svc.resolve("rp1")).status).toBe("expired");
-    expect(await store.get("rp1")).toBeNull();
-  });
-});
-
-// ============================================================================
-// Revocation boundaries during asynchronous identity resolution
-// ============================================================================
-
-describe("RP revocation fencing", () => {
-  it.each(["local", "backchannel"])(
-    "does not resurrect a session revoked by %s logout during refresh",
-    async (mode) => {
-      const store = new RpSessionStore(fakeRedis(), "console");
-      await store.create("rp1", session({ accessExpiresAt: now() + 5 }), 3600);
-      let release!: (value: OidcTokenSet) => void;
-      let started!: () => void;
-      const refreshing = new Promise<void>((resolve) => {
-        started = resolve;
+  it.each([
+    new Error("timeout"),
+    new OidcTokenRequestError(false),
+    new OidcTokenRequestError(true),
+  ])(
+    "retains identity and rejects expired authorization on refresh error %s",
+    async (error) => {
+      const f = fixture(now() - 1);
+      f.client.refresh.mockRejectedValue(error);
+      const result = await f.auth.resolve("a");
+      expect(result).toEqual({
+        status: "unavailable",
+        reauthorizationRequired:
+          error instanceof OidcTokenRequestError &&
+          error.reauthorizationRequired,
       });
-      const svc = new RpAuthService(
-        store,
-        fakeClient({
-          refresh: async () => {
-            started();
-            return new Promise<OidcTokenSet>((resolve) => {
-              release = resolve;
-            });
-          },
-        }),
-        3600,
-      );
-      const pending = svc.resolve("rp1");
-      await refreshing;
-      if (mode === "local") await store.destroy("rp1");
-      else await store.destroyBySid("sidA");
-      release(session({ accessToken: "rotated", refreshToken: "rotated-ref" }));
-      expect(await pending).toEqual({ status: "expired" });
-      expect(await store.get("rp1")).toBeNull();
+      expect(await f.store.get()).toEqual(f.session);
+      expect(f.store.update).not.toHaveBeenCalled();
     },
   );
-
-  it("rejects verified identity if logout occurs during token verification", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    await store.create("rp1", session(), 3600);
-    const svc = new RpAuthService(
-      store,
-      fakeClient({
-        verify: async () => {
-          await store.destroyBySid("sidA");
-          return { sub: "usr_1" };
-        },
-      }),
-      3600,
-    );
-    expect(await svc.resolve("rp1")).toEqual({ status: "expired" });
-  });
-
-  it("does not overwrite a replacement identity after delayed refresh", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    await store.create("rp1", session({ accessExpiresAt: now() + 5 }), 3600);
-    const replacement = session({
-      sid: "sidB",
-      sub: "usr_2",
-      accessToken: "other-user",
+  it("can still use a valid verified access token during a proactive refresh outage", async () => {
+    const f = fixture(now() + 20);
+    f.client.refresh.mockRejectedValue(new Error("network"));
+    expect(await f.auth.resolve("a")).toMatchObject({
+      status: "ok",
+      accessToken: "access",
+      refreshed: false,
     });
-    const svc = new RpAuthService(
-      store,
-      fakeClient({
-        refresh: async () => {
-          await store.destroy("rp1");
-          await store.create("rp1", replacement, 3600);
-          return session({ accessToken: "late-old-user" });
-        },
-      }),
-      3600,
-    );
-    expect(await svc.resolve("rp1")).toEqual({ status: "expired" });
-    expect(await store.get("rp1")).toEqual(replacement);
   });
-
-  it("uses the concurrent rotation winner instead of overwriting it", async () => {
-    const store = new RpSessionStore(fakeRedis(), "console");
-    await store.create("rp1", session({ accessExpiresAt: now() + 5 }), 3600);
-    const winner = session({
-      accessToken: "winner",
-      refreshToken: "winner-ref",
+  it("does not publish tokens bound to another identity", async () => {
+    const f = fixture(now() - 1);
+    f.client.verifyIdToken.mockResolvedValue({
+      sub: "usr_other",
+      sid: "central",
+      iss: "issuer",
+      aud: "console",
+      exp: now() + 3600,
     });
-    const svc = new RpAuthService(
-      store,
-      fakeClient({
-        refresh: async () => {
-          await store.update("rp1", winner, 3600, "ref");
-          return session({
-            accessToken: "late-loser",
-            refreshToken: "loser-ref",
-          });
-        },
-      }),
-      3600,
-    );
-    const outcome = await svc.resolve("rp1");
-    expect(outcome.status).toBe("ok");
-    if (outcome.status === "ok") expect(outcome.accessToken).toBe("winner");
-    expect(await store.get("rp1")).toEqual(winner);
+    expect(await f.auth.resolve("a")).toEqual({
+      status: "unavailable",
+      reauthorizationRequired: true,
+    });
+    expect(f.store.update).not.toHaveBeenCalled();
   });
-});
-
-// ============================================================================
-// Failed refresh must not delete a replacement identity
-// ============================================================================
-
-it("keeps a replacement session when an old identity refresh is rejected", async () => {
-  const store = new RpSessionStore(fakeRedis(), "console");
-  await store.create("rp1", session({ accessExpiresAt: now() + 5 }), 3600);
-  const replacement = session({
-    sid: "sidB",
-    sub: "usr_2",
-    accessToken: "new-user",
+  it("does not authorize when logout arrives during verification", async () => {
+    const f = fixture();
+    f.client.verifyAccessToken.mockImplementation(async () => {
+      f.revoke();
+      return { sub: "usr_test", sid: "central", active_org: "org" };
+    });
+    expect(await f.auth.resolve("a")).toEqual({ status: "expired" });
   });
-  const svc = new RpAuthService(
-    store,
-    fakeClient({
-      refresh: async () => {
-        await store.destroy("rp1");
-        await store.create("rp1", replacement, 3600);
-        throw new Error("invalid_grant");
-      },
-    }),
-    3600,
-  );
-  expect(await svc.resolve("rp1")).toEqual({ status: "expired" });
-  expect(await store.get("rp1")).toEqual(replacement);
+  it("reports storage and JWKS failures as availability, with no write", async () => {
+    const f = fixture();
+    f.store.get.mockRejectedValueOnce(new Error("Redis unavailable"));
+    expect((await f.auth.resolve("a")).status).toBe("unavailable");
+    f.client.verifyAccessToken.mockRejectedValue(new Error("JWKS unavailable"));
+    expect((await f.auth.resolve("a")).status).toBe("unavailable");
+    expect(f.store.update).not.toHaveBeenCalled();
+  });
+  it("does not return uncommitted refresh results after a failed CAS", async () => {
+    const f = fixture(now() - 1);
+    f.store.update.mockResolvedValue(false);
+    expect((await f.auth.resolve("a")).status).toBe("unavailable");
+    expect(await f.store.get()).toEqual(f.session);
+  });
+  it("bounds lock contention and never makes a competing refresh", async () => {
+    const f = fixture(now() - 1);
+    f.store.lockRefresh.mockResolvedValue(false);
+    expect((await f.auth.resolve("a")).status).toBe("unavailable");
+    expect(f.client.refresh).not.toHaveBeenCalled();
+  });
+  it("maps upstream failure separately from missing-session responses", () => {
+    expect(
+      rpAuthFailure({ status: "unavailable", reauthorizationRequired: false }),
+    ).toMatchObject({ statusCode: 503, retryable: true });
+    expect(
+      rpAuthFailure({ status: "unavailable", reauthorizationRequired: true }),
+    ).toMatchObject({ statusCode: 503, retryable: false });
+  });
 });

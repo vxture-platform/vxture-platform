@@ -79,15 +79,22 @@ const DDL_TABLES = new Set();
 const LIVE_SCHEMAS = new Set();
 for (const df of readdirSync(DDL_DIR).filter((x) => /^[0-9].*\.sql$/.test(x))) {
   const sql = readFileSync(join(DDL_DIR, df), 'utf8');
-  for (const m of sql.matchAll(/^CREATE TABLE ([a-z_]+)\.([a-z_]+)/gm)) {
-    DDL_TABLES.add(`${m[1]}.${m[2]}`);
-    LIVE_SCHEMAS.add(m[1]);
+  for (const m of sql.matchAll(/^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)/gim)) {
+    DDL_TABLES.add(`${m[1].toLowerCase()}.${m[2].toLowerCase()}`);
+    LIVE_SCHEMAS.add(m[1].toLowerCase());
   }
 }
 // 规则③白名单：设计上有意未建的表（代码经 to_regclass 探测优雅空态，非残留）。
 const DESIGN_PENDING_TABLES = new Set([
   // 2026-08-31 清空：admin.governance_record 的唯一读者 platform-governance.router
   // 已随审批中心 / 平台密钥两页退役，不再有代码探测这张从未建过的表。
+]);
+// The baseline marker is created by ddl/apply.sh, outside the numbered SQL files.
+DDL_TABLES.add('public.vx_ddl_baseline');
+// Disposable verification tables are valid only in their owning test fixture.
+const VERIFICATION_TABLES = new Map([
+  ['bff/admin-bff/src/routers/order-payment-e2e.itest.spec.ts', new Set(['public.codex_voucher_run'])],
+  ['deploy/database/verify/migration-channel.test.mjs', new Set(['public.s05_write_probe'])],
 ]);
 const reSqlRef = new RegExp(
   `\\b(?:from|join|into|update)\\s+(${[...LIVE_SCHEMAS].join('|')})\\.([a-z_][a-z0-9_]*)\\b`,
@@ -183,6 +190,7 @@ for (const f of files) {
       const key = `${m[1].toLowerCase()}.${m[2].toLowerCase()}`;
       if (DDL_TABLES.has(key)) continue;
       if (DESIGN_PENDING_TABLES.has(key)) continue;
+      if (VERIFICATION_TABLES.get(rel)?.has(key)) continue;
       const plural = `${key}s`;
       const to = DDL_TABLES.has(plural) ? plural : '（DDL 中无此表，核对权威 DDL）';
       hits.push({ rel, line: i + 1, kind: 'unknown-table', ref: key, to });

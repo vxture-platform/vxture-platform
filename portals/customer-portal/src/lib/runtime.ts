@@ -28,7 +28,7 @@ export async function loadBrand(): Promise<PortalBrand> {
       name: "如影智能研究院",
       title: "具身智能体\n空间服务平台",
       subtitle: "连接物理空间与智能体，支撑空间感知、场景建模与协同执行。",
-      brandColor: "var(--vx-color-brand-700)",
+      brandColor: "#2548C5",
       appearance: "light",
       density: "comfortable",
       logo: null,
@@ -46,12 +46,13 @@ export async function loadBrand(): Promise<PortalBrand> {
 export async function portalRequest(
   path: string,
   init: RequestInit = {},
+  stream = false,
 ): Promise<Response> {
   const incoming = await headers();
   const host = incoming.get("host") ?? "";
   if (!/^(?:a|[a-z][a-z0-9]{2,7})\.ruyin\.work$/.test(host)) notFound();
-  const upstream = process.env.CUSTOMER_PORTAL_BFF_URL;
-  const token = process.env.CUSTOMER_PORTAL_BFF_TOKEN;
+  const upstream = process.env.TENANT_BFF_URL;
+  const token = process.env.TENANT_BFF_TOKEN;
   if (!upstream || !token)
     throw new Error("Customer portal backend is not configured");
   const forwarded = new Headers(init.headers);
@@ -61,13 +62,24 @@ export async function portalRequest(
     const value = incoming.get(key);
     if (value) forwarded.set(key, value);
   }
-  return fetch(new URL(path, upstream), {
-    ...init,
-    headers: forwarded,
-    redirect: "manual",
-    cache: "no-store",
-    signal: AbortSignal.timeout(25000),
-  });
+  const deadline = new AbortController();
+  const timeout = setTimeout(() => deadline.abort(), 25000);
+  try {
+    return await fetch(new URL(path, upstream), {
+      ...init,
+      headers: forwarded,
+      redirect: "manual",
+      cache: "no-store",
+      signal: stream
+        ? AbortSignal.any([
+            deadline.signal,
+            ...(init.signal ? [init.signal] : []),
+          ])
+        : AbortSignal.timeout(25000),
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ============================================================================
