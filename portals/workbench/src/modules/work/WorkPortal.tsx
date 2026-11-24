@@ -192,7 +192,7 @@ function WorkPortalContent({
       allowSilentSso.current = false;
       const denied = value.status === "error" && value.code === 403;
       if (denied || (value.status === "error" && value.code === 401)) {
-        setOverview(null);
+        setOverviewCode(null);
         setDetailsOpen(false);
         setNotificationsOpen(false);
       }
