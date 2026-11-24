@@ -156,7 +156,7 @@ describe.skipIf(!connectionString)(
       await app?.close();
       await pool?.end();
       if (admin) {
-        await admin.query(`drop database if exists "${database}" with (force)`);
+        await admin.query(`drop database if exists "${database}"`);
         await admin.end();
       }
     });

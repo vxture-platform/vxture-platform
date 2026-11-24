@@ -160,7 +160,8 @@ describe.skipIf(!connectionString)(
         );
       await pool?.end();
       if (admin) {
-        await admin.query(`drop database if exists "${database}" with (force)`);
+        // Let released sockets finish closing; a live connection must fail cleanup.
+        await admin.query(`drop database if exists "${database}"`);
         await admin.end();
       }
     });
