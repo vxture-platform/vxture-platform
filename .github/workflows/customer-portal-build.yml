@@ -46,7 +46,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-node-pnpm
         with:
-          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
+          node-auth-token: ${{ github.token }}
       - name: Validate deployment behavior and column permissions
         run: |
           bash deploy/scripts/lib/customer-portal-deploy.test.sh
@@ -148,7 +148,7 @@ jobs:
             BUILD_TIME=${{ steps.refs.outputs.build_time }}
             DEPLOY_STAGE=${{ steps.refs.outputs.stage }}
           secrets: |
-            node_auth_token=${{ secrets.NODE_AUTH_TOKEN || github.token }}
+            node_auth_token=${{ github.token }}
           provenance: false
           sbom: false
           cache-from: type=gha,scope=${{ matrix.name }}

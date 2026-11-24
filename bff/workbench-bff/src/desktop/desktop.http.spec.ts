@@ -1198,7 +1198,14 @@ describe("minimal desktop backend", () => {
   ])("rejects scope drift after shared RP refresh %j", async (overrides) => {
     const s = await login();
     const record = (await rt.store.get(s.rpsid))!;
-    await rt.store.update(s.rpsid, { ...record, accessExpiresAt: 1 }, 3600);
+    expect(
+      await rt.store.update(
+        s.rpsid,
+        { ...record, accessExpiresAt: 1 },
+        3600,
+        record,
+      ),
+    ).toBe(true);
     refreshOverrides = overrides;
     const response = await request("/api/tenant-context", {
       headers: { "x-vxture-session": s.rpsid },

@@ -363,7 +363,7 @@ N6 将 Console、Website、Admin、Opera、Arche、Accounts、Workbench、Custom
 
 ### 12.2 独立 RP 数据库与代理
 
-Workbench 和 Customer Portal 使用 `RP_IDENTITY_DATABASE_URL` 独立连接存储本地收据/inbox/版本。DDL97/迁移20创建无密码的 `svc_rp_identity`：只授予 session schema 使用及这三张表的必要读写；不授予账号/组织/业务表写入，不复用只读业务角色。凭证由目标环境配置。共享角色适用于平台可信 BFF；不向外部产品授予平台库连接。
+Workbench 和 Customer Portal 使用 `RP_IDENTITY_DATABASE_URL` 独立连接存储本地收据/inbox/版本。DDL97/2026-12-22 迁移创建无密码的 `svc_rp_identity`：只授予 session schema 使用及这三张表的必要读写；不授予账号/组织/业务表写入，不复用只读业务角色。凭证由目标环境配置。共享角色适用于平台可信 BFF；不向外部产品授予平台库连接。
 
 Website、Admin、Opera、Arche、Workbench 的 /auth/events 与 Accounts 的 /oidc/session-events 使用 HTTP/1.1、关闭缓存/缓冲/gzip、75 秒读取超时。Customer Portal 经过 Next.js 转发：25 秒只约束 SSE 建连，响应体继续透传并跟随请求取消；/auth/identity-events 独立允许 64 KiB，其他认证请求保持原限制。客户门户读取其既有独立 Cookie，host/发布绑定/成员检查仍为业务访问前提。
 
@@ -462,7 +462,7 @@ promtool test rules deploy/identity-sync/alerts.test.yml
 
 | 阶段   | 成组动作                                                                                        | 进入下一阶段的证据                                              |
 | ------ | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| A 准备 | 精确目标配置、不可变镜像对和前版 digest；前序迁移至 2026-12-20；SQL 登记默认禁用；采集/告警接线 | 迁移/范围检查通过；禁用登记阶段 database_ready=false 属于预期   |
+| A 准备 | 精确目标配置、不可变镜像对和前版 digest；前序迁移至 2026-12-22；SQL 登记默认禁用；采集/告警接线 | 迁移/范围检查通过；禁用登记阶段 database_ready=false 属于预期   |
 | B 部署 | 上线 auth 和七 RP，轮询退役保持 false；Tenant 镜像/配置成对切换；运营域启用前安排重新登录       | 实际版本、运行变量、密钥/JWKS、基础登录及代理核验               |
 | C 事件 | 按 §12.1 启用持久恢复、receiver/changes、发送及 SSE；运营开关与 Accounts 开关独立核对           | 七 RP 预检通过；Accounts 双域真实会话通过；无隔离/耗尽/陈旧指标 |
 | D 退役 | 已通过矩阵的入口逐个开启 POLLING_RETIREMENT，观测实际流量和告警                                 | 各入口正常闲置身份查询为零，故障仍能恢复；保留有时间戳的证据    |

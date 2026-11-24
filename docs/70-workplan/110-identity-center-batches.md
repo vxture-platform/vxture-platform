@@ -531,7 +531,7 @@ N5 合并目标环境发布准备/观察指标、跨产品适配矩阵与接入�
 - Website、Admin、Opera、Arche 新增接收/恢复/SSE 路由及模块配置；运营三入口显式传 workforce。会话视图同步保持故障与退出分离，只有完整视图成功才能协商停轮询。
 - auth 新增 CentralEventsHub、AccountsEventsRouter 与边界测试；运营登录/换票/刷新、状态验证、在线列表和退出接入持久权威。新增运营域/门户绑定真实数据库测试，补充登录落库/缓存失败及并发安全变更测试。
 - Workbench 和 Customer Portal 在现有独立 RP 存储上接入同一协议；分离身份持久库与业务只读库；继续验证账号/成员、固定组织/空间、客户 hostname。客户门户保留已有独立 Cookie 并透传 SSE，新增当前 workspace 读取接口和 4 项同步适配测试。
-- 新增 DDL96 workforce 与 2026-12-20 迁移：运营版本、realm 隔离、7 张运营事实表、中央通知、门户绑定变化；DDL97 增加受限 svc_rp_identity。更新 8 组代理配置/模板、各 BFF 环境样例及客户门户 compose；所有功能默认关闭。
+- 新增 DDL96 workforce 与 2026-12-22 迁移：运营版本、realm 隔离、7 张运营事实表、中央通知、门户绑定变化；DDL97 增加受限 svc_rp_identity。更新 8 组代理配置/模板、各 BFF 环境样例及客户门户 compose；所有功能默认关闭。
 - 更新 150 接口文档到 v0.7、4 份 OpenAPI、运行手册 §12、core/auth/Console 包说明、110/120。外部通则/范本原件未改，发布前需成对增加 v0.7 引用。新增 Accounts 的 SDK 直接依赖及相应锁文件项。
 
 ### 14.2 验证结果

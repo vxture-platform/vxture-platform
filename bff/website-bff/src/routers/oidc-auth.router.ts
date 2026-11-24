@@ -15,7 +15,6 @@ import {
 } from "@vxture-platform/shared";
 import {
   BadRequestException,
-  ServiceUnavailableException,
   Body,
   Controller,
   Get,
