@@ -31,6 +31,9 @@ RUYIN_DESKTOP_OIDC_CLIENT_SECRET=fixture-native-secret
 EOF
 printf 'OIDC_CLIENT_SECRET_HASH_RUYIN_DESKTOP=\x27$2b$12$%053d\x27\n' 1 > "$fixture/runtime/.env.auth-bff"
 export RUNTIME_DIR="$fixture/runtime"
+# Portal preflight must inspect this fixture, never an installed host route.
+export NGINX_CONFIG_DIR="$fixture/nginxconf"
+unset CUSTOMER_PORTAL_ENV_FILE
 mkdir() { echo MUTATION_REACHED; }
 export -f mkdir
 check() {

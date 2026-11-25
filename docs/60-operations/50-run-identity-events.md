@@ -559,3 +559,13 @@ Workbench 的语言偏好仍有独立焦点同步：`/auth/language` 请求单�
 主机 `vxture-identity-observer.service` / `.timer` 每 30 秒运行，专用 `svc_identity_observer` 默认只读；七个范围必须完整。输出在 `/srv/vxture/runtime/identity-sync/identity-sync.prom` 与 `status.json`，包含采集时间、就绪状态和有范围的队列指标。service 失败或快照超过 120 秒必须按不可用处理，不可把旧的健康文件当现状。用 `systemctl show vxture-identity-observer.service -p Result -p ExecMainStatus`、timer 状态和快照时间共同检查；日志仅写本机 journal。
 
 这不是 Prometheus 抓取或外部告警送达，后两项尚未接线。本次没有发送邮件、聊天通知或替用户完成验证码/MFA。当前剩余合并批为：完整目标浏览器矩阵 → 按入口开启轮询退役并记录正常闲置请求 → 外部告警接线/演练 → 独立产品接入。外部产品 #726/#731 与通则/范本引用仍分别保留待办，平台上线不能替代产品侧迁移。
+
+## 18. N12 部署工具加固（2026-11-25）
+
+本节替代 §17.2 中依靠人工重拉 Tenant 候选镜像的临时处理。主平台镜像清理仅接受本次 `compose.platform.yml config --images` 声明的完整仓库名；运行中和停止容器引用的镜像、其他栈的候选/回退镜像，以及同时具有外部仓库别名的镜像均保留。取消全局 dangling prune；容器、Compose 或镜像清单任一读取失败则跳过清理，不使用部分清单作删除依据，也不使用强制删除。独立 Tenant 发布仍由 36 脚本管理。
+
+Nginx 同步发现已有 `customer-portal-*.conf` 或 `runtime/customer-portal-releases/current` 时，必须读到 `.env.tenant-bff` 中非空且合法的 `CUSTOMER_PORTAL_HOSTS`。指定的 env 路径不存在也会拒绝。拒绝发生在 compose 写入、站点清理和 reload 之前；未安装门户的新主机仍可不配置租户入口。停用已有门户必须走明确的退役操作，不能通过删除配置文件或清空主机列表隐式完成。`NGINX_CONFIG_DIR` 用于隔离配置检查，生产默认路径不变。
+
+30 脚本成功时清理临时预演目录；失败时保留本次 `vx-stack-plan.*` 目录，并打印路径及退出码。目录权限 0700，日志和 pin 文件 0600。Compose 配置错误的 stderr 与预演的 stdout/stderr 只留主机私有文件，不写入 CI 输出。原始诊断可能含凭据，不上传或粘贴到问题单；由部署账号在主机内检查，脱敏后归档证据，再按精确路径清理。临时目录不替代正式备份，也不保证跨重启持久。
+
+验证覆盖独立 Tenant 候选/回退镜像、跨仓库别名、停止容器、部分清单失败、已安装入口缺文件/缺主机键/空主机列表、Compose 失败日志权限与输出脱敏。20 个部署脚本测试全部通过；环境审计测试通过。首次 Linux 整组执行暴露旧 Ruyin 预检夹具读取宿主真实路由，已改用隔离配置目录后通过。真实生产复查在 10:09 CST 确认 18 个应用容器健康且 digest 匹配、七范围采集健康无延迟、18 项公开边界通过；这些检查不替代 §13.4 的完整互动验收。

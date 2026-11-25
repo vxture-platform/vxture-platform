@@ -411,3 +411,15 @@ N11 合并审查补充：
 部署故障与恢复记录：停写迁移后首次 Compose 预演失败，容器尚未替换，06:33 左右重新启动原 18 个容器恢复服务，约 7 分钟停写/不可用窗口。预演原始错误已被脚本清理，原因未完全定性；恢复运行态后同一新版预演通过。随后发现 root 运维运行 Buildx 留下 `/home/ecs-user/.docker/buildx/current` 属主错误，精确改回部署账号后镜像解析和发布成功。主平台清理旧镜像时回收了尚无容器引用的新 Tenant BFF，按原 digest 重新拉取后成对切换。新 Tenant env 安装后补跑 20-sync-nginx-config，恢复其精确域名路由并通过公网复验；已将这些顺序约束写入运行手册 §17。
 
 证据留存在独立发布工作区 `output/production-deploy-success.log`、`production-tenant-deploy.log`、`production-enable-*.log`、`production-protocol-probe.log`、`production-public-probe.log`、`production-final-inventory.jsonl`、`production-runtime-verification.log`、`production-observer-install.log`。服务器备份、阶段标记和配置回退在 `/srv/vxture/backups/identity-20261125/`；凭据和生产备份未下载、未提交 Git。
+
+## N12 部署工具加固与生产复查（2026-11-25）
+
+- [x] 镜像回收限定本次主平台 Compose 的完整仓库名；保留独立 Tenant 候选/回退、外部别名以及运行/停止容器引用；清单不完整时跳过，不再执行全局 dangling prune。
+- [x] 已安装租户门户缺少 `.env.tenant-bff`、主机键或有效主机列表时，Nginx 在替换配置前拒绝；未安装门户的新主机保持可用。
+- [x] Compose 预检失败保留权限为 0700/0600 的诊断目录/文件，公开输出只含路径与退出码；成功预检仍自动清理临时文件。
+- [x] 20 个部署脚本测试和环境审计通过；首次整组测试暴露 Ruyin 旧夹具读取真实宿主路由，已隔离后复验。证据：`output/identity-n12-linux-tests.log`、`identity-n12-linux-tests-final.log`；失败原记录保留。
+- [x] 10:09 CST 复查：18 个应用容器健康且 digest 匹配，七范围采集健康且无延迟/积压，18 项公开入口/匿名 SSE 检查通过，八 BFF 近五分钟日志未命中已定义的身份投递、权限、数据库和监听失败模式。证据：`output/identity-n12-production-inventory.jsonl`、`identity-n12-public-stability.jsonl`。
+- [x] 本机 SSH 代理停止导致既有密钥无法签名；启动原代理后使用已登记密钥恢复连接，没有更换密钥或改服务器认证。
+- [ ] 合并本批修复，同步生产部署工具，完成只读预演、镜像保留清单及公开入口复验。
+
+本批应用版本仍为 v0.33.17；七 RP 轮询退役仍全部关闭。目标真实登录/MFA、跨标签退出/撤权和代理恢复矩阵、外部告警送达以及 #726/#731 产品接入仍待完成；不能将部署工具加固记作轮询已经退役。

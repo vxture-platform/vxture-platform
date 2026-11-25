@@ -55,6 +55,7 @@ case "$*" in
     [[ "${STACK_PREVIEW_MODE:-}" != unsupported ]] || exit 0
     echo 'Options: --dry-run';;
   'compose -f '*'/compose.platform.yml config --format json')
+    [[ "${STACK_PREVIEW_MODE:-}" != config-failure ]] || { echo 'synthetic-secret-never-print' >&2; exit 62; }
     [[ "${STACK_PREVIEW_MODE:-}" != malformed ]] || { echo '{bad json'; exit 0; }
     [[ "${STACK_PREVIEW_MODE:-}" != incomplete ]] || { echo '{"services":{}}'; exit 0; }
     printf '{"services":{"auth-bff":{"image":"registry.example.test/platform/auth:preview-test"},"workbench-bff":{"image":"registry.example.test/platform/workbench:preview-test"}}}\n';;
@@ -91,12 +92,28 @@ script31="$fixture/scripts/31-regular-upgrade-platform.sh"
 count=0
 passed() { count=$((count+1)); printf 'ok %s - %s\n' "$count" "$1"; }
 run_ok() { "$@" > "$fixture/output" 2>&1 || { cat "$fixture/output"; exit 1; }; }
-run_bad() { if "$@" > "$fixture/output" 2>&1; then echo 'Expected preview rejection'; exit 1; fi; }
+run_bad() {
+  if "$@" > "$fixture/output" 2>&1; then echo 'Expected preview rejection'; exit 1;
+  else last_status=$?; fi
+}
 unchanged() {
   [[ "$(cat "$fixture/compose.pinned.yml")" == previous-pin ]]
   [[ "$(cat "$fixture/runtime/.last-deploy-tag")" == previous-release ]]
-  [[ -z "$(find "$fixture/tmp" -mindepth 1 -print -quit)" ]]
   ! grep -q 'synthetic-secret-never-print' "$fixture/output"
+}
+no_diagnostics() { [[ -z "$(find "$fixture/tmp" -mindepth 1 -print -quit)" ]]; }
+failure_diagnostics() {
+  local directory
+  directory="$(find "$fixture/tmp" -mindepth 1 -maxdepth 1 -type d)"
+  [[ -n "$directory" && "$directory" == "$fixture/tmp/vx-stack-plan."* ]]
+  grep -Fq "Private diagnostics retained in $directory" "$fixture/output"
+  [[ "$(stat -c %a "$directory")" == 700 ]]
+  [[ -z "$(find "$directory" -type f ! -perm 600 -print -quit)" ]]
+  case "${STACK_PREVIEW_MODE:-}" in
+    config-failure) grep -q 'synthetic-secret-never-print' "$directory/config.stderr" ;;
+    preview-failure) grep -q 'synthetic-secret-never-print' "$directory/preview.log" ;;
+  esac
+  rm -rf -- "$directory"
 }
 
 # ============================================================================
@@ -107,18 +124,22 @@ grep -q '\[preview\] Container vx-platform-auth-bff Running' "$fixture/output"
 [[ "$(grep -c 'image: registry.example.test/platform/.*@sha256:' "$fixture/preview-pin")" == 2 ]]
 [[ ! -e "$(cat "$fixture/preview-pin-path")" ]]
 unchanged
+no_diagnostics
 passed 'read-only preview resolves every image without changing deployed files'
 
 STACK_PREVIEW_MODE=config-change run_ok bash "$script30" --preview
 grep -q '\[preview\] Container vx-platform-auth-bff Recreate' "$fixture/output"
 unchanged
+no_diagnostics
 passed 'same pinned images still expose configuration-driven recreation from stderr'
 
-for mode in unsupported preview-failure malformed incomplete image-failure empty-preview; do
+for mode in unsupported config-failure preview-failure malformed incomplete image-failure empty-preview; do
   STACK_PREVIEW_MODE="$mode" run_bad bash "$script30" --preview
+  case "$mode" in config-failure) [[ "$last_status" == 1 ]] ;; preview-failure) [[ "$last_status" == 73 ]] ;; esac
   unchanged
+  STACK_PREVIEW_MODE="$mode" failure_diagnostics
 done
-passed 'unsupported preview, invalid plans, missing images and Docker failures reject safely'
+passed 'failed plans retain private diagnostics without leaking secrets or changing the stack'
 
 rm -f "$fixture/calls"
 run_bad bash "$script30" --preview extra
@@ -133,11 +154,13 @@ passed 'unknown or extra arguments are rejected before Docker'
 run_ok bash "$script31" --preview
 [[ ! -e "$fixture/steps" ]]
 unchanged
+no_diagnostics
 passed 'upgrade preview bypasses runtime preparation, routing, database and deploy steps'
 
 STACK_PREVIEW_MODE=preview-failure run_bad bash "$script31"
 [[ "$(cat "$fixture/steps")" == 13-prepare-runtime-env.sh ]]
 unchanged
+STACK_PREVIEW_MODE=preview-failure failure_diagnostics
 passed 'normal upgrade stops before any routing or service change when preview fails'
 
 run_bad bash "$script31" --preview extra

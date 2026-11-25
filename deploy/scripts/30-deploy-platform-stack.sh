@@ -10,6 +10,7 @@
 # 运行：bash 30-deploy-platform-stack.sh
 # 用途：docker compose pull + up -d；不执行数据库 migration 或 seed。
 set -euo pipefail
+umask 077
 
 # Preview is an explicit read-only mode, never a loosely interpreted flag.
 PREVIEW_ONLY=0
@@ -132,9 +133,20 @@ echo "==> [3/4] Resolve pinned service images"
 . "$COMPOSE_DIR/scripts/lib/pin-image-digests.sh"
 # An incomplete plan must never overwrite the last deployed pin file.
 PLAN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vx-stack-plan.XXXXXXXX")"
-trap 'rm -rf -- "$PLAN_DIR"' EXIT
+finish_stack_plan() {
+  local status=$?
+  trap - EXIT
+  if [ "$status" -eq 0 ]; then
+    rm -rf -- "$PLAN_DIR"
+  else
+    # Raw Compose errors can contain secrets. Retain them privately, never in CI.
+    echo "Deployment failed (exit $status). Private diagnostics retained in $PLAN_DIR; inspect on the host, do not upload raw logs." >&2
+  fi
+  exit "$status"
+}
+trap finish_stack_plan EXIT
 PINNED_FILE="$PLAN_DIR/compose.pinned.yml"
-svc_images_json="$(docker compose -f "$COMPOSE_FILE" config --format json)" || {
+svc_images_json="$(docker compose -f "$COMPOSE_FILE" config --format json 2> "$PLAN_DIR/config.stderr")" || {
   echo "错误：docker compose config 失败，无法生成 pin 覆盖。" >&2
   exit 1
 }
@@ -181,9 +193,11 @@ if [[ "$compose_help" != *--dry-run* ]]; then
   echo 'Compose must support --dry-run before deployment can continue.' >&2
   exit 1
 fi
-if ! docker compose --dry-run --ansi never "${COMPOSE_FILES[@]}" up -d --no-deps --remove-orphans > "$PLAN_DIR/preview.log" 2>&1; then
+preview_status=0
+docker compose --dry-run --ansi never "${COMPOSE_FILES[@]}" up -d --no-deps --remove-orphans > "$PLAN_DIR/preview.log" 2>&1 || preview_status=$?
+if [ "$preview_status" -ne 0 ]; then
   echo 'Compose preview failed; no container actions were executed.' >&2
-  exit 1
+  exit "$preview_status"
 fi
 # Show action lines only, never full rendered configurations or error details.
 node -e '
