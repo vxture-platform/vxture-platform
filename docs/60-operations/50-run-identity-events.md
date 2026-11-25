@@ -443,16 +443,18 @@ promtool test rules deploy/identity-sync/alerts.test.yml
 
 每行都记录目标版本/digest、实际 origin、执行时间、操作者和证据位置。2026-11-25 已完成 §17 的生产镜像、协议和公开代理检查；下表的完整行为验收仍单列，不能用本机 SQL、HTTP 或规则测试替代。
 
-| 入口      | 身份域 / SSE 地址                                     | 必须核验的特殊边界                                             | 目标状态     |
-| --------- | ----------------------------------------------------- | -------------------------------------------------------------- | ------------ |
-| Console   | customer / `/auth/events`                             | 完整权限与上下文视图，切组织/工作区和撤权收敛                  | 待验收       |
-| Website   | customer / `/auth/events`                             | 当前 Cookie 资料、匿名状态、登录/退出及账号展示                | 待验收       |
-| Admin     | workforce / `/auth/events`                            | MFA、运营角色/权限、安全变更持久退出                           | 待验收       |
-| Opera     | workforce / `/auth/events`                            | 平台平面隔离、权限撤销、运营退出                               | 待验收       |
-| Arche     | workforce / `/auth/events`                            | 平台平面隔离、权限撤销、运营退出                               | 待验收       |
-| Workbench | customer / `/auth/events`                             | 固定原组织/工作区；中央上下文不能越界切换                      | 待验收       |
-| Tenant    | customer / `/auth/events`                             | 发布 hostname、租户/成员绑定、Next.js SSE 透传及 Tenant 配置名 | 待验收       |
-| Accounts  | customer + workforce / `/oidc/session-events?realm=…` | 分别验证 vx_sid/vx_sid_op、同 UUID 两域隔离、改密/MFA 后退出   | 两域均待验收 |
+| 入口      | 身份域 / SSE 地址                                     | 必须核验的特殊边界                                             | 目标状态                        |
+| --------- | ----------------------------------------------------- | -------------------------------------------------------------- | ------------------------------- |
+| Console   | customer / `/auth/events`                             | 完整权限与上下文视图，切组织/工作区和撤权收敛                  | 基础登录/退出通过；其余待测     |
+| Website   | customer / `/auth/events`                             | 当前 Cookie 资料、匿名状态、登录/退出及账号展示                | 基础登录/退出通过；其余待测     |
+| Admin     | workforce / `/auth/events`                            | MFA、运营角色/权限、安全变更持久退出                           | 基础登录/退出通过；其余待测     |
+| Opera     | workforce / `/auth/events`                            | 平台平面隔离、权限撤销、运营退出                               | 基础登录/退出通过；其余待测     |
+| Arche     | workforce / `/auth/events`                            | 平台平面隔离、权限撤销、运营退出                               | 基础登录/退出通过；其余待测     |
+| Workbench | customer / `/auth/events`                             | 固定原组织/工作区；中央上下文不能越界切换                      | 基础登录/退出通过；其余待测     |
+| Tenant    | customer / `/auth/events`                             | 发布 hostname、租户/成员绑定、Next.js SSE 透传及 Tenant 配置名 | 基础登录/退出通过；其余待测     |
+| Accounts  | customer + workforce / `/oidc/session-events?realm=…` | 分别验证 vx_sid/vx_sid_op、同 UUID 两域隔离、改密/MFA 后退出   | 两域基础登录/退出通过；其余待测 |
+
+N14 生产证据（2026-11-25 11:31–11:36 CST）：用户完成两域登录后，七 RP 与 Accounts 两域页面可用。Admin 主动退出使三运营 RP/运营账号中心收敛，客户域保持可用；随后 Tenant 主动退出使四客户 RP/客户账号中心收敛。七平台接收方首次投递全部 delivered，后端确认 256–650 ms。主平台为 v0.33.17，Tenant 为 #747 镜像对，实际 origin/digest 与证据见 [120 N14](../70-workplan/120-identity-sync-progress.md#n14-生产八入口跨端退出与双域验证2026-11-25)。多标签观察不证明隐藏页行为；当前轮询退役仍 false，不据本轮开启。新登录后的旧标签恢复、反向域隔离、权限/安全变更、故障与休眠、正常闲置网络及告警送达继续逐项验收。
 
 每个入口按同一顺序执行：真实登录（需要时含 MFA）→ 两标签且一页隐藏 → 资料/权限变化 → 主动退出/强制下线 → 新登录后旧标签重读 Cookie → 代理断流/进程重启后恢复 → 真实系统休眠唤醒 → 禁用轮询退役开关后恢复兼容。验证通知后重新读取完整视图；401 退出、503 保持展示但拒绝未完成授权的请求；事件和心跳均不能续期或直接授权。
 
