@@ -197,12 +197,15 @@ const request = async (
       cookie: session,
     },
   });
-async function begin() {
-  const response = await request("/auth/login");
+async function begin(prompt?: "none") {
+  const response = await request(
+    `/auth/login${prompt ? `?prompt=${prompt}` : ""}`,
+  );
   expect(response.status).toBe(302);
   const auth = new URL(response.headers.get("location")!);
   expect(auth.searchParams.get("tenant_hint")).toBe(ORG);
   expect(auth.searchParams.get("workspace_hint")).toBe(SPACE);
+  expect(auth.searchParams.get("prompt")).toBe(prompt ?? null);
   expect(auth.searchParams.get("redirect_uri")).toBe(
     "https://a.ruyin.work/auth/callback",
   );
@@ -213,27 +216,96 @@ async function begin() {
 }
 
 describe("customer portal private access", () => {
-  it("issues a secure host-only session for a member and blocks cross-host replay", async () => {
+  it.each([undefined, "none"] as const)(
+    "lands in the verified workspace with prompt=%s and blocks cross-host replay",
+    async (prompt) => {
+      const start = await begin(prompt);
+      expect(
+        (await request(start.path, start.cookie, "robot01.ruyin.work")).status,
+      ).toBe(400);
+      const response = await request(start.path, start.cookie);
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe(
+        "https://a.ruyin.work/workspace?vx_sso_checked=1",
+      );
+      const session = cookie(response);
+      expect(session).toMatch(/^__Host-vx_customer_portal_session=/);
+      const set = response.headers
+        .getSetCookie()
+        .find((x) => x.startsWith(session));
+      expect(set).toMatch(/Secure/i);
+      expect(set).toMatch(/HttpOnly/i);
+      expect(set).not.toMatch(/Domain=/i);
+      expect((await request("/api/portal/workspace", session)).status).toBe(
+        200,
+      );
+      expect(
+        (await request("/api/portal/workspace", session, "robot01.ruyin.work"))
+          .status,
+      ).toBe(401);
+      expect((await request(start.path, start.cookie)).status).toBe(400);
+    },
+  );
+  it.each(["login", "", "none&prompt=none", "none&prompt[]=none"])(
+    "rejects an unsupported or ambiguous prompt=%s before creating login state",
+    async (prompt) => {
+      const response = await request(`/auth/login?prompt=${prompt}`);
+      expect(response.status).toBe(400);
+      expect(states.size).toBe(0);
+      expect(response.headers.getSetCookie()).toHaveLength(0);
+    },
+  );
+  it.each(["login_required", "interaction_required"])(
+    "ends an unavailable silent login once for %s without restarting authentication",
+    async (error) => {
+      const start = await begin();
+      const session = cookie(await request(start.path, start.cookie));
+      const probe = await begin("none");
+      const callback = probe.path.replace("code=ok", `error=${error}`);
+      // An unbound callback must never clear a valid session.
+      expect((await request(callback, session)).status).toBe(400);
+      expect((await request("/auth/session", session)).status).toBe(200);
+      vi.mocked(PortalOidcClient.prototype.exchangeCode).mockClear();
+      const response = await request(callback, `${session}; ${probe.cookie}`);
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe("https://a.ruyin.work/");
+      expect(
+        response.headers
+          .getSetCookie()
+          .some(
+            (value) =>
+              value.startsWith("__Host-vx_customer_portal_session=;") &&
+              value.includes("Expires=Thu, 01 Jan 1970"),
+          ),
+      ).toBe(true);
+      expect((await request("/auth/session", session)).status).toBe(401);
+      expect(
+        (await request(callback, `${session}; ${probe.cookie}`)).status,
+      ).toBe(400);
+      expect(PortalOidcClient.prototype.exchangeCode).not.toHaveBeenCalled();
+    },
+  );
+  it("keeps denied membership distinct from an absent silent session", async () => {
+    const probe = await begin("none");
+    const response = await request(
+      probe.path.replace("code=ok", "error=access_denied"),
+      probe.cookie,
+    );
+    expect(response.status).toBe(403);
+    expect(response.headers.get("location")).toBeNull();
+    expect(sessions.size).toBe(0);
+  });
+  it("preserves the existing session when silent token exchange is unavailable", async () => {
     const start = await begin();
-    expect(
-      (await request(start.path, start.cookie, "robot01.ruyin.work")).status,
-    ).toBe(400);
-    const response = await request(start.path, start.cookie);
-    expect(response.status).toBe(302);
-    const session = cookie(response);
-    expect(session).toMatch(/^__Host-vx_customer_portal_session=/);
-    const set = response.headers
-      .getSetCookie()
-      .find((x) => x.startsWith(session));
-    expect(set).toMatch(/Secure/i);
-    expect(set).toMatch(/HttpOnly/i);
-    expect(set).not.toMatch(/Domain=/i);
-    expect((await request("/api/portal/workspace", session)).status).toBe(200);
-    expect(
-      (await request("/api/portal/workspace", session, "robot01.ruyin.work"))
-        .status,
-    ).toBe(401);
-    expect((await request(start.path, start.cookie)).status).toBe(400);
+    const session = cookie(await request(start.path, start.cookie));
+    const probe = await begin("none");
+    vi.mocked(PortalOidcClient.prototype.exchangeCode).mockRejectedValue(
+      new Error("offline"),
+    );
+    const response = await request(probe.path, `${session}; ${probe.cookie}`);
+    expect(response.status).toBe(503);
+    expect((await request("/auth/session", session)).status).toBe(200);
+    expect(sessions.size).toBe(1);
   });
   it("blocks an IdP fallback context and a nonmember before setting a session", async () => {
     org = "00000000-0000-4000-8000-000000000099";

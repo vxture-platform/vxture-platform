@@ -32,6 +32,7 @@ import { validateBinding } from "./oidc-client";
 import { failure } from "../errors";
 
 interface PendingLogin {
+  silent?: boolean;
   nonce: string;
   verifier: string;
   binding: string;
@@ -177,11 +178,19 @@ export class AuthRouter {
   async login(@Req() req: Request, @Res() res: Response): Promise<void> {
     const { runtime, store, client } = await this.gateway.context(req);
     navigation(req, runtime);
+    const prompt = parameter(req, "prompt");
+    if (prompt !== undefined && prompt !== "none")
+      throw failure(
+        400,
+        "CUSTOMER_PORTAL_REQUEST_INVALID",
+        "Invalid login prompt",
+      );
     const state = randomToken(),
       binding = randomToken(),
       nonce = randomToken(),
       pkce = generatePkce();
     const pending: PendingLogin = {
+      silent: prompt === "none",
       nonce,
       verifier: pkce.verifier,
       binding: digest(binding),
@@ -205,7 +214,7 @@ export class AuthRouter {
         tenantHint: pending.tenantId,
         workspaceHint: pending.workspaceId,
         uiLocales: "zh-CN",
-        prompt: "select_account",
+        ...(prompt ? { prompt } : {}),
       }),
     );
   }
@@ -255,6 +264,18 @@ export class AuthRouter {
         "门户绑定已更新，请重新登录",
       );
     const authorizationError = parameter(req, "error");
+    if (
+      pending.silent &&
+      ["login_required", "interaction_required"].includes(
+        authorizationError ?? "",
+      )
+    ) {
+      const previous = sessions.cookie(req);
+      if (previous) await store.destroy(previous);
+      res.clearCookie(runtime.cookieName, cookieOptions());
+      res.redirect(`${runtime.origin}/`);
+      return;
+    }
     if (authorizationError === "access_denied")
       throw failure(
         403,
@@ -302,7 +323,8 @@ export class AuthRouter {
       ...cookieOptions(),
       maxAge: runtime.oidc.sessionTtlSec * 1000,
     });
-    res.redirect(`${runtime.origin}/workspace`);
+    // The workspace still authenticates the session; this only ends browser bootstrap.
+    res.redirect(`${runtime.origin}/workspace?vx_sso_checked=1`);
   }
 
   @Get("session")
