@@ -10,9 +10,9 @@
 
 > 持续更新入口；最近更新：2026-11-25（Asia/Shanghai）。
 > 目标：变化主动通知，漏消息可恢复，页面及时收敛，最终按客户端撤除身份轮询。
-> 当前阶段：**N13 租户门户登录循环修复已上线；真实浏览器普通入口、刷新及登录按钮通过。N12 部署工具加固已上线；主平台仍为 v0.33.17，七 RP 事件同步已启用，轮询退役仍关闭。** 此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
+> 当前阶段：**N14 完成八入口真实登录基线及客户/运营两组跨端退出验证，七个平台 RP 首次投递均成功。N13 登录修复已上线；主平台仍为 v0.33.17，七 RP 事件同步已启用，轮询退役仍关闭。** 此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
 > 实现基线：**N6 平台八入口统一接入事件同步/恢复/协商停轮询；N7 七 RP 登记计划、批量采集、告警及发布准备已完成。运营域持久会话与退出独立隔离，默认开关关闭。**
-> 最新收口：**PR #747 与 CI 全部通过；独立 Tenant 镜像对已部署，18 个应用容器健康，其余 16 个未重启。公网匿名静默回调和真实会话进入工作台均通过；完全未登录状态下的密码/钉钉重登、轮询退役与外部产品迁移仍分别待验收。**
+> 最新收口：**11:34 CST 运营退出后客户域保持可用，随后 Tenant 退出使四个客户 RP 与客户账号中心收敛；七个平台 RP 后端确认耗时 256–650 ms。用户需要重新登录以继续新会话/旧标签恢复；隐藏页、反向域隔离、故障恢复、轮询退役与外部产品迁移仍分别待验收。**
 
 ## 总览
 
@@ -438,7 +438,7 @@ N12 上线证据：`output/identity-n12-production-install.jsonl`、`identity-n1
 - [x] 新增 HTTP 回归覆盖交互/静默成功落点、非法/重复 prompt、未绑定/重放回调、静默 `login_required`/`interaction_required` 收敛、权限拒绝与上游故障保留会话。修复前 13 项失败，修复后 BFF 14 项通过，3 项依赖外部基础设施的测试跳过，不计为通过。
 - [x] BFF 类型/Lint、门户类型和格式检查通过；PR [#747](https://github.com/vxture-platform/vxture-platform/pull/747) 已合并为 `82770f7ebe23349787109874d6623855be17210b`，CI [45537714380](https://github.com/vxture-platform/vxture-platform/actions/runs/45537714380) 全部通过，包含持久身份/事件恢复专项与 SonarQube。Tenant 的 3 项 Redis 专项在本地及本次 CI 普通测试中均跳过，不计为通过。
 - [x] 独立构建 [45537739567](https://github.com/vxture-platform/vxture-platform/actions/runs/45537739567) 完成校验与成对发布，源码 `b25730595bfdc85f7b8d4247ee7e3b2023b22f12` 与合并提交文件树相同。前端 digest `620677eac4abbcd57c79ed5882fdf9d0e50cff63aeb6c80c1c03d58e8ec165c5`；BFF digest `db1eb344d2438792bbc9984fa86a3509337bd1a4f4927f5940def00c98772457`。
-- [x] 11:18 CST 前完成标准 36 脚本 check/deploy 与健康门；18 个应用容器健康、实际镜像与发布记录匹配，仅 Tenant 前端/BFF 被替换，其他 16 个容器 ID/启动时间/重启计数不变。原镜像对保留在 managed previous，并在 `/srv/vxture/backups/identity-20261125/n13-tenant-login/current-before` 留存记录；部署脚本哈希与仓库一致。
+- [x] 11:18 CST 执行标准 36 脚本部署，两个容器于 11:18:00 启动并随后通过健康门；18 个应用容器健康、实际镜像与发布记录匹配，仅 Tenant 前端/BFF 被替换，其他 16 个容器 ID/启动时间/重启计数不变。原镜像对保留在 managed previous，并在 `/srv/vxture/backups/identity-20261125/n13-tenant-login/current-before` 留存记录；部署脚本哈希与仓库一致。
 - [x] 公网匿名静默登录修复前因 prompt 被替换而失败；修复后完整链路为 Tenant login 302 → Accounts authorize 302 → Tenant callback 302 → 门户首页 200，没有互动登录循环。18 项公开入口/匿名 SSE 边界复验通过，七范围采集健康无延迟。
 - [x] Chrome 真实用户会话直接打开无标记 `/workspace`、刷新、门户首页点击“登录”三项均回到组织工作台与应用列表。此次使用已有中央会话完成授权/回调，未替用户输入密码、钉钉确认、验证码或 MFA。
 - [ ] 用户在完全未登录的独立浏览器会话中完成密码/钉钉重登验收；跨标签退出/撤权、轮询退役及外部告警仍按原矩阵推进。
@@ -446,3 +446,17 @@ N12 上线证据：`output/identity-n12-production-install.jsonl`、`identity-n1
 本批不修改数据库、运行环境变量、运营端会话或轮询退役开关。前次合成会话验收未覆盖真实认证回调，不能替代本次登录链路回归。证据：`output/tenant-login-regression-before.log`、`output/tenant-login-regression-after.log`。
 
 发布与复验证据：`output/tenant-login-build.log`、`tenant-login-ci-tests.log`、`tenant-login-deploy.log`、`tenant-login-public-before.log`、`tenant-login-public-after.json`、`tenant-login-container-diff.json`、`tenant-login-inventory-after.jsonl`、`tenant-login-all-public.jsonl`。本机证据不提交 Git，服务端发布记录与脱敏执行证据归档到 N13 备份目录。
+
+## N14 生产八入口跨端退出与双域验证（2026-11-25）
+
+- [x] 用户确认运营/客户两个账号均已登录。11:31 CST 真实 Chrome 验证七个平台 RP 与 Accounts 两域共九组页面均已认证；本轮没有替用户输入密码、验证码、钉钉确认或 MFA，也未确认两种客户登录方式分别完成。
+- [x] 11:34:07 CST 从 Admin 用户菜单退出，另一个 Admin 标签、Opera、Arche 自动转到运营登录，Accounts 运营资料页离开受保护页面。客户 Tenant、Console、Workbench、Website、Accounts 页面保持可用；Tenant、Console 和客户 Accounts 刷新后仍认证通过。Workbench 刷新后即时快照不足以判定结果，不计入刷新通过项。
+- [x] 11:34:39 CST 从 Tenant 工作台退出，另一个 Tenant 标签返回门户登录页，Console 转到客户登录，Workbench 回到公开登录页，Website 用户菜单变为登录/注册，Accounts 客户资料页离开受保护页面。观察这些退出结果时未手工刷新对应页面。
+- [x] 现有只读观察角色核对时间窗口内的退出投递：Admin 288 ms、Opera 273 ms、Arche 419 ms；Console 256 ms、Website 429 ms、Workbench 307 ms、Tenant 650 ms，均仅 1 次尝试且 delivered。另有已绑定 CoSpace 投递 667 ms 成功，仅属后端证据，未扩展为外部产品页面验收。
+- [x] 复查 18 个应用容器健康且镜像匹配，七范围采集健康、无延迟积压。此轮未修改应用代码、数据库事实、权限、运行环境变量或身份开关；没有部署或服务重启。用户菜单退出是本轮明确执行的会话操作。
+- [ ] 用户重新登录后，验证旧标签读取新 Cookie、新旧会话隔离及客户退出不影响仍有效运营会话。
+- [ ] 隐藏页、真实网络/代理中断与进程恢复、操作系统休眠、资料/权限变化、MFA/安全强制下线及外部告警继续待测；七 RP 轮询退役保持 false。
+
+页面为依次观察，时间戳不是精确页面收敛耗时或 P95。浏览器工具报告被观察文档 visible，不能将本次多标签测试写成隐藏页验收；兼容读取仍启用，亦不能据此宣称零轮询。初次观察脚本尝试聚合撤销收据被现有只读角色拒绝，随后限定到已授权的投递表，没有扩大角色权限。
+
+证据：`output/identity-n14-browser-evidence.json`、`identity-n14-logout-before.json`、`identity-n14-logout-after.json`、`identity-n14-inventory-before.jsonl`、`identity-n14-inventory-after.jsonl`、`identity-n14-errors-after.jsonl`。进展保留在本节与运行手册 §13.4，下一步需用户完成两域重新登录。
