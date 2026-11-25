@@ -10,9 +10,9 @@
 
 > 持续更新入口；最近更新：2026-11-25（Asia/Shanghai）。
 > 目标：变化主动通知，漏消息可恢复，页面及时收敛，最终按客户端撤除身份轮询。
-> 当前阶段：**N11 生产主平台 v0.33.17 与 Tenant 镜像对已部署，18 个应用容器健康；七 RP 持久恢复、变化接收和 SSE 已启用，5 条真实变化投递完成。轮询退役仍关闭。** 此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
+> 当前阶段：**N12 部署工具加固已合并并同步生产；预演、Nginx 与公开入口复验通过，18 个应用容器健康且未重启。主平台仍为 v0.33.17，七 RP 事件同步已启用，轮询退役仍关闭。** 此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
 > 实现基线：**N6 平台八入口统一接入事件同步/恢复/协商停轮询；N7 七 RP 登记计划、批量采集、告警及发布准备已完成。运营域持久会话与退出独立隔离，默认开关关闭。**
-> 最新收口：**PR #743 已合并，CI、镜像构建和生产发布工作流均通过；八份迁移完成，4 个有可信上下文的客户会话完成回填。真实登录/MFA、生产浏览器轮询退役与外部产品迁移仍分别待验收。**
+> 最新收口：**PR #745 与 CI 全部通过；生产四个部署脚本完成哈希核对、备份与替换，7 个独立 Tenant 镜像 ID 受保护，10:24 CST 复验通过。真实登录/MFA、生产浏览器轮询退役与外部产品迁移仍分别待验收。**
 
 ## 总览
 
@@ -33,6 +33,7 @@
 | 独立进程故障与本机容量                  | ✅ N5 本地通过             | 发送/接收进程强杀、真实 60 秒租约、发送停机时恢复、256 SSE，详见本页 N5 |
 | 部署预检、指标与告警模板                | ✅ 七 RP 主机采集已运行    | 每 30 秒只读检查，七范围就绪且无积压；外部面板/告警送达待接线           |
 | 平台生产部署与目标代理                  | ✅ v0.33.17 已部署         | 18 个镜像/健康匹配；八入口公开边界通过；完整互动登录/MFA仍待验收        |
+| 发布工具加固与生产复验                  | ✅ N12 已上线              | 独立镜像保护、租户入口缺配置拒绝、预检私有诊断；18 容器未重启           |
 | 跨产品、生产容量与轮询退役              | ⏳ 待验收                  | 外部产品未迁移；七 RP 退役开关 false；不以本地证据代替目标验收          |
 
 ## 上轮合并工作包（M1–M5）
@@ -420,6 +421,11 @@ N11 合并审查补充：
 - [x] 20 个部署脚本测试和环境审计通过；首次整组测试暴露 Ruyin 旧夹具读取真实宿主路由，已隔离后复验。证据：`output/identity-n12-linux-tests.log`、`identity-n12-linux-tests-final.log`；失败原记录保留。
 - [x] 10:09 CST 复查：18 个应用容器健康且 digest 匹配，七范围采集健康且无延迟/积压，18 项公开入口/匿名 SSE 检查通过，八 BFF 近五分钟日志未命中已定义的身份投递、权限、数据库和监听失败模式。证据：`output/identity-n12-production-inventory.jsonl`、`identity-n12-public-stability.jsonl`。
 - [x] 本机 SSH 代理停止导致既有密钥无法签名；启动原代理后使用已登记密钥恢复连接，没有更换密钥或改服务器认证。
-- [ ] 合并本批修复，同步生产部署工具，完成只读预演、镜像保留清单及公开入口复验。
+- [x] PR [#745](https://github.com/vxture-platform/vxture-platform/pull/745) 已合并，main 为 `ee722841f4e4a192405973551ff048d0674116e2`；CI [45531385804](https://github.com/vxture-platform/vxture-platform/actions/runs/45531385804) 全部通过，包括身份回归与 SonarQube。
+- [x] 10:24 CST 完成生产四个脚本同步：发布来源 `7b7ab05` 与合并提交脚本内容一致，前后 SHA-256 均核验，原文件和 Nginx 配置备份在 `/srv/vxture/backups/identity-20261125/n12-deploy-tools/`。只读筛选保护 7 个独立 Tenant 镜像 ID，实际删除镜像为 0；Compose 预演无重建动作。
+- [x] 新脚本执行 Nginx 同步、配置校验与热重载成功；标准 40 运行态检查和 18 项公开入口/匿名 SSE 复验通过。18 个应用容器 ID、启动时间、重启计数均与安装前一致；采集器仍 active，10:24:28 CST 七范围健康无延迟。
+- [x] Chrome 补查 Console/Workbench 既有登录页面的组织、工作空间和产品列表，Tenant 品牌页和登录入口正常。临时两标签已关闭；未执行退出/撤权或完成新登录/MFA。
 
 本批应用版本仍为 v0.33.17；七 RP 轮询退役仍全部关闭。目标真实登录/MFA、跨标签退出/撤权和代理恢复矩阵、外部告警送达以及 #726/#731 产品接入仍待完成；不能将部署工具加固记作轮询已经退役。
+
+N12 上线证据：`output/identity-n12-production-install.jsonl`、`identity-n12-production-preview.log`、`identity-n12-nginx-sync.log`、`identity-n12-runtime-verify.log`、`identity-n12-no-restarts.json`、`identity-n12-public-final.jsonl`、`identity-n12-inventory-final.jsonl`、`identity-n12-browser-check.json`。基线环境审计仍有 29 项既存废弃键警告、无错误；本批未扩展为配置清理。
