@@ -10,9 +10,9 @@
 
 > 持续更新入口；最近更新：2026-11-25（Asia/Shanghai）。
 > 目标：变化主动通知，漏消息可恢复，页面及时收敛，最终按客户端撤除身份轮询。
-> 当前阶段：**N12 部署工具加固已合并并同步生产；预演、Nginx 与公开入口复验通过，18 个应用容器健康且未重启。主平台仍为 v0.33.17，七 RP 事件同步已启用，轮询退役仍关闭。** 此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
+> 当前阶段：**N13 修复租户门户新登录循环，正在回归与发布。N12 部署工具加固已上线；主平台仍为 v0.33.17，七 RP 事件同步已启用，轮询退役仍关闭。** 此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
 > 实现基线：**N6 平台八入口统一接入事件同步/恢复/协商停轮询；N7 七 RP 登记计划、批量采集、告警及发布准备已完成。运营域持久会话与退出独立隔离，默认开关关闭。**
-> 最新收口：**PR #745 与 CI 全部通过；生产四个部署脚本完成哈希核对、备份与替换，7 个独立 Tenant 镜像 ID 受保护，10:24 CST 复验通过。真实登录/MFA、生产浏览器轮询退役与外部产品迁移仍分别待验收。**
+> 最新收口：**真实租户登录暴露回调与静默登录回归；已有会话有效，工作台可读取。已定位 #743 合并时遗漏 #687 的登录引导修复，补充 HTTP 回归，生产修复待发布。真实登录/MFA、生产浏览器轮询退役与外部产品迁移仍分别待验收。**
 
 ## 总览
 
@@ -429,3 +429,14 @@ N11 合并审查补充：
 本批应用版本仍为 v0.33.17；七 RP 轮询退役仍全部关闭。目标真实登录/MFA、跨标签退出/撤权和代理恢复矩阵、外部告警送达以及 #726/#731 产品接入仍待完成；不能将部署工具加固记作轮询已经退役。
 
 N12 上线证据：`output/identity-n12-production-install.jsonl`、`identity-n12-production-preview.log`、`identity-n12-nginx-sync.log`、`identity-n12-runtime-verify.log`、`identity-n12-no-restarts.json`、`identity-n12-public-final.jsonl`、`identity-n12-inventory-final.jsonl`、`identity-n12-browser-check.json`。基线环境审计仍有 29 项既存废弃键警告、无错误；本批未扩展为配置清理。
+
+## N13 租户门户新登录循环修复（2026-11-25）
+
+- [x] 用户报告密码/钉钉登录后，短暂显示会话验证页并返回登录；其他电脑已有登录正常。浏览器使用完成标记进入后真实工作台与应用列表可读，证实已签发的租户会话有效。
+- [x] 对照 #743 与其主线父提交：BFF 更名合并遗漏 #687 的 `prompt=none`、静默未登录处理与回调完成标记。认证成功回到无标记 `/workspace`，门户再次静默引导，而 BFF 强制 `select_account`，形成循环。N12 工具批次没有重启应用，不是本次回归引入点。
+- [x] 在 `bff/tenant-bff/src/auth/auth-router.ts` 恢复既有引导协议。成功回调落到 `/workspace?vx_sso_checked=1`；该标记只结束浏览器引导，工作台 API 仍完整校验会话与成员资格。保留持久事件恢复、新 BFF 命名与现有 Cookie/Redis 契约。
+- [x] 新增 HTTP 回归覆盖交互/静默成功落点、非法/重复 prompt、未绑定/重放回调、静默 `login_required`/`interaction_required` 收敛、权限拒绝与上游故障保留会话。修复前 13 项失败，修复后 BFF 14 项通过，3 项依赖外部基础设施的测试跳过，不计为通过。
+- [ ] 类型、Lint、CI、不可变 Tenant 镜像对发布与标准 36 部署健康门。
+- [ ] 生产普通工作台入口与登录回调复验，用户重新完成密码/钉钉交互验收。
+
+本批不修改数据库、运行环境变量、运营端会话或轮询退役开关。前次合成会话验收未覆盖真实认证回调，不能替代本次登录链路回归。证据：`output/tenant-login-regression-before.log`、`output/tenant-login-regression-after.log`。
