@@ -24,7 +24,7 @@ load_workbench_desktop_env
 validate_workbench_desktop_runtime "$COMPOSE_DIR"
 SRC="$COMPOSE_DIR/nginx"
 COMPOSE_SRC="$COMPOSE_DIR/compose.nginx.yml"
-DST=/srv/vxture/data/nginx/conf
+DST="${NGINX_CONFIG_DIR:-/srv/vxture/data/nginx/conf}"
 COMPOSE_DST=/srv/vxture/data/nginx/compose.yml
 
 if [ ! -f "$SRC/nginx.conf" ]; then
@@ -67,8 +67,23 @@ fi
 customer_portal_env="${CUSTOMER_PORTAL_ENV_FILE:-$COMPOSE_ENV_RUNTIME_DIR/.env.tenant-bff}"
 customer_portal_template="$SRC/templates/customer-portal.vhost.template"
 customer_portal_hosts=()
+# An installed portal must never disappear because its runtime file was omitted.
+customer_portal_installed=0
+if compgen -G "$DST/sites-enabled/customer-portal-*.conf" >/dev/null ||
+   [ -e "$COMPOSE_ENV_RUNTIME_DIR/customer-portal-releases/current" ]; then
+  customer_portal_installed=1
+fi
+if [ ! -f "$customer_portal_env" ] &&
+   { [ "$customer_portal_installed" = 1 ] || [ -n "${CUSTOMER_PORTAL_ENV_FILE:-}" ]; }; then
+  echo 'Customer portal runtime env is missing; refusing to replace Nginx configuration.' >&2
+  exit 1
+fi
 if [ -f "$customer_portal_env" ]; then
   customer_portal_host_list="$(env_value "$customer_portal_env" CUSTOMER_PORTAL_HOSTS)"
+  if [ -z "$customer_portal_host_list" ] && [ "$customer_portal_installed" = 1 ]; then
+    echo 'Installed customer portal requires non-empty CUSTOMER_PORTAL_HOSTS; refusing to remove its routes.' >&2
+    exit 1
+  fi
   if [ -n "$customer_portal_host_list" ]; then
     customer_portal_label='(a|[a-z][a-z0-9]{2,7})'
     customer_portal_host="${customer_portal_label}\.ruyin\.work"
