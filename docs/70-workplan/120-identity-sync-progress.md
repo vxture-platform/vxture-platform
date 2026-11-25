@@ -10,9 +10,9 @@
 
 > 持续更新入口；最近更新：2026-11-25（Asia/Shanghai）。
 > 目标：变化主动通知，漏消息可恢复，页面及时收敛，最终按客户端撤除身份轮询。
-> 当前阶段：**N13 修复租户门户新登录循环，正在回归与发布。N12 部署工具加固已上线；主平台仍为 v0.33.17，七 RP 事件同步已启用，轮询退役仍关闭。** 此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
+> 当前阶段：**N13 租户门户登录循环修复已上线；真实浏览器普通入口、刷新及登录按钮通过。N12 部署工具加固已上线；主平台仍为 v0.33.17，七 RP 事件同步已启用，轮询退役仍关闭。** 此页追踪进展；接口定义仍在 [150 接口文档](../30-design/identity/150-event-sync-api.md)，详细历史见 [110 批次记录](./110-identity-center-batches.md)。
 > 实现基线：**N6 平台八入口统一接入事件同步/恢复/协商停轮询；N7 七 RP 登记计划、批量采集、告警及发布准备已完成。运营域持久会话与退出独立隔离，默认开关关闭。**
-> 最新收口：**真实租户登录暴露回调与静默登录回归；已有会话有效，工作台可读取。已定位 #743 合并时遗漏 #687 的登录引导修复，补充 HTTP 回归，生产修复待发布。真实登录/MFA、生产浏览器轮询退役与外部产品迁移仍分别待验收。**
+> 最新收口：**PR #747 与 CI 全部通过；独立 Tenant 镜像对已部署，18 个应用容器健康，其余 16 个未重启。公网匿名静默回调和真实会话进入工作台均通过；完全未登录状态下的密码/钉钉重登、轮询退役与外部产品迁移仍分别待验收。**
 
 ## 总览
 
@@ -436,7 +436,13 @@ N12 上线证据：`output/identity-n12-production-install.jsonl`、`identity-n1
 - [x] 对照 #743 与其主线父提交：BFF 更名合并遗漏 #687 的 `prompt=none`、静默未登录处理与回调完成标记。认证成功回到无标记 `/workspace`，门户再次静默引导，而 BFF 强制 `select_account`，形成循环。N12 工具批次没有重启应用，不是本次回归引入点。
 - [x] 在 `bff/tenant-bff/src/auth/auth-router.ts` 恢复既有引导协议。成功回调落到 `/workspace?vx_sso_checked=1`；该标记只结束浏览器引导，工作台 API 仍完整校验会话与成员资格。保留持久事件恢复、新 BFF 命名与现有 Cookie/Redis 契约。
 - [x] 新增 HTTP 回归覆盖交互/静默成功落点、非法/重复 prompt、未绑定/重放回调、静默 `login_required`/`interaction_required` 收敛、权限拒绝与上游故障保留会话。修复前 13 项失败，修复后 BFF 14 项通过，3 项依赖外部基础设施的测试跳过，不计为通过。
-- [ ] 类型、Lint、CI、不可变 Tenant 镜像对发布与标准 36 部署健康门。
-- [ ] 生产普通工作台入口与登录回调复验，用户重新完成密码/钉钉交互验收。
+- [x] BFF 类型/Lint、门户类型和格式检查通过；PR [#747](https://github.com/vxture-platform/vxture-platform/pull/747) 已合并为 `82770f7ebe23349787109874d6623855be17210b`，CI [45537714380](https://github.com/vxture-platform/vxture-platform/actions/runs/45537714380) 全部通过，包含持久身份/事件恢复专项与 SonarQube。Tenant 的 3 项 Redis 专项在本地及本次 CI 普通测试中均跳过，不计为通过。
+- [x] 独立构建 [45537739567](https://github.com/vxture-platform/vxture-platform/actions/runs/45537739567) 完成校验与成对发布，源码 `b25730595bfdc85f7b8d4247ee7e3b2023b22f12` 与合并提交文件树相同。前端 digest `620677eac4abbcd57c79ed5882fdf9d0e50cff63aeb6c80c1c03d58e8ec165c5`；BFF digest `db1eb344d2438792bbc9984fa86a3509337bd1a4f4927f5940def00c98772457`。
+- [x] 11:18 CST 前完成标准 36 脚本 check/deploy 与健康门；18 个应用容器健康、实际镜像与发布记录匹配，仅 Tenant 前端/BFF 被替换，其他 16 个容器 ID/启动时间/重启计数不变。原镜像对保留在 managed previous，并在 `/srv/vxture/backups/identity-20261125/n13-tenant-login/current-before` 留存记录；部署脚本哈希与仓库一致。
+- [x] 公网匿名静默登录修复前因 prompt 被替换而失败；修复后完整链路为 Tenant login 302 → Accounts authorize 302 → Tenant callback 302 → 门户首页 200，没有互动登录循环。18 项公开入口/匿名 SSE 边界复验通过，七范围采集健康无延迟。
+- [x] Chrome 真实用户会话直接打开无标记 `/workspace`、刷新、门户首页点击“登录”三项均回到组织工作台与应用列表。此次使用已有中央会话完成授权/回调，未替用户输入密码、钉钉确认、验证码或 MFA。
+- [ ] 用户在完全未登录的独立浏览器会话中完成密码/钉钉重登验收；跨标签退出/撤权、轮询退役及外部告警仍按原矩阵推进。
 
 本批不修改数据库、运行环境变量、运营端会话或轮询退役开关。前次合成会话验收未覆盖真实认证回调，不能替代本次登录链路回归。证据：`output/tenant-login-regression-before.log`、`output/tenant-login-regression-after.log`。
+
+发布与复验证据：`output/tenant-login-build.log`、`tenant-login-ci-tests.log`、`tenant-login-deploy.log`、`tenant-login-public-before.log`、`tenant-login-public-after.json`、`tenant-login-container-diff.json`、`tenant-login-inventory-after.jsonl`、`tenant-login-all-public.jsonl`。本机证据不提交 Git，服务端发布记录与脱敏执行证据归档到 N13 备份目录。
