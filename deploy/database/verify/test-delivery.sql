@@ -38,7 +38,7 @@ INSERT INTO provisioning.webhook_deliveries
    workspace_id, tenant_id, product_id, event_type, payload,
    status, attempts, next_retry_at, created_at)
 SELECT d.id,
-       'manual-test:' || current_setting('vx.product_code') || ':' || s.workspace_id || ':' || d.id,
+       'manual-test:' || s.workspace_id || ':' || d.id,
        NULL, NULL,
        s.workspace_id, s.tenant_id, tg.product_id, current_setting('vx.event'),
        jsonb_build_object(
