@@ -33,7 +33,7 @@ name: db-init
 #                               (fixes IdP authorize 400 invalid_redirect_uri)
 #   action=test-delivery     -> 31-test-delivery: enqueue one version-less notification event
 #                               (subscription_changed/grant.invalidated) for test_delivery_product
-#                               against an existing seeded account's default workspace, then poll
+#                               against the selected test workspace or the account's unique default, then poll
 #                               provisioning.webhook_deliveries for the real dispatch outcome
 #                               (proves the registered product_webhooks.webhook_url is actually
 #                               reachable, not just registered — karda 120 函 ask)
@@ -93,9 +93,13 @@ on:
         required: false
         default: ""
       test_delivery_account:
-        description: "test-delivery only: seeded account whose default workspace is the test subject"
+        description: "test-delivery only: account that owns the selected workspace"
         required: false
         default: "stonesmoker"
+      test_delivery_workspace_id:
+        description: "test-delivery only: workspace UUID; leave empty for a unique default"
+        required: false
+        default: ""
       test_delivery_event:
         description: "test-delivery only: version-less event type"
         required: false
@@ -255,6 +259,7 @@ jobs:
           MIGRATE_PLAN_SHA256: ${{ inputs.migration_plan_sha256 }}
           TEST_DELIVERY_PRODUCT: ${{ inputs.test_delivery_product }}
           TEST_DELIVERY_ACCOUNT: ${{ inputs.test_delivery_account }}
+          TEST_DELIVERY_WORKSPACE_ID: ${{ inputs.test_delivery_workspace_id }}
           TEST_DELIVERY_EVENT: ${{ inputs.test_delivery_event }}
           # Per-run staging dir (platform#223): a fixed /tmp path is shared state
           # between concurrent CD runs on the same host, and scp `rm: true` wipes
@@ -273,7 +278,7 @@ jobs:
           #   ssh-keyscan -t ed25519 <host> | ssh-keygen -lf - | awk '{print $2}'
           fingerprint: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           command_timeout: 30m
-          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,MIGRATE_UNTIL,MIGRATE_PLAN_SHA256,MIGRATE_TARGET_SHA256,MIGRATE_BACKUP_SHA256,MIGRATE_RESTORE_EVIDENCE,MIGRATE_CUTOVER_EVIDENCE,MIGRATE_QUIESCED_AT,MIGRATE_WRITES_STOPPED,MIGRATE_RESTORE_VERIFIED,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT,STAGE_DIR
+          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,MIGRATE_UNTIL,MIGRATE_PLAN_SHA256,MIGRATE_TARGET_SHA256,MIGRATE_BACKUP_SHA256,MIGRATE_RESTORE_EVIDENCE,MIGRATE_CUTOVER_EVIDENCE,MIGRATE_QUIESCED_AT,MIGRATE_WRITES_STOPPED,MIGRATE_RESTORE_VERIFIED,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_WORKSPACE_ID,TEST_DELIVERY_EVENT,STAGE_DIR
           script: |
             set -e
             SRC="${STAGE_DIR:?}/deploy"
@@ -426,6 +431,7 @@ jobs:
                 CONFIRM_TEST_DELIVERY=yes \
                 TEST_DELIVERY_PRODUCT="$TEST_DELIVERY_PRODUCT" \
                 TEST_DELIVERY_ACCOUNT="$TEST_DELIVERY_ACCOUNT" \
+                TEST_DELIVERY_WORKSPACE_ID="$TEST_DELIVERY_WORKSPACE_ID" \
                 TEST_DELIVERY_EVENT="$TEST_DELIVERY_EVENT" \
                   bash scripts/31-test-delivery.sh
                 ;;
