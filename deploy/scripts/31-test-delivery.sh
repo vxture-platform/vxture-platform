@@ -15,8 +15,8 @@
 # 复用既有 platform-api 的 dispatch 定时任务（默认 10s 一轮）派发——走的是真实签名/HTTP
 # 路径，不是伪造响应。
 #
-# 主体（workspace/tenant）取自 TEST_DELIVERY_ACCOUNT 的默认 workspace，默认为种子
-# 测试用户 stonesmoker（seed 样例），不凭空造租户。
+# The test account defaults to the seed account. Set TEST_DELIVERY_WORKSPACE_ID
+# to choose a workspace explicitly. Without it, a unique default is required.
 #
 # DATABASE_URL 只存在于容器内（--env-file 注入），本脚本用 `sh -lc` 把 psql 调用留给
 # 容器自己的 shell 解析，宿主 bash 不直接引用 $DATABASE_URL（同 30-verify 的做法）。
@@ -38,8 +38,10 @@ PLATFORM_ENV="$RUNTIME_DIR/secrets/rds-owner.env"
 
 PRODUCT_CODE="${TEST_DELIVERY_PRODUCT:-}"
 ACCOUNT="${TEST_DELIVERY_ACCOUNT:-stonesmoker}"
+WORKSPACE_ID="${TEST_DELIVERY_WORKSPACE_ID:-}"
 EVENT="${TEST_DELIVERY_EVENT:-subscription_changed}"
 POLL_SECONDS="${TEST_DELIVERY_POLL_SECONDS:-30}"
+UUID_PATTERN='^[[:xdigit:]]{8}(-[[:xdigit:]]{4}){3}-[[:xdigit:]]{12}$'
 
 check_file() {
   if [ ! -f "$1" ]; then
@@ -56,6 +58,10 @@ if [ -z "$PRODUCT_CODE" ]; then
   echo "错误：TEST_DELIVERY_PRODUCT 未设置（目标产品的 product_code，如 karda）。" >&2
   exit 1
 fi
+if [[ -n "$WORKSPACE_ID" && ! "$WORKSPACE_ID" =~ $UUID_PATTERN ]]; then
+  echo "错误：TEST_DELIVERY_WORKSPACE_ID 必须是工作空间 UUID。" >&2
+  exit 1
+fi
 case "$EVENT" in
   subscription_changed | grant.invalidated) ;;
   *)
@@ -66,7 +72,7 @@ esac
 check_file "$PLATFORM_ENV"
 check_file "$VERIFY_DIR/test-delivery.sql"
 
-echo "=== 测试投递：product=$PRODUCT_CODE event=$EVENT account=$ACCOUNT ==="
+echo "=== 测试投递：product=$PRODUCT_CODE event=$EVENT account=$ACCOUNT workspace=${WORKSPACE_ID:-default} ==="
 
 DELIVERY_ID="$(
   docker run --rm \
@@ -74,16 +80,17 @@ DELIVERY_ID="$(
     --env-file "$PLATFORM_ENV" \
     --env PRODUCT_CODE="$PRODUCT_CODE" \
     --env ACCOUNT="$ACCOUNT" \
+    --env WORKSPACE_ID="$WORKSPACE_ID" \
     --env EVENT="$EVENT" \
     -v "$VERIFY_DIR:/verify:ro" \
     postgres:18-alpine \
     sh -lc 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q -A -t \
-      -v product_code="$PRODUCT_CODE" -v account="$ACCOUNT" -v event="$EVENT" \
+      -v product_code="$PRODUCT_CODE" -v account="$ACCOUNT" -v event="$EVENT" -v workspace_id="$WORKSPACE_ID" \
       -f /verify/test-delivery.sql'
 )"
 
 if [ -z "$DELIVERY_ID" ]; then
-  echo "错误：未插入任何行——account='$ACCOUNT' 无默认 workspace、product_code='$PRODUCT_CODE' 不存在，或该产品未登记 product_webhooks（webhook_url 为空）。" >&2
+  echo "错误：未入队。请核对账号与工作空间的归属和状态。存在多个默认空间时填写 TEST_DELIVERY_WORKSPACE_ID，并核对产品已登记回调地址和签名密钥。" >&2
   exit 1
 fi
 echo "✓  已入队：delivery id=$DELIVERY_ID（等待 platform-api 定时任务派发，默认 10s 一轮）"
